@@ -1,3 +1,7 @@
+import {
+  ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer, Cell, ReferenceLine,
+} from 'recharts';
 import type { HistoricalInflow, PricePoint } from '../services/sosovalue';
 
 interface PriceFlowChartProps {
@@ -6,13 +10,68 @@ interface PriceFlowChartProps {
   asset: 'BTC' | 'ETH';
 }
 
+/** Format a short date label like "Apr 8" */
+function shortDate(iso: string) {
+  const d = new Date(iso);
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+/** Format dollar values on the Y axis */
+function fmtPrice(v: number) {
+  if (v >= 1_000) return `$${(v / 1_000).toFixed(0)}k`;
+  return `$${v}`;
+}
+function fmtFlow(v: number) {
+  const abs = Math.abs(v);
+  if (abs >= 1e9) return `${v < 0 ? '-' : '+'}$${(abs / 1e9).toFixed(1)}B`;
+  if (abs >= 1e6) return `${v < 0 ? '-' : '+'}$${(abs / 1e6).toFixed(0)}M`;
+  return `${v < 0 ? '-' : '+'}$${abs}`;
+}
+
+interface TooltipPayload {
+  dataKey: string;
+  value: number;
+  color: string;
+}
+
+interface CustomTooltipProps {
+  active?: boolean;
+  payload?: TooltipPayload[];
+  label?: string;
+}
+
+function CustomTooltip({ active, payload, label }: CustomTooltipProps) {
+  if (!active || !payload?.length) return null;
+  const price  = payload.find(p => p.dataKey === 'price');
+  const inflow = payload.find(p => p.dataKey === 'inflow');
+  return (
+    <div style={{
+      background: 'var(--brand-card)',
+      border: '1px solid var(--brand-border)',
+      borderRadius: 8,
+      padding: '8px 12px',
+      fontSize: 11,
+      fontFamily: 'JetBrains Mono, monospace',
+      boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
+    }}>
+      <div style={{ color: '#94A3B8', marginBottom: 6 }}>{label}</div>
+      {price && (
+        <div style={{ color: '#00C2FF' }}>
+          Price: ${price.value.toLocaleString()}
+        </div>
+      )}
+      {inflow && (
+        <div style={{ color: inflow.value >= 0 ? '#34D399' : '#F87171' }}>
+          Flow: {fmtFlow(inflow.value)}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /**
- * Combined price line + net inflow bars on a shared x-axis. The overlay tells
- * the institutional-flow / price-action story at a glance:
- *   - Are rising prices confirmed by rising inflows?
- *   - Or is price running ahead of the flow?
- *
- * Self-contained SVG, no chart library. Handles empty-data gracefully.
+ * Combined price line + net inflow bars on a shared x-axis.
+ * Powered by Recharts — full tooltips, responsive container, smooth animations.
  */
 export function PriceFlowChart({ inflows, prices, asset }: PriceFlowChartProps) {
   if (inflows.length === 0 || prices.length === 0) {
@@ -26,43 +85,26 @@ export function PriceFlowChart({ inflows, prices, asset }: PriceFlowChartProps) 
     );
   }
 
-  const W = 320, H = 160;
-  const pad = { top: 18, right: 44, bottom: 20, left: 8 };
-  const plotW = W - pad.left - pad.right;
-  const plotH = H - pad.top  - pad.bottom;
-
   const n = Math.min(inflows.length, prices.length);
-  const step = plotW / (n - 1 || 1);
+  const data = Array.from({ length: n }, (_, i) => ({
+    date:   shortDate(inflows[i].date),
+    inflow: inflows[i].inflow,
+    price:  prices[i].price,
+  }));
 
-  // Price scale
-  const pMin = Math.min(...prices.map(p => p.price));
-  const pMax = Math.max(...prices.map(p => p.price));
-  const pRange = Math.max(pMax - pMin, 1);
-  const priceY = (v: number) => pad.top + plotH - ((v - pMin) / pRange) * plotH;
-
-  // Inflow scale (symmetric around zero for nice bars)
-  const fMax = Math.max(1, ...inflows.map(i => Math.abs(i.inflow)));
-  const barH = plotH / 2;
-  const zeroY = pad.top + plotH / 2;
-  const flowY = (v: number) => zeroY - (v / fMax) * barH;
-
-  const linePath = prices.slice(0, n).map((p, i) => {
-    const x = pad.left + i * step;
-    const y = priceY(p.price);
-    return `${i === 0 ? 'M' : 'L'} ${x} ${y}`;
-  }).join(' ');
-
-  const latestPrice = prices[n - 1].price;
+  const latestPrice  = prices[n - 1].price;
+  const firstPrice   = prices[0].price;
+  const priceChange  = latestPrice - firstPrice;
+  const priceChangePct = (priceChange / firstPrice) * 100;
   const latestInflow = inflows[n - 1].inflow;
-  const priceChange = latestPrice - prices[0].price;
-  const priceChangePct = (priceChange / prices[0].price) * 100;
 
   return (
     <div
       style={{ background: 'var(--brand-card)', border: '1px solid var(--brand-border)' }}
       className="rounded-xl p-4"
     >
-      <div className="flex items-start justify-between mb-2">
+      {/* Header */}
+      <div className="flex items-start justify-between mb-3">
         <div>
           <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
             {asset} Price × ETF Flow · 14d
@@ -71,70 +113,95 @@ export function PriceFlowChart({ inflows, prices, asset }: PriceFlowChartProps) 
             <span className="font-mono font-semibold text-white text-base">
               ${latestPrice.toLocaleString()}
             </span>
-            <span
-              className="text-xs font-mono"
-              style={{ color: priceChange >= 0 ? '#34D399' : '#F87171' }}
-            >
-              {priceChange >= 0 ? '▲' : '▼'} {priceChangePct.toFixed(2)}%
+            <span className="text-xs font-mono" style={{ color: priceChange >= 0 ? '#34D399' : '#F87171' }}>
+              {priceChange >= 0 ? '▲' : '▼'} {Math.abs(priceChangePct).toFixed(2)}%
             </span>
           </div>
         </div>
         <div className="flex gap-3 text-[10px] font-mono">
-          <span className="flex items-center gap-1"><span className="inline-block w-3 h-[2px]" style={{ background: '#00C2FF' }} /> Price</span>
-          <span className="flex items-center gap-1"><span className="inline-block w-2 h-2" style={{ background: '#34D399' }} /> Inflow</span>
-          <span className="flex items-center gap-1"><span className="inline-block w-2 h-2" style={{ background: '#F87171' }} /> Outflow</span>
+          <span className="flex items-center gap-1">
+            <span className="inline-block w-3 h-[2px]" style={{ background: '#00C2FF' }} /> Price
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="inline-block w-2 h-2 rounded-sm" style={{ background: '#34D399' }} /> Inflow
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="inline-block w-2 h-2 rounded-sm" style={{ background: '#F87171' }} /> Outflow
+          </span>
         </div>
       </div>
 
-      <svg width="100%" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="block">
-        {/* zero baseline */}
-        <line x1={pad.left} x2={W - pad.right} y1={zeroY} y2={zeroY}
-          stroke="rgba(255,255,255,0.08)" strokeDasharray="2 3" />
+      {/* Chart */}
+      <ResponsiveContainer width="100%" height={160}>
+        <ComposedChart data={data} margin={{ top: 4, right: 40, bottom: 0, left: 0 }}>
+          <defs>
+            <linearGradient id="priceGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%"  stopColor="#00C2FF" stopOpacity={0.2} />
+              <stop offset="95%" stopColor="#00C2FF" stopOpacity={0} />
+            </linearGradient>
+          </defs>
 
-        {/* inflow bars */}
-        {inflows.slice(0, n).map((f, i) => {
-          const x = pad.left + i * step;
-          const y = f.inflow >= 0 ? flowY(f.inflow) : zeroY;
-          const h = Math.max(1, Math.abs(flowY(f.inflow) - zeroY));
-          const bw = Math.max(3, step * 0.55);
-          return (
-            <rect
-              key={f.date}
-              x={x - bw / 2} y={y} width={bw} height={h}
-              fill={f.inflow >= 0 ? '#34D399' : '#F87171'} fillOpacity="0.7" rx="1"
-            >
-              <title>{`${f.date}: ${f.inflow >= 0 ? '+' : '-'}$${(Math.abs(f.inflow) / 1e6).toFixed(0)}M`}</title>
-            </rect>
-          );
-        })}
+          <CartesianGrid stroke="rgba(255,255,255,0.04)" vertical={false} />
 
-        {/* price line (with subtle area) */}
-        <path d={`${linePath} L ${pad.left + (n - 1) * step} ${pad.top + plotH} L ${pad.left} ${pad.top + plotH} Z`}
-          fill="url(#priceArea)" opacity="0.4" />
-        <path d={linePath} stroke="#00C2FF" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+          <XAxis
+            dataKey="date"
+            tick={{ fontSize: 9, fill: '#475569', fontFamily: 'JetBrains Mono' }}
+            tickLine={false}
+            axisLine={false}
+            interval="preserveStartEnd"
+          />
 
-        {/* latest price dot */}
-        <circle cx={pad.left + (n - 1) * step} cy={priceY(latestPrice)} r="3.5" fill="#00C2FF" />
-        <circle cx={pad.left + (n - 1) * step} cy={priceY(latestPrice)} r="7" fill="#00C2FF" opacity="0.25" />
+          {/* Left axis — inflows */}
+          <YAxis
+            yAxisId="flow"
+            orientation="left"
+            tickFormatter={fmtFlow}
+            tick={{ fontSize: 9, fill: '#475569', fontFamily: 'JetBrains Mono' }}
+            tickLine={false}
+            axisLine={false}
+            width={48}
+          />
 
-        {/* right-axis price label */}
-        <text x={W - pad.right + 4} y={priceY(latestPrice) + 3}
-          fontSize="10" fill="#94A3B8" fontFamily="JetBrains Mono">
-          {`$${(latestPrice / 1000).toFixed(1)}k`}
-        </text>
+          {/* Right axis — price */}
+          <YAxis
+            yAxisId="price"
+            orientation="right"
+            tickFormatter={fmtPrice}
+            tick={{ fontSize: 9, fill: '#475569', fontFamily: 'JetBrains Mono' }}
+            tickLine={false}
+            axisLine={false}
+            width={40}
+          />
 
-        <defs>
-          <linearGradient id="priceArea" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0%" stopColor="#00C2FF" stopOpacity="0.3" />
-            <stop offset="100%" stopColor="#00C2FF" stopOpacity="0" />
-          </linearGradient>
-        </defs>
-      </svg>
+          <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.03)' }} />
 
+          <ReferenceLine yAxisId="flow" y={0} stroke="rgba(255,255,255,0.08)" strokeDasharray="2 3" />
+
+          {/* Inflow bars */}
+          <Bar yAxisId="flow" dataKey="inflow" maxBarSize={18} radius={[2, 2, 0, 0]}>
+            {data.map((d, i) => (
+              <Cell key={i} fill={d.inflow >= 0 ? '#34D399' : '#F87171'} fillOpacity={0.75} />
+            ))}
+          </Bar>
+
+          {/* Price line */}
+          <Line
+            yAxisId="price"
+            dataKey="price"
+            stroke="#00C2FF"
+            strokeWidth={2}
+            dot={false}
+            activeDot={{ r: 4, fill: '#00C2FF', strokeWidth: 0 }}
+            type="monotone"
+          />
+        </ComposedChart>
+      </ResponsiveContainer>
+
+      {/* Footer */}
       <div className="flex items-center justify-between mt-1 text-[10px] text-slate-600 font-mono">
-        <span>{inflows[0].date}</span>
+        <span>{shortDate(inflows[0].date)}</span>
         <span style={{ color: latestInflow >= 0 ? '#34D399' : '#F87171' }}>
-          {latestInflow >= 0 ? '+' : '-'}${(Math.abs(latestInflow) / 1e6).toFixed(0)}M today
+          {fmtFlow(latestInflow)} today
         </span>
         <span>Today</span>
       </div>

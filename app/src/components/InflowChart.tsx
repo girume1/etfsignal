@@ -1,3 +1,7 @@
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer, Cell, ReferenceLine,
+} from 'recharts';
 import type { HistoricalInflow } from '../services/sosovalue';
 
 interface InflowChartProps {
@@ -6,89 +10,9 @@ interface InflowChartProps {
   label?: string;
 }
 
-/**
- * Compact SVG sparkline for 14-day ETF net inflows.
- *
- * - Positive bars render green, negative bars red — mirrors the fund-row colours
- *   so the visual language stays consistent across the dashboard.
- * - A zero baseline is drawn so direction is unambiguous at a glance.
- * - Fully self-contained: no chart lib dependency, keeps the bundle slim.
- */
-export function InflowChart({ data, height = 72, label = 'Daily Net Inflow · 14d' }: InflowChartProps) {
-  if (!data || data.length === 0) {
-    return (
-      <div
-        style={{ background: 'var(--brand-card)', border: '1px solid var(--brand-border)', height: height + 48 }}
-        className="rounded-xl p-4 flex items-center justify-center"
-      >
-        <span className="text-xs text-slate-500">No historical data</span>
-      </div>
-    );
-  }
-
-  const values = data.map(d => d.inflow);
-  const max = Math.max(...values, 0);
-  const min = Math.min(...values, 0);
-  const absMax = Math.max(Math.abs(max), Math.abs(min)) || 1;
-
-  const barGap = 3;
-  const viewWidth = 300;
-  const barWidth = Math.max(4, (viewWidth - (data.length + 1) * barGap) / data.length);
-  const zero = height / 2;
-
-  const latest = data[data.length - 1];
-  const latestPositive = latest.inflow >= 0;
-
-  return (
-    <div
-      style={{ background: 'var(--brand-card)', border: '1px solid var(--brand-border)' }}
-      className="rounded-xl p-4"
-    >
-      <div className="flex items-center justify-between mb-3">
-        <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">{label}</span>
-        <span
-          className="text-xs font-mono"
-          style={{ color: latestPositive ? '#34D399' : '#F87171' }}
-        >
-          {formatCompact(latest.inflow)}
-        </span>
-      </div>
-
-      <svg
-        width="100%"
-        viewBox={`0 0 ${viewWidth} ${height}`}
-        preserveAspectRatio="none"
-        className="block"
-      >
-        {/* zero baseline */}
-        <line x1="0" x2={viewWidth} y1={zero} y2={zero}
-          stroke="rgba(255,255,255,0.08)" strokeDasharray="2 3" strokeWidth="1" />
-
-        {data.map((d, i) => {
-          const magnitude = (Math.abs(d.inflow) / absMax) * (height / 2 - 4);
-          const positive = d.inflow >= 0;
-          const x = barGap + i * (barWidth + barGap);
-          const y = positive ? zero - magnitude : zero;
-          const h = Math.max(magnitude, 1);
-          const fill = positive ? '#34D399' : '#F87171';
-          return (
-            <rect
-              key={d.date}
-              x={x} y={y} width={barWidth} height={h}
-              fill={fill} fillOpacity="0.85" rx="1"
-            >
-              <title>{`${d.date}: ${formatCompact(d.inflow)}`}</title>
-            </rect>
-          );
-        })}
-      </svg>
-
-      <div className="flex items-center justify-between mt-2 text-[10px] text-slate-600 font-mono">
-        <span>{data[0].date}</span>
-        <span>Today</span>
-      </div>
-    </div>
-  );
+function shortDate(iso: string) {
+  const d = new Date(iso);
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
 function formatCompact(value: number): string {
@@ -98,4 +22,105 @@ function formatCompact(value: number): string {
   if (abs >= 1e6) return `${sign}$${(abs / 1e6).toFixed(0)}M`;
   if (abs >= 1e3) return `${sign}$${(abs / 1e3).toFixed(0)}K`;
   return `${sign}$${abs.toFixed(0)}`;
+}
+
+interface TooltipPayload {
+  value: number;
+}
+
+interface CustomTooltipProps {
+  active?: boolean;
+  payload?: TooltipPayload[];
+  label?: string;
+}
+
+function CustomTooltip({ active, payload, label }: CustomTooltipProps) {
+  if (!active || !payload?.length) return null;
+  const val = payload[0].value;
+  return (
+    <div style={{
+      background: 'var(--brand-card)',
+      border: '1px solid var(--brand-border)',
+      borderRadius: 8,
+      padding: '8px 12px',
+      fontSize: 11,
+      fontFamily: 'JetBrains Mono, monospace',
+      boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
+    }}>
+      <div style={{ color: '#94A3B8', marginBottom: 4 }}>{label}</div>
+      <div style={{ color: val >= 0 ? '#34D399' : '#F87171' }}>
+        {formatCompact(val)}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * 14-day net-inflow bar chart. Positive bars are green, negative red.
+ * Powered by Recharts — interactive tooltips, responsive container.
+ */
+export function InflowChart({ data, height = 100, label = 'Daily Net Inflow · 14d' }: InflowChartProps) {
+  if (!data || data.length === 0) {
+    return (
+      <div
+        style={{ background: 'var(--brand-card)', border: '1px solid var(--brand-border)', height: height + 64 }}
+        className="rounded-xl p-4 flex items-center justify-center"
+      >
+        <span className="text-xs text-slate-500">No historical data</span>
+      </div>
+    );
+  }
+
+  const chartData = data.map(d => ({
+    date:   shortDate(d.date),
+    inflow: d.inflow,
+  }));
+
+  const latest = data[data.length - 1];
+
+  return (
+    <div
+      style={{ background: 'var(--brand-card)', border: '1px solid var(--brand-border)' }}
+      className="rounded-xl p-4"
+    >
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">{label}</span>
+        <span className="text-xs font-mono" style={{ color: latest.inflow >= 0 ? '#34D399' : '#F87171' }}>
+          {formatCompact(latest.inflow)}
+        </span>
+      </div>
+
+      <ResponsiveContainer width="100%" height={height}>
+        <BarChart data={chartData} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
+          <CartesianGrid stroke="rgba(255,255,255,0.04)" vertical={false} />
+          <XAxis
+            dataKey="date"
+            tick={{ fontSize: 9, fill: '#475569', fontFamily: 'JetBrains Mono' }}
+            tickLine={false}
+            axisLine={false}
+            interval="preserveStartEnd"
+          />
+          <YAxis
+            tickFormatter={v => formatCompact(v)}
+            tick={{ fontSize: 9, fill: '#475569', fontFamily: 'JetBrains Mono' }}
+            tickLine={false}
+            axisLine={false}
+            width={48}
+          />
+          <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.03)' }} />
+          <ReferenceLine y={0} stroke="rgba(255,255,255,0.08)" strokeDasharray="2 3" />
+          <Bar dataKey="inflow" maxBarSize={20} radius={[2, 2, 0, 0]}>
+            {chartData.map((d, i) => (
+              <Cell key={i} fill={d.inflow >= 0 ? '#34D399' : '#F87171'} fillOpacity={0.8} />
+            ))}
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+
+      <div className="flex items-center justify-between mt-2 text-[10px] text-slate-600 font-mono">
+        <span>{shortDate(data[0].date)}</span>
+        <span>Today</span>
+      </div>
+    </div>
+  );
 }
