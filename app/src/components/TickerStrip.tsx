@@ -1,3 +1,4 @@
+import { useRef, useState, useEffect } from 'react';
 import type { EtfData } from '../types';
 import { formatUSD } from '../services/sosovalue';
 
@@ -6,19 +7,60 @@ interface TickerStripProps {
   ethData: EtfData | null;
   btcPrice?: number;
   ethPrice?: number;
+  /** True when the Binance WebSocket is connected and prices are live */
+  liveConnected?: boolean;
 }
 
 /**
- * Bloomberg-style scrolling ticker. Pulls the top funds from each ETF snapshot,
- * interleaves prices + aggregate flows, and animates infinitely.
+ * Bloomberg-style scrolling ticker.
+ * When liveConnected=true, BTC/ETH prices update in real-time from Binance WS
+ * and a green "LIVE" pill is shown on the right edge.
  *
- * Accessibility: wrapped in `role="marquee"` with a paused-on-hover interaction.
+ * Hover pauses the scroll (accessibility).
  */
-export function TickerStrip({ btcData, ethData, btcPrice, ethPrice }: TickerStripProps) {
-  const items: { label: string; value: string; color: string }[] = [];
+export function TickerStrip({
+  btcData, ethData, btcPrice, ethPrice, liveConnected = false,
+}: TickerStripProps) {
+  // Flash animation for price updates
+  const [btcFlash, setBtcFlash] = useState(false);
+  const [ethFlash, setEthFlash] = useState(false);
+  const prevBtc = useRef<number | undefined>(btcPrice);
+  const prevEth = useRef<number | undefined>(ethPrice);
 
-  if (btcPrice) items.push({ label: 'BTC', value: `$${btcPrice.toLocaleString()}`, color: '#FCD34D' });
-  if (ethPrice) items.push({ label: 'ETH', value: `$${ethPrice.toLocaleString()}`, color: '#A78BFA' });
+  useEffect(() => {
+    if (btcPrice !== undefined && btcPrice !== prevBtc.current && liveConnected) {
+      setBtcFlash(true);
+      const t = setTimeout(() => setBtcFlash(false), 300);
+      prevBtc.current = btcPrice;
+      return () => clearTimeout(t);
+    }
+    prevBtc.current = btcPrice;
+  }, [btcPrice, liveConnected]);
+
+  useEffect(() => {
+    if (ethPrice !== undefined && ethPrice !== prevEth.current && liveConnected) {
+      setEthFlash(true);
+      const t = setTimeout(() => setEthFlash(false), 300);
+      prevEth.current = ethPrice;
+      return () => clearTimeout(t);
+    }
+    prevEth.current = ethPrice;
+  }, [ethPrice, liveConnected]);
+
+  const items: { label: string; value: string; color: string; flash?: boolean }[] = [];
+
+  if (btcPrice) items.push({
+    label: 'BTC',
+    value: `$${btcPrice.toLocaleString(undefined, { maximumFractionDigits: 0 })}`,
+    color: '#FCD34D',
+    flash: btcFlash,
+  });
+  if (ethPrice) items.push({
+    label: 'ETH',
+    value: `$${ethPrice.toLocaleString(undefined, { maximumFractionDigits: 0 })}`,
+    color: '#A78BFA',
+    flash: ethFlash,
+  });
 
   if (btcData) {
     items.push({
@@ -84,7 +126,12 @@ export function TickerStrip({ btcData, ethData, btcPrice, ethPrice }: TickerStri
         {track.map((item, i) => (
           <div key={i} className="flex items-center gap-2 text-xs shrink-0">
             <span className="text-slate-500 uppercase tracking-wider font-mono">{item.label}</span>
-            <span className="font-mono font-semibold" style={{ color: item.color }}>{item.value}</span>
+            <span
+              className="font-mono font-semibold transition-colors duration-150"
+              style={{ color: item.flash ? '#fff' : item.color }}
+            >
+              {item.value}
+            </span>
             <span className="text-slate-700 font-mono">·</span>
           </div>
         ))}
@@ -99,6 +146,32 @@ export function TickerStrip({ btcData, ethData, btcPrice, ethPrice }: TickerStri
         className="absolute right-0 top-0 bottom-0 w-16 pointer-events-none"
         style={{ background: 'linear-gradient(to left, var(--brand-panel), transparent)' }}
       />
+
+      {/* LIVE indicator */}
+      <div className="absolute right-0 top-0 bottom-0 flex items-center pr-2 z-10">
+        <span
+          className="text-[9px] font-mono font-semibold uppercase tracking-widest px-1.5 py-0.5 rounded-full flex items-center gap-1"
+          style={{
+            background: liveConnected
+              ? 'rgba(52,211,153,0.12)'
+              : 'rgba(100,116,139,0.12)',
+            color: liveConnected ? '#34D399' : '#475569',
+            border: `1px solid ${liveConnected ? 'rgba(52,211,153,0.3)' : 'rgba(100,116,139,0.2)'}`,
+          }}
+        >
+          <span
+            className={liveConnected ? 'animate-pulse' : ''}
+            style={{
+              width: 5,
+              height: 5,
+              borderRadius: '50%',
+              background: liveConnected ? '#34D399' : '#475569',
+              display: 'inline-block',
+            }}
+          />
+          {liveConnected ? 'LIVE' : 'OFF'}
+        </span>
+      </div>
     </div>
   );
 }

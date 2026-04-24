@@ -9,7 +9,9 @@ import { useDashboard } from '../contexts/DashboardContext';
 
 export function AppShell() {
   const {
-    btcData, ethData, latestBtcPx, latestEthPx,
+    btcData, ethData,
+    latestBtcPx, latestEthPx,
+    liveBtcPx, liveEthPx, liveConnected,
     wallet, handleConnectWallet, handleDisconnectWallet,
     lastUpdated, effectiveMock, dataError, refresh,
     signal, symbol, tradeModal, closeTradeModal, confirmTrade,
@@ -31,7 +33,9 @@ export function AppShell() {
 
       <TickerStrip
         btcData={btcData} ethData={ethData}
-        btcPrice={latestBtcPx} ethPrice={latestEthPx}
+        btcPrice={liveBtcPx ?? latestBtcPx}
+        ethPrice={liveEthPx ?? latestEthPx}
+        liveConnected={liveConnected}
       />
 
       {effectiveMock && !bannerDismissed && (

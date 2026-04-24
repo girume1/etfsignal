@@ -2,20 +2,32 @@ import { useDashboard } from '../contexts/DashboardContext';
 import { formatUSD } from '../services/sosovalue';
 
 export function QuickStats() {
-  const { btcData, ethData, alerts, sentiment, activeLabel } = useDashboard();
+  const {
+    btcData, ethData, alerts, sentiment, activeLabel,
+    liveBtcPx, liveEthPx, liveConnected,
+    latestBtcPx, latestEthPx,
+  } = useDashboard();
+
+  // Use live Binance price when connected, fall back to last API price
+  const displayBtcPx = liveBtcPx ?? latestBtcPx;
+  const displayEthPx = liveEthPx ?? latestEthPx;
 
   const stats = [
     {
-      label: 'BTC ETF AUM',
-      value: btcData ? formatUSD(btcData.totalNetAssets.value).replace('+', '') : '—',
-      sub: btcData ? formatUSD(btcData.dailyNetInflow.value) + ' today' : '',
-      color: (btcData?.dailyNetInflow.value || 0) >= 0 ? '#34D399' : '#F87171',
+      label: 'BTC Price',
+      value: displayBtcPx
+        ? `$${displayBtcPx.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
+        : '—',
+      sub: liveConnected ? '● live' : btcData ? 'from API' : '',
+      color: liveConnected ? '#34D399' : '#60A5FA',
     },
     {
-      label: 'ETH ETF AUM',
-      value: ethData ? formatUSD(ethData.totalNetAssets.value).replace('+', '') : '—',
-      sub: ethData ? formatUSD(ethData.dailyNetInflow.value) + ' today' : '',
-      color: (ethData?.dailyNetInflow.value || 0) >= 0 ? '#34D399' : '#F87171',
+      label: 'ETH Price',
+      value: displayEthPx
+        ? `$${displayEthPx.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
+        : '—',
+      sub: liveConnected ? '● live' : ethData ? 'from API' : '',
+      color: liveConnected ? '#34D399' : '#A78BFA',
     },
     {
       label: `${activeLabel} Sentiment`,
