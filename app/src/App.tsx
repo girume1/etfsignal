@@ -1,3 +1,5 @@
+// Boot Reown AppKit before the React tree — registers the <w3m-modal> web-component
+import './lib/reown';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { DensityProvider } from './contexts/DensityContext';
 import { DashboardProvider } from './contexts/DashboardContext';

@@ -2,6 +2,9 @@ import {
   createContext, useContext, useState, useEffect, useCallback, useMemo,
   type ReactNode,
 } from 'react';
+import { useAppKitAccount, useAppKitProvider } from '@reown/appkit/react';
+import type { Eip1193Provider } from 'ethers';
+import { ethers } from 'ethers';
 import {
   fetchEtfMetrics, fetchNews, fetchHistoricalInflows, fetchPriceHistory,
   fetchAlerts, fetchSignalHistory, isMockMode, mockReason,
@@ -9,12 +12,13 @@ import {
 import type { HistoricalInflow, PricePoint } from '../services/sosovalue';
 import { computeSentiment } from '../services/mockData';
 import { analyzeMarket } from '../services/ai';
-import { connectWallet, placeSpotOrder } from '../services/sodex';
+import { placeSpotOrder } from '../services/sodex';
+import { modal } from '../lib/reown';
+import { useLivePrices } from '../hooks/useLivePrices';
 import type {
   EtfData, NewsItem, MarketSignal, Alert, HistoricalSignal,
   ActiveTab, WalletState, TradeOrder, OrderSide, SentimentScore,
 } from '../types';
-import { ethers } from 'ethers';
 
 interface DashboardContextValue {
   // data
@@ -42,6 +46,10 @@ interface DashboardContextValue {
   activeLabel: 'BTC' | 'ETH';
   latestBtcPx: number | undefined;
   latestEthPx: number | undefined;
+  /** Binance WebSocket live price — null until first tick arrives */
+  liveBtcPx: number | null;
+  liveEthPx: number | null;
+  liveConnected: boolean;
   sentiment: SentimentScore;
 
   // signal
@@ -53,7 +61,7 @@ interface DashboardContextValue {
   // wallet + trade
   wallet: WalletState;
   signer: ethers.Signer | null;
-  handleConnectWallet: () => Promise<void>;
+  handleConnectWallet: () => void;
   handleDisconnectWallet: () => void;
   tradeModal: { side: OrderSide } | null;
   openTradeModal: (side: OrderSide) => void;
@@ -65,19 +73,19 @@ interface DashboardContextValue {
 const DashboardContext = createContext<DashboardContextValue | null>(null);
 
 export function DashboardProvider({ children }: { children: ReactNode }) {
-  // data
-  const [btcData,   setBtcData]    = useState<EtfData | null>(null);
-  const [ethData,   setEthData]    = useState<EtfData | null>(null);
-  const [btcHist,   setBtcHist]    = useState<HistoricalInflow[]>([]);
-  const [ethHist,   setEthHist]    = useState<HistoricalInflow[]>([]);
-  const [btcPrice,  setBtcPrice]   = useState<PricePoint[]>([]);
-  const [ethPrice,  setEthPrice]   = useState<PricePoint[]>([]);
-  const [alerts,    setAlerts]     = useState<Alert[]>([]);
-  const [history,   setHistory]    = useState<HistoricalSignal[]>([]);
-  const [news,      setNews]       = useState<NewsItem[]>([]);
-  const [loading,   setLoading]    = useState(false);
+  // ── ETF data ────────────────────────────────────────────────────────────
+  const [btcData,     setBtcData]     = useState<EtfData | null>(null);
+  const [ethData,     setEthData]     = useState<EtfData | null>(null);
+  const [btcHist,     setBtcHist]     = useState<HistoricalInflow[]>([]);
+  const [ethHist,     setEthHist]     = useState<HistoricalInflow[]>([]);
+  const [btcPrice,    setBtcPrice]    = useState<PricePoint[]>([]);
+  const [ethPrice,    setEthPrice]    = useState<PricePoint[]>([]);
+  const [alerts,      setAlerts]      = useState<Alert[]>([]);
+  const [history,     setHistory]     = useState<HistoricalSignal[]>([]);
+  const [news,        setNews]        = useState<NewsItem[]>([]);
+  const [loading,     setLoading]     = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-  const [dataError, setDataError]  = useState<string | null>(null);
+  const [dataError,   setDataError]   = useState<string | null>(null);
   const [effectiveMock, setEffectiveMock] = useState<boolean>(isMockMode);
 
   const [activeTab, setActiveTab] = useState<ActiveTab>('btc');
@@ -86,10 +94,50 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
   const [signalLoading, setSignalLoading] = useState(false);
   const [signalError,   setSignalError]   = useState<string | null>(null);
 
+  // ── Wallet — driven by Reown AppKit ────────────────────────────────────
   const [wallet, setWallet] = useState<WalletState>({ connected: false, address: null, network: null });
   const [signer, setSigner] = useState<ethers.Signer | null>(null);
   const [tradeModal, setTradeModal] = useState<{ side: OrderSide } | null>(null);
 
+  // AppKit account state (reactive — updates on connect / disconnect)
+  const { address: akAddress, isConnected: akConnected } = useAppKitAccount();
+  const { walletProvider } = useAppKitProvider<Eip1193Provider>('eip155');
+
+  // Sync WalletState from AppKit
+  useEffect(() => {
+    setWallet({
+      connected: akConnected,
+      address:   akAddress  ?? null,
+      network:   akConnected ? 'testnet' : null,
+    });
+  }, [akConnected, akAddress]);
+
+  // Build ethers.js Signer from AppKit provider
+  useEffect(() => {
+    if (akConnected && walletProvider) {
+      const provider = new ethers.BrowserProvider(walletProvider as Eip1193Provider);
+      provider.getSigner()
+        .then(s => setSigner(s))
+        .catch(() => setSigner(null));
+    } else {
+      setSigner(null);
+    }
+  }, [akConnected, walletProvider]);
+
+  // Open Reown modal (wallet selector / QR)
+  const handleConnectWallet = useCallback(() => {
+    modal.open();
+  }, []);
+
+  // Disconnect via AppKit (clears session in all wallets)
+  const handleDisconnectWallet = useCallback(() => {
+    modal.disconnect();
+  }, []);
+
+  // ── Live prices (Binance WebSocket) ────────────────────────────────────
+  const { BTC: liveBtcPx, ETH: liveEthPx, connected: liveConnected } = useLivePrices();
+
+  // ── Data refresh ────────────────────────────────────────────────────────
   const refresh = useCallback(async () => {
     setLoading(true);
     setDataError(null);
@@ -111,9 +159,10 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
       setAlerts(al); setHistory(hist);
       setNews(newsData.list);
       setLastUpdated(new Date());
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to load market data.';
       console.error('Failed to load data:', err);
-      setDataError(err?.message || 'Failed to load market data. Check API key or network.');
+      setDataError(msg);
     } finally {
       setEffectiveMock(mockReason() !== null);
       setLoading(false);
@@ -128,18 +177,22 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => { setSignal(null); setSignalError(null); }, [activeTab]);
 
-  const activeData   = activeTab === 'btc' ? btcData   : ethData;
-  const activeHist   = activeTab === 'btc' ? btcHist   : ethHist;
-  const activePrice  = activeTab === 'btc' ? btcPrice  : ethPrice;
-  const activeLabel: 'BTC' | 'ETH' = activeTab === 'btc' ? 'BTC' : 'ETH';
-  const latestBtcPx  = btcPrice[btcPrice.length - 1]?.price;
-  const latestEthPx  = ethPrice[ethPrice.length - 1]?.price;
+  // ── Derived values ───────────────────────────────────────────────────────
+  const activeData:  EtfData | null       = activeTab === 'btc' ? btcData  : ethData;
+  const activeHist:  HistoricalInflow[]   = activeTab === 'btc' ? btcHist  : ethHist;
+  const activePrice: PricePoint[]         = activeTab === 'btc' ? btcPrice : ethPrice;
+  const activeLabel: 'BTC' | 'ETH'       = activeTab === 'btc' ? 'BTC'    : 'ETH';
+
+  // Historical last price (from API / mock)
+  const latestBtcPx = btcPrice[btcPrice.length - 1]?.price;
+  const latestEthPx = ethPrice[ethPrice.length - 1]?.price;
 
   const sentiment = useMemo(
     () => computeSentiment(activeHist.map(h => h.inflow)),
     [activeHist],
   );
 
+  // ── AI signal ────────────────────────────────────────────────────────────
   const handleAnalyze = useCallback(async () => {
     if (!activeData) return;
     setSignalLoading(true);
@@ -148,28 +201,16 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     try {
       const r = await analyzeMarket(activeLabel, activeData, news);
       setSignal(r);
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Claude analysis failed.';
       console.error(err);
-      setSignalError(err?.message || 'Claude analysis failed. Check ANTHROPIC_API_KEY on the server and retry.');
+      setSignalError(msg);
     } finally {
       setSignalLoading(false);
     }
   }, [activeData, activeLabel, news]);
 
-  const handleConnectWallet = useCallback(async () => {
-    if (wallet.connected) return;
-    const r = await connectWallet();
-    if (r) {
-      setSigner(r.signer);
-      setWallet({ connected: true, address: r.address, network: 'testnet' });
-    }
-  }, [wallet.connected]);
-
-  const handleDisconnectWallet = useCallback(() => {
-    setSigner(null);
-    setWallet({ connected: false, address: null, network: null });
-  }, []);
-
+  // ── Trade modal ──────────────────────────────────────────────────────────
   const openTradeModal  = useCallback((side: OrderSide) => setTradeModal({ side }), []);
   const closeTradeModal = useCallback(() => setTradeModal(null), []);
 
@@ -186,14 +227,20 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     alerts, history, news, loading, lastUpdated, dataError,
     effectiveMock, refresh,
     activeTab, setActiveTab, activeData, activeHist, activePrice,
-    activeLabel, latestBtcPx, latestEthPx, sentiment,
+    activeLabel, latestBtcPx, latestEthPx,
+    liveBtcPx, liveEthPx, liveConnected,
+    sentiment,
     signal, signalLoading, signalError, handleAnalyze,
     wallet, signer, handleConnectWallet, handleDisconnectWallet,
     tradeModal, openTradeModal, closeTradeModal, confirmTrade,
     symbol,
   };
 
-  return <DashboardContext.Provider value={value}>{children}</DashboardContext.Provider>;
+  return (
+    <DashboardContext.Provider value={value}>
+      {children}
+    </DashboardContext.Provider>
+  );
 }
 
 export function useDashboard(): DashboardContextValue {
