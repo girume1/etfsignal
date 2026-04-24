@@ -10,6 +10,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@dynamic-labs/ethereum": "^4.78.0",
+    "@dynamic-labs/ethers-v6": "^4.78.0",
+    "@dynamic-labs/sdk-react-core": "^4.78.0",
     "@reown/appkit": "^1.8.19",
     "@reown/appkit-adapter-ethers": "^1.8.19",
     "autoprefixer": "^10.5.0",
