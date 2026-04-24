@@ -1,5 +1,6 @@
-/// <reference types="node" />
 // Vercel Edge Function — proxies SoSoValue API calls so the key never reaches the browser.
+// Your SOSOVALUE_API_KEY stays hidden here
+declare const process: { env: Record<string, string | undefined> };
 // Client POSTs { method, url, body?, params? } → this function forwards with the server key.
 
 export const config = { runtime: 'edge' };

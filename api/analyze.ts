@@ -1,6 +1,6 @@
-/// <reference types="node" />
 // Vercel serverless function — runs on the server, not in browser
 // Your ANTHROPIC_API_KEY stays hidden here
+declare const process: { env: Record<string, string | undefined> };
 
 export const config = { runtime: 'edge' };
 
