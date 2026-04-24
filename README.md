@@ -35,7 +35,7 @@ Most crypto traders are drowning in noise. BTC/ETH spot ETF flows, institutional
 
 **ETFSignal AI** closes that gap.
 
-It pulls institutional ETF flow data from SoSoValue, computes a live sentiment score, synthesizes everything with Claude AI into a clear market signal, then lets you execute the trade directly on SoDEX testnet — all from one dashboard with 5 focused views.
+It pulls institutional ETF flow data from SoSoValue, streams live BTC/ETH prices from Binance, computes a live sentiment score, synthesizes everything with Claude AI into a clear market signal, then lets you execute the trade directly on SoDEX testnet — all from one dashboard with 5 focused views.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -45,6 +45,10 @@ It pulls institutional ETF flow data from SoSoValue, computes a live sentiment s
 │   ETF Flows             Synthesize           Place Order       │
 │   News Feed             Signal               EIP712 Sign       │
 │   Fund Data             Risk Score           Confirm Trade     │
+│                                                                 │
+│   Binance WS                                                    │
+│   ──────────                                                    │
+│   Live BTC/ETH price (1s updates)                              │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -58,11 +62,12 @@ It pulls institutional ETF flow data from SoSoValue, computes a live sentiment s
 | Step | What Happens |
 |------|-------------|
 | **1. Ingest** | Fetches live BTC & ETH spot ETF metrics — daily inflows, net assets, cumulative flows, per-fund breakdown |
-| **2. Sentiment** | Computes a 0–100 flow sentiment score from 14-day momentum + inflow breadth |
-| **3. Enrich** | Pulls categorised news: on-chain events, institutional reports, price alerts, research |
-| **4. Analyze** | Claude AI synthesises everything into a structured signal: direction, confidence, key factors, risk warning |
-| **5. Signal** | Dashboard shows BULLISH / BEARISH / NEUTRAL with headline, summary, trade idea, AskAI follow-up chat |
-| **6. Execute** | User connects MetaMask, reviews order, acknowledges risk, signs via EIP712, submits to SoDEX testnet |
+| **2. Live Price** | Streams real-time BTC/ETH price from Binance WebSocket (~1s cadence); auto-reconnects |
+| **3. Sentiment** | Computes a 0–100 flow sentiment score from 14-day momentum + inflow breadth |
+| **4. Enrich** | Pulls categorised news: on-chain events, institutional reports, price alerts, research |
+| **5. Analyze** | Claude AI synthesises everything into a structured signal: direction, confidence, key factors, risk warning |
+| **6. Signal** | Dashboard shows BULLISH / BEARISH / NEUTRAL with headline, summary, trade idea, AskAI follow-up chat |
+| **7. Execute** | User connects wallet via Dynamic, reviews order, acknowledges risk, signs via EIP712, submits to SoDEX testnet |
 
 ---
 
@@ -85,7 +90,7 @@ The app is split into 5 focused views, all sharing one live data context (no re-
 ### Prerequisites
 
 - Node.js 18+ / pnpm 9+
-- MetaMask browser extension
+- Any EVM wallet (MetaMask recommended)
 - SoSoValue API key ([apply here](https://forms.gle/2nuJT2qNbUQsyyZy8)) — *app works in demo mode without one*
 - Anthropic API key ([get here](https://console.anthropic.com))
 
@@ -148,17 +153,20 @@ Without a key the app runs in **demo mode** — a yellow "Demo Data" pill appear
 </details>
 
 <details>
-<summary><strong>SoDEX Testnet Wallet Setup</strong></summary>
+<summary><strong>Wallet Setup (Dynamic)</strong></summary>
 
-1. Install [MetaMask](https://metamask.io)
-2. Visit [sodex.com](https://sodex.com) and connect
-3. Follow [Testnet Onboarding Steps](https://sodex.com/documentation/resources/testnet-onboarding-steps):
+ETFSignal AI uses [Dynamic](https://dynamic.xyz) for wallet connections — supports MetaMask, WalletConnect, Coinbase Wallet, and 300+ EVM wallets.
+
+1. Click **Connect Wallet** in the app header
+2. Select your wallet from the Dynamic modal
+3. For SoDEX testnet trading, follow [Testnet Onboarding Steps](https://sodex.com/documentation/resources/testnet-onboarding-steps):
    - Connect whitelisted wallet
    - Claim test tokens
    - Add ValueChain to MetaMask (`chainId: 138565`)
    - Transfer test tokens to Spot Account
    - Enable gas-free trading
-4. Click **Connect Wallet** in ETFSignal AI — dropdown shows copy address, explorer link, and disconnect
+
+Once connected, the header shows your address with a dropdown for: copy address · view on explorer · disconnect.
 
 </details>
 
@@ -176,18 +184,22 @@ app/
 │   │   ├── DashboardContext.tsx # Shared data + wallet + signal state for all /app/* pages
 │   │   └── DensityContext.tsx   # Layout density (compact / comfortable / mobile) + localStorage
 │   │
+│   ├── hooks/
+│   │   └── useLivePrices.ts     # Binance WebSocket hook — live BTC/ETH price stream
+│   │
 │   ├── components/
 │   │   ├── AppShell.tsx         # Header + TickerStrip + Sidebar + <Outlet />
 │   │   ├── AppSidebar.tsx       # Sticky sidebar nav with active-route highlight + alert badge
 │   │   ├── Header.tsx           # Logo + DensityToggle + WalletMenu
 │   │   ├── WalletMenu.tsx       # Dropdown: copy address · explorer link · disconnect
 │   │   ├── DensityToggle.tsx    # Mobile / Compact / Comfortable switcher
-│   │   ├── TickerStrip.tsx      # Bloomberg-style scrolling marquee
-│   │   ├── QuickStats.tsx       # 4-card stats bar (AUM · flows · sentiment · alerts)
+│   │   ├── TickerStrip.tsx      # Bloomberg-style marquee + LIVE indicator
+│   │   ├── QuickStats.tsx       # 4-card stats bar — live BTC/ETH price + sentiment + alerts
 │   │   ├── EtfPanel.tsx         # BTC/ETH tab · metrics · fund breakdown table · anomaly badges
 │   │   ├── SentimentGauge.tsx   # SVG half-circle gauge (0–100 flow momentum score)
-│   │   ├── PriceFlowChart.tsx   # Combined SVG: price line + inflow bars, shared x-axis
-│   │   ├── MarketShareDonut.tsx # SVG donut — top-6 funds + Other bucket
+│   │   ├── PriceFlowChart.tsx   # Recharts ComposedChart: price line + inflow bars, dual Y axes
+│   │   ├── MarketShareDonut.tsx # Recharts PieChart donut — top-6 funds + Other bucket
+│   │   ├── InflowChart.tsx      # Recharts BarChart — 14-day net inflow sparkline
 │   │   ├── SignalPanel.tsx      # AI signal card + Long/Short trade buttons
 │   │   ├── AskAI.tsx            # Follow-up chat — routed through /api/analyze
 │   │   ├── AlertsPanel.tsx      # Severity-glow alert feed (5 kinds)
@@ -215,7 +227,7 @@ app/
 │   │   └── sodex.ts             # EIP712 signing + SoDEX testnet order placement
 │   │
 │   ├── types/index.ts           # Full TypeScript definitions
-│   └── App.tsx                  # BrowserRouter + DensityProvider + nested /app routes
+│   └── App.tsx                  # DynamicContextProvider + BrowserRouter + nested /app routes
 │
 ├── .env.example
 └── README.md
@@ -223,15 +235,15 @@ app/
 
 ---
 
-## 📡 API Integration
+## 📡 API & Data Integration
 
-| API | Endpoint | Purpose |
-|-----|----------|---------|
-| **SoSoValue** | `POST /openapi/v2/etf/currentEtfDataMetrics` | Live BTC/ETH ETF flows, net assets, holdings |
-| **SoSoValue** | `GET /api/v1/news/featured` | Crypto news — filtered by category |
-| **Claude AI** | `claude-sonnet-4-20250514` (server-side) | Market signal synthesis + AskAI chat |
+| Source | Endpoint / Protocol | Purpose |
+|--------|---------------------|---------|
+| **SoSoValue** | `POST /openapi/v2/etf/currentEtfDataMetrics` | Live BTC/ETH ETF flows, net assets, fund breakdown |
+| **SoSoValue** | `GET /api/v1/news/featured` | Categorised crypto news feed |
+| **Binance** | `wss://stream.binance.com:9443/stream` | Live BTC/ETH price — `miniTicker` ~1s updates |
+| **Claude AI** | `claude-sonnet-4-20250514` (server-side) | Market signal synthesis + AskAI follow-up chat |
 | **SoDEX Testnet** | `POST testnet-gw.sodex.dev/api/v1/spot/order` | EIP712-signed spot order placement |
-| **SoDEX Testnet** | `wss://testnet-gw.sodex.dev/ws/spot` | Real-time price feed (Wave 2) |
 
 ### Mock Mode
 
@@ -277,11 +289,13 @@ interface MarketSignal {
 
 ```
 Wave 1  ✅  Full scaffold · SoSoValue mock+live data · Claude AI signals · SoDEX EIP712 trades
-            5-page app shell · Bloomberg ticker · Sentiment gauge · Price/flow charts
-            Market-share donut · AskAI chat · Alerts feed · Signal archive · Wallet menu
+            5-page app shell · Bloomberg ticker · Binance live price stream (● LIVE indicator)
+            Recharts interactive charts (price+flow, donut, inflow bars)
+            Sentiment gauge · AskAI chat · Alerts feed · Signal archive
+            Dynamic multi-wallet (MetaMask, WalletConnect, Coinbase + 300 more)
             Density toggle (mobile/compact/comfortable) · Landing hero visualization
 
-Wave 2  🔜  Real-time WebSocket price feed · SoSoValue historical API endpoint
+Wave 2  🔜  SoDEX WebSocket real-time order book · SoSoValue historical API endpoint
             AI trade suggestions with TP/SL · Portfolio P&L tracker
 
 Wave 3  🔜  Copy-trading module · Risk scoring dashboard · Final demo polish
@@ -294,10 +308,10 @@ Wave 3  🔜  Copy-trading module · Risk scoring dashboard · Final demo polish
 | Criterion | Weight | ETFSignal AI |
 |-----------|--------|-------------|
 | User Value & Practical Impact | **30%** | Turns institutional ETF flow data into plain-English signals a retail trader can act on in seconds |
-| Functionality & Working Demo | **25%** | Live at etfsignal.vercel.app — full pipeline: data → sentiment → AI signal → EIP712 trade |
+| Functionality & Working Demo | **25%** | Live at etfsignal.vercel.app — full pipeline: live data → sentiment → AI signal → EIP712 trade |
 | Logic, Workflow & Product Design | **20%** | 5-page app shell, shared data context, density-responsive layouts, sidebar navigation |
-| Data / API Integration | **15%** | SoSoValue API + mock-mode fallback + Claude AI (server-side) + SoDEX testnet EIP712 |
-| UX & Clarity | **10%** | Bloomberg-style cockpit, density toggle, animated hero, wallet dropdown with copy/disconnect |
+| Data / API Integration | **15%** | SoSoValue + Binance WS live prices + Claude AI (server-side) + SoDEX testnet EIP712 |
+| UX & Clarity | **10%** | Bloomberg cockpit, Recharts charts, live price ticker, Dynamic wallet, density toggle |
 
 ---
 
@@ -306,9 +320,12 @@ Wave 3  🔜  Copy-trading module · Risk scoring dashboard · Final demo polish
 | Layer | Technology |
 |-------|-----------|
 | Frontend | React 19 + TypeScript + Vite 5 |
-| Styling | Tailwind CSS 3 + CSS custom properties + custom SVG charts |
-| Routing | React Router v6 (nested routes with shared context) |
-| Web3 | ethers.js v6 (EIP712 signing) |
+| Styling | Tailwind CSS 3 + CSS custom properties |
+| Routing | React Router v7 (nested routes with shared context) |
+| Charts | Recharts 3 — ComposedChart, PieChart, BarChart |
+| Wallet | Dynamic (`@dynamic-labs/sdk-react-core`) — MetaMask, WalletConnect, Coinbase + 300 more |
+| Web3 | ethers.js v6 (EIP712 signing via Dynamic signer) |
+| Live Data | Binance WebSocket `miniTicker` stream (BTC + ETH, ~1s cadence) |
 | AI | Anthropic Claude `claude-sonnet-4-20250514` (Vercel Edge Function) |
 | Data | SoSoValue REST API + realistic mock fallback |
 | Trading | SoDEX Testnet REST (EIP712 signed orders) |
@@ -347,6 +364,6 @@ Add environment variables in Vercel dashboard → **Settings → Environment Var
 
 **ETFSignal AI** · SoSoValue Buildathon 2026 · Wave 1
 
-*Data by [SoSoValue](https://sosovalue.com) · Trading on [SoDEX Testnet](https://sodex.com) · AI by [Anthropic Claude](https://anthropic.com)*
+*Data by [SoSoValue](https://sosovalue.com) · Live prices by [Binance](https://binance.com) · Trading on [SoDEX Testnet](https://sodex.com) · AI by [Anthropic Claude](https://anthropic.com) · Wallet by [Dynamic](https://dynamic.xyz)*
 
 </div>
