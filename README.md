@@ -90,7 +90,7 @@ The app is split into 5 focused views, all sharing one live data context (no re-
 
 ### Prerequisites
 
-- Node.js 18+ / pnpm 9+
+- Node.js 18+
 - Any EVM wallet (MetaMask recommended)
 - SoSoValue API key ([apply here](https://forms.gle/2nuJT2qNbUQsyyZy8)) — *app works in demo mode without one*
 - Anthropic API key ([get here](https://console.anthropic.com))
@@ -100,7 +100,7 @@ The app is split into 5 focused views, all sharing one live data context (no re-
 ```bash
 git clone https://github.com/girume1/etfsignal.git
 cd etfsignal/app
-pnpm install
+npm install --legacy-peer-deps
 ```
 
 ### 2. Configure Environment
@@ -125,7 +125,7 @@ VITE_DYNAMIC_ENVIRONMENT_ID=your_dynamic_environment_id_here
 ### 3. Run
 
 ```bash
-pnpm dev
+npm run dev
 ```
 
 Open [http://localhost:5173](http://localhost:5173) 🎉
@@ -177,12 +177,15 @@ Once connected, the header shows your address with a dropdown for: copy address 
 ## 🏗️ Architecture
 
 ```
-app/
+etfsignal/
 ├── api/
 │   ├── analyze.ts              # Vercel Edge Function — Claude proxy (ANTHROPIC_API_KEY server-side)
 │   └── sosovalue.ts            # Vercel Edge Function — SoSoValue proxy (SOSOVALUE_API_KEY server-side)
 │
-├── src/
+├── vercel.json                 # Build config — points Vercel at app/dist + npm install
+│
+└── app/
+    ├── src/
 │   ├── contexts/
 │   │   ├── DashboardContext.tsx # Shared data + wallet + signal state for all /app/* pages
 │   │   └── DensityContext.tsx   # Layout density (compact / comfortable / mobile) + localStorage
@@ -232,8 +235,8 @@ app/
 │   ├── types/index.ts           # Full TypeScript definitions
 │   └── App.tsx                  # DynamicContextProvider + BrowserRouter + nested /app routes
 │
-├── .env.example
-└── README.md
+    ├── .env.example
+    └── package.json
 ```
 
 ---
@@ -245,7 +248,7 @@ app/
 | **SoSoValue** | `POST /openapi/v2/etf/currentEtfDataMetrics` | Live BTC/ETH ETF flows, net assets, fund breakdown |
 | **SoSoValue** | `GET /api/v1/news/featured` | Categorised crypto news feed |
 | **Binance** | `wss://stream.binance.com:9443/stream` | Live BTC/ETH price — `miniTicker` ~1s updates |
-| **Claude AI** | `claude-sonnet-4-20250514` (server-side) | Market signal synthesis + AskAI follow-up chat |
+| **Claude AI** | `claude-sonnet-4-6` (server-side) | Market signal synthesis + AskAI follow-up chat |
 | **SoDEX Testnet** | `POST testnet-gw.sodex.dev/api/v1/spot/order` | EIP712-signed spot order placement |
 
 ### Mock Mode
@@ -329,7 +332,7 @@ Wave 3  🔜  Copy-trading module · Risk scoring dashboard · Final demo polish
 | Wallet | Dynamic (`@dynamic-labs/sdk-react-core`) — MetaMask, WalletConnect, Coinbase + 300 more |
 | Web3 | ethers.js v6 (EIP712 signing via Dynamic signer) |
 | Live Data | Binance WebSocket `miniTicker` stream (BTC + ETH, ~1s cadence) |
-| AI | Anthropic Claude `claude-sonnet-4-20250514` (Vercel Edge Function) |
+| AI | Anthropic Claude `claude-sonnet-4-6` (Vercel Edge Function) |
 | Data | SoSoValue REST API + realistic mock fallback |
 | Trading | SoDEX Testnet REST (EIP712 signed orders) |
 | Deploy | Vercel (Edge Functions for API proxy) |
@@ -339,7 +342,7 @@ Wave 3  🔜  Copy-trading module · Risk scoring dashboard · Final demo polish
 ## 🚢 Deploy to Vercel
 
 ```bash
-pnpm build
+npm run build
 npx vercel --prod
 ```
 
