@@ -43,7 +43,8 @@ export const modal = createAppKit({
   metadata: {
     name: 'ETFSignal AI',
     description: 'AI-Powered BTC/ETH ETF Intelligence & Signal-to-Execution Platform',
-    url: 'https://etfsignal.vercel.app',
+    // Use the actual origin so localhost dev and Vercel prod both validate correctly
+    url: typeof window !== 'undefined' ? window.location.origin : 'https://etfsignal.vercel.app',
     icons: ['https://etfsignal.vercel.app/favicon.png'],
   },
   features: {
