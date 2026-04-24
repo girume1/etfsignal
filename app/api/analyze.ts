@@ -1,3 +1,4 @@
+/// <reference types="node" />
 // Vercel serverless function — runs on the server, not in browser
 // Your ANTHROPIC_API_KEY stays hidden here
 
