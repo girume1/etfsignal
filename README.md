@@ -112,14 +112,15 @@ cp .env.example .env
 ```env
 # .env
 
-# SERVER-SIDE — used only by /api/analyze edge function (never sent to browser)
+# SERVER-SIDE — consumed by Vercel Edge Functions only, never sent to browser
 ANTHROPIC_API_KEY=sk-ant-...
+SOSOVALUE_API_KEY=SOSO-...
 
-# CLIENT-SIDE — leave as placeholder to run in demo/mock mode
-VITE_SOSOVALUE_API_KEY=your_sosovalue_api_key_here
+# CLIENT-SIDE (VITE_ prefix = bundled into browser)
+VITE_DYNAMIC_ENVIRONMENT_ID=your_dynamic_environment_id_here
 ```
 
-> **Security note:** `ANTHROPIC_API_KEY` has **no** `VITE_` prefix — it is a server-only variable consumed by the Vercel Edge Function `/api/analyze`. It is never bundled into the browser build.
+> **Security note:** Both `ANTHROPIC_API_KEY` and `SOSOVALUE_API_KEY` have **no** `VITE_` prefix — they are server-only variables consumed by Vercel Edge Functions (`/api/analyze` and `/api/sosovalue`). They are never bundled into the browser build.
 
 ### 3. Run
 
@@ -136,11 +137,11 @@ Open [http://localhost:5173](http://localhost:5173) 🎉
 <details>
 <summary><strong>SoSoValue API Key</strong></summary>
 
-1. Visit [sosovalue.gitbook.io/soso-value-api-doc](https://sosovalue.gitbook.io/soso-value-api-doc)
-2. Apply for buildathon access via [forms.gle/2nuJT2qNbUQsyyZy8](https://forms.gle/2nuJT2qNbUQsyyZy8)
-3. Once approved, add to `.env` as `VITE_SOSOVALUE_API_KEY`
+1. Visit [sosovalue.com/developer/dashboard](https://sosovalue.com/developer/dashboard) to get your key
+2. Add to `.env` as `SOSOVALUE_API_KEY` (no `VITE_` prefix — server-only)
+3. Add the same key to Vercel → Settings → Environment Variables
 
-Without a key the app runs in **demo mode** — a yellow "Demo Data" pill appears in the header, and all data comes from realistic mock data matching the real API shape.
+All SoSoValue requests are proxied through `/api/sosovalue` (Vercel Edge Function) — the key never reaches the browser. Without a key the app runs in **demo mode** — a yellow "Demo Data" pill appears in the header, and all data comes from realistic mock data matching the real API shape.
 
 </details>
 
@@ -178,7 +179,8 @@ Once connected, the header shows your address with a dropdown for: copy address 
 ```
 app/
 ├── api/
-│   └── analyze.ts              # Vercel Edge Function — Claude proxy (keeps API key server-side)
+│   ├── analyze.ts              # Vercel Edge Function — Claude proxy (ANTHROPIC_API_KEY server-side)
+│   └── sosovalue.ts            # Vercel Edge Function — SoSoValue proxy (SOSOVALUE_API_KEY server-side)
 │
 ├── src/
 │   ├── contexts/
@@ -248,7 +250,7 @@ app/
 
 ### Mock Mode
 
-When `VITE_SOSOVALUE_API_KEY` is empty or a placeholder, all fetchers return from `mockData.ts`:
+When `SOSOVALUE_API_KEY` is not set in Vercel, the `/api/sosovalue` proxy returns `{ noKey: true }` and the client automatically falls back to `mockData.ts`:
 - 10 BTC funds (IBIT, FBTC, ARKB, BITB, HODL, BRRR, BTCO, EZBC, BTC, GBTC)
 - 9 ETH funds (ETHA, FETH, ETHW, CETH, ETHV, QETH, EZET, ETH, ETHE)
 - 14-day inflow series + price history per asset
@@ -282,7 +284,7 @@ interface MarketSignal {
 - **Testnet-only** — all trades go to SoDEX testnet (`chainId: 138565`), no real funds
 - **"Not financial advice"** — displayed on every signal card and trade modal
 - **Trade review step** — full order details visible (symbol, side, quantity) before signing
-- **API key isolation** — Anthropic key lives only in Vercel Edge Function, never in the browser bundle
+- **API key isolation** — Both Anthropic and SoSoValue keys live only in Vercel Edge Functions, never in the browser bundle
 
 ---
 
@@ -346,7 +348,8 @@ Add environment variables in Vercel dashboard → **Settings → Environment Var
 | Key | Value | Visibility |
 |-----|-------|-----------|
 | `ANTHROPIC_API_KEY` | Your Anthropic key | **Server only** (no VITE_ prefix) |
-| `VITE_SOSOVALUE_API_KEY` | Your SoSoValue key | Client + Server |
+| `SOSOVALUE_API_KEY` | Your SoSoValue key | **Server only** (no VITE_ prefix) |
+| `VITE_DYNAMIC_ENVIRONMENT_ID` | Your Dynamic environment ID | Client (public) |
 
 ---
 
