@@ -1,6 +1,6 @@
 {
-  "installCommand": "npm install -g pnpm@10",
-  "buildCommand": "cd app && pnpm install && pnpm build",
+  "installCommand": "cd app && npm install --legacy-peer-deps",
+  "buildCommand": "cd app && npm run build",
   "outputDirectory": "app/dist",
   "framework": null
 }
