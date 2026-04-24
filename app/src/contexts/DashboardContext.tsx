@@ -2,9 +2,9 @@ import {
   createContext, useContext, useState, useEffect, useCallback, useMemo,
   type ReactNode,
 } from 'react';
-import { useAppKitAccount, useAppKitProvider } from '@reown/appkit/react';
-import type { Eip1193Provider } from 'ethers';
-import { ethers } from 'ethers';
+import { useDynamicContext } from '@dynamic-labs/sdk-react-core';
+import { getSigner } from '@dynamic-labs/ethers-v6';
+import type { JsonRpcSigner } from 'ethers';
 import {
   fetchEtfMetrics, fetchNews, fetchHistoricalInflows, fetchPriceHistory,
   fetchAlerts, fetchSignalHistory, isMockMode, mockReason,
@@ -13,7 +13,6 @@ import type { HistoricalInflow, PricePoint } from '../services/sosovalue';
 import { computeSentiment } from '../services/mockData';
 import { analyzeMarket } from '../services/ai';
 import { placeSpotOrder } from '../services/sodex';
-import { modal } from '../lib/reown';
 import { useLivePrices } from '../hooks/useLivePrices';
 import type {
   EtfData, NewsItem, MarketSignal, Alert, HistoricalSignal,
@@ -46,7 +45,6 @@ interface DashboardContextValue {
   activeLabel: 'BTC' | 'ETH';
   latestBtcPx: number | undefined;
   latestEthPx: number | undefined;
-  /** Binance WebSocket live price — null until first tick arrives */
   liveBtcPx: number | null;
   liveEthPx: number | null;
   liveConnected: boolean;
@@ -60,7 +58,7 @@ interface DashboardContextValue {
 
   // wallet + trade
   wallet: WalletState;
-  signer: ethers.Signer | null;
+  signer: JsonRpcSigner | null;
   handleConnectWallet: () => void;
   handleDisconnectWallet: () => void;
   tradeModal: { side: OrderSide } | null;
@@ -94,50 +92,39 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
   const [signalLoading, setSignalLoading] = useState(false);
   const [signalError,   setSignalError]   = useState<string | null>(null);
 
-  // ── Wallet — driven by Reown AppKit ────────────────────────────────────
-  const [wallet, setWallet] = useState<WalletState>({ connected: false, address: null, network: null });
-  const [signer, setSigner] = useState<ethers.Signer | null>(null);
+  const [wallet,     setWallet]     = useState<WalletState>({ connected: false, address: null, network: null });
+  const [signer,     setSigner]     = useState<JsonRpcSigner | null>(null);
   const [tradeModal, setTradeModal] = useState<{ side: OrderSide } | null>(null);
 
-  // AppKit account state (reactive — updates on connect / disconnect)
-  const { address: akAddress, isConnected: akConnected } = useAppKitAccount();
-  const { walletProvider } = useAppKitProvider<Eip1193Provider>('eip155');
+  // ── Dynamic wallet ───────────────────────────────────────────────────────
+  const { primaryWallet, handleLogOut, setShowAuthFlow } = useDynamicContext();
 
-  // Sync WalletState from AppKit
+  // Sync wallet state + ethers signer whenever Dynamic's primary wallet changes
   useEffect(() => {
-    setWallet({
-      connected: akConnected,
-      address:   akAddress  ?? null,
-      network:   akConnected ? 'testnet' : null,
-    });
-  }, [akConnected, akAddress]);
+    const address = primaryWallet?.address ?? null;
+    setWallet({ connected: !!address, address, network: address ? 'testnet' : null });
 
-  // Build ethers.js Signer from AppKit provider
-  useEffect(() => {
-    if (akConnected && walletProvider) {
-      const provider = new ethers.BrowserProvider(walletProvider as Eip1193Provider);
-      provider.getSigner()
+    if (primaryWallet) {
+      getSigner(primaryWallet)
         .then(s => setSigner(s))
         .catch(() => setSigner(null));
     } else {
       setSigner(null);
     }
-  }, [akConnected, walletProvider]);
+  }, [primaryWallet]);
 
-  // Open Reown modal (wallet selector / QR)
   const handleConnectWallet = useCallback(() => {
-    modal.open();
-  }, []);
+    setShowAuthFlow(true);
+  }, [setShowAuthFlow]);
 
-  // Disconnect via AppKit (clears session in all wallets)
   const handleDisconnectWallet = useCallback(() => {
-    modal.disconnect();
-  }, []);
+    handleLogOut();
+  }, [handleLogOut]);
 
-  // ── Live prices (Binance WebSocket) ────────────────────────────────────
+  // ── Live prices (Binance WebSocket) ─────────────────────────────────────
   const { BTC: liveBtcPx, ETH: liveEthPx, connected: liveConnected } = useLivePrices();
 
-  // ── Data refresh ────────────────────────────────────────────────────────
+  // ── Data refresh ─────────────────────────────────────────────────────────
   const refresh = useCallback(async () => {
     setLoading(true);
     setDataError(null);
@@ -177,13 +164,11 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => { setSignal(null); setSignalError(null); }, [activeTab]);
 
-  // ── Derived values ───────────────────────────────────────────────────────
-  const activeData:  EtfData | null       = activeTab === 'btc' ? btcData  : ethData;
-  const activeHist:  HistoricalInflow[]   = activeTab === 'btc' ? btcHist  : ethHist;
-  const activePrice: PricePoint[]         = activeTab === 'btc' ? btcPrice : ethPrice;
-  const activeLabel: 'BTC' | 'ETH'       = activeTab === 'btc' ? 'BTC'    : 'ETH';
-
-  // Historical last price (from API / mock)
+  // ── Derived values ────────────────────────────────────────────────────────
+  const activeData:  EtfData | null     = activeTab === 'btc' ? btcData  : ethData;
+  const activeHist:  HistoricalInflow[] = activeTab === 'btc' ? btcHist  : ethHist;
+  const activePrice: PricePoint[]       = activeTab === 'btc' ? btcPrice : ethPrice;
+  const activeLabel: 'BTC' | 'ETH'     = activeTab === 'btc' ? 'BTC'    : 'ETH';
   const latestBtcPx = btcPrice[btcPrice.length - 1]?.price;
   const latestEthPx = ethPrice[ethPrice.length - 1]?.price;
 
@@ -210,7 +195,7 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     }
   }, [activeData, activeLabel, news]);
 
-  // ── Trade modal ──────────────────────────────────────────────────────────
+  // ── Trade modal ───────────────────────────────────────────────────────────
   const openTradeModal  = useCallback((side: OrderSide) => setTradeModal({ side }), []);
   const closeTradeModal = useCallback(() => setTradeModal(null), []);
 
@@ -231,7 +216,8 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     liveBtcPx, liveEthPx, liveConnected,
     sentiment,
     signal, signalLoading, signalError, handleAnalyze,
-    wallet, signer, handleConnectWallet, handleDisconnectWallet,
+    wallet, signer,
+    handleConnectWallet, handleDisconnectWallet,
     tradeModal, openTradeModal, closeTradeModal, confirmTrade,
     symbol,
   };
