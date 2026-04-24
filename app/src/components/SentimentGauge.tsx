@@ -20,7 +20,7 @@ export function SentimentGauge({ sentiment, asset }: SentimentGaugeProps) {
     score >= 30 ? '#FB923C' : '#F87171';
 
   // Gauge geometry
-  const w = 220, h = 130, cx = w / 2, cy = 110, r = 88;
+  const w = 220, h = 148, cx = w / 2, cy = 108, r = 88;
   const angle = (score / 100) * 180 - 180; // -180 → 0
   const rad = (angle * Math.PI) / 180;
   const needleX = cx + Math.cos(rad) * (r - 8);
@@ -50,7 +50,7 @@ export function SentimentGauge({ sentiment, asset }: SentimentGaugeProps) {
         <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
           {asset} Flow Sentiment
         </span>
-        <span className="text-[10px] text-slate-600 font-mono uppercase tracking-wider">14d</span>
+        <span className="text-[10px] text-slate-600 font-mono tracking-wider">14-day</span>
       </div>
 
       <svg width="100%" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="xMidYMid meet" className="block">
