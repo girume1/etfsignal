@@ -13,7 +13,6 @@ export default async function handler(req: Request) {
 
   const apiKey = process.env.SOSOVALUE_API_KEY;
   if (!apiKey) {
-    // Tell the client: no key configured → fall back to mock data
     return json({ noKey: true }, 200);
   }
 
@@ -32,7 +31,6 @@ export default async function handler(req: Request) {
   }
   const { method, url, body, params } = payload;
 
-  // Only allow SoSoValue domains
   let target: URL;
   try {
     target = new URL(url);
@@ -43,7 +41,6 @@ export default async function handler(req: Request) {
     return json({ error: 'Forbidden host' }, 403);
   }
 
-  // Append query params for GET requests
   if (params) {
     Object.entries(params).forEach(([k, v]) => target.searchParams.set(k, v));
   }
