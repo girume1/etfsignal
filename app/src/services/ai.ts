@@ -93,7 +93,7 @@ Answer the user's question concisely (2-4 sentences max). Reference specific num
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-3-5-sonnet-20241022',
       max_tokens: 400,
       system: systemContext,
       messages,
@@ -118,7 +118,7 @@ export async function analyzeMarket(
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-3-5-sonnet-20241022',
       max_tokens: 1000,
       messages: [{ role: 'user', content: prompt }],
     }),
