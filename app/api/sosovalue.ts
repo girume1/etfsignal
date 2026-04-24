@@ -17,12 +17,20 @@ export default async function handler(req: Request) {
     return json({ noKey: true }, 200);
   }
 
-  let method: string, url: string, body: unknown, params: Record<string, string> | undefined;
+  interface ProxyBody {
+    method: string;
+    url: string;
+    body?: unknown;
+    params?: Record<string, string>;
+  }
+
+  let payload: ProxyBody;
   try {
-    ({ method, url, body, params } = await req.json());
+    payload = await req.json() as ProxyBody;
   } catch {
     return json({ error: 'Invalid JSON body' }, 400);
   }
+  const { method, url, body, params } = payload;
 
   // Only allow SoSoValue domains
   let target: URL;
