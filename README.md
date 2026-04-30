@@ -74,7 +74,9 @@ It pulls institutional ETF flow data from SoSoValue, streams live BTC/ETH prices
 
 ## 🖥️ App Pages
 
-The app is split into 5 focused views, all sharing one live data context (no re-fetch on navigation):
+The app is split into 5 focused views, all sharing one live data context (no re-fetch on navigation).
+
+> **🔒 Wallet-gated** — all `/app/*` pages require a connected wallet. Unauthenticated visitors see a lock screen with a one-click connect prompt. The header and ticker strip remain visible so the live data is teased.
 
 | Route | Purpose |
 |-------|---------|
@@ -194,7 +196,8 @@ etfsignal/
 │   │   └── useLivePrices.ts     # Binance WebSocket hook — live BTC/ETH price stream
 │   │
 │   ├── components/
-│   │   ├── AppShell.tsx         # Header + TickerStrip + Sidebar + <Outlet />
+│   │   ├── AppShell.tsx         # Header + TickerStrip + Sidebar + WalletGate + <Outlet />
+│   │   ├── WalletGate.tsx       # Locks all /app/* pages — shows connect screen if no wallet
 │   │   ├── AppSidebar.tsx       # Sticky sidebar nav with active-route highlight + alert badge
 │   │   ├── Header.tsx           # Logo + DensityToggle + WalletMenu
 │   │   ├── WalletMenu.tsx       # Dropdown: copy address · explorer link · disconnect
@@ -202,7 +205,7 @@ etfsignal/
 │   │   ├── TickerStrip.tsx      # Bloomberg-style marquee + LIVE indicator
 │   │   ├── QuickStats.tsx       # 4-card stats bar — live BTC/ETH price + sentiment + alerts
 │   │   ├── EtfPanel.tsx         # BTC/ETH tab · metrics · fund breakdown table · anomaly badges
-│   │   ├── SentimentGauge.tsx   # SVG half-circle gauge (0–100 flow momentum score)
+│   │   ├── SentimentGauge.tsx   # SVG half-circle gauge (0–100) · animated needle · zone colors
 │   │   ├── PriceFlowChart.tsx   # Recharts ComposedChart: price line + inflow bars, dual Y axes
 │   │   ├── MarketShareDonut.tsx # Recharts PieChart donut — top-6 funds + Other bucket
 │   │   ├── InflowChart.tsx      # Recharts BarChart — 14-day net inflow sparkline
@@ -297,9 +300,11 @@ interface MarketSignal {
 Wave 1  ✅  Full scaffold · SoSoValue mock+live data · Claude AI signals · SoDEX EIP712 trades
             5-page app shell · Bloomberg ticker · Binance live price stream (● LIVE indicator)
             Recharts interactive charts (price+flow, donut, inflow bars)
-            Sentiment gauge · AskAI chat · Alerts feed · Signal archive
+            Sentiment gauge (animated needle, zone colors) · AskAI chat · Alerts feed · Signal archive
             Dynamic multi-wallet (MetaMask, WalletConnect, Coinbase + 300 more)
+            Wallet-gated dashboard (lock screen → connect → full access)
             Density toggle (mobile/compact/comfortable) · Landing hero visualization
+            SPA routing fix · Server-side API key proxying (Anthropic + SoSoValue)
 
 Wave 2  🔜  SoDEX WebSocket real-time order book · SoSoValue historical API endpoint
             AI trade suggestions with TP/SL · Portfolio P&L tracker
@@ -317,7 +322,7 @@ Wave 3  🔜  Copy-trading module · Risk scoring dashboard · Final demo polish
 | Functionality & Working Demo | **25%** | Live at etfsignal.vercel.app — full pipeline: live data → sentiment → AI signal → EIP712 trade |
 | Logic, Workflow & Product Design | **20%** | 5-page app shell, shared data context, density-responsive layouts, sidebar navigation |
 | Data / API Integration | **15%** | SoSoValue + Binance WS live prices + Claude AI (server-side) + SoDEX testnet EIP712 |
-| UX & Clarity | **10%** | Bloomberg cockpit, Recharts charts, live price ticker, Dynamic wallet, density toggle |
+| UX & Clarity | **10%** | Bloomberg cockpit, Recharts charts, live price ticker, Dynamic wallet, density toggle, wallet-gated access |
 
 ---
 
