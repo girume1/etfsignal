@@ -5,6 +5,7 @@ import { TickerStrip } from './TickerStrip';
 import { DemoBanner } from './DemoBanner';
 import { AppSidebar } from './AppSidebar';
 import { TradeModal } from './TradeModal';
+import { WalletGate } from './WalletGate';
 import { useDashboard } from '../contexts/DashboardContext';
 
 export function AppShell() {
@@ -62,7 +63,9 @@ export function AppShell() {
         <AppSidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
         <main className="flex-1 min-w-0 overflow-y-auto">
-          <Outlet />
+          <WalletGate connected={!!wallet} onConnect={handleConnectWallet}>
+            <Outlet />
+          </WalletGate>
         </main>
       </div>
 
