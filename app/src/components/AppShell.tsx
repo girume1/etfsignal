@@ -63,7 +63,7 @@ export function AppShell() {
         <AppSidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
         <main className="flex-1 min-w-0 overflow-y-auto">
-          <WalletGate connected={!!wallet} onConnect={handleConnectWallet}>
+          <WalletGate connected={wallet.connected} onConnect={handleConnectWallet}>
             <Outlet />
           </WalletGate>
         </main>
