@@ -1,54 +1,40 @@
-// Vercel Edge Function — proxies SoSoValue API calls so the key never reaches the browser.
-// Your SOSOVALUE_API_KEY stays hidden here
-declare const process: { env: Record<string, string | undefined> };
-// Client POSTs { method, url, body?, params? } → this function forwards with the server key.
-
-export const config = { runtime: 'edge' };
+// Vercel Node.js Serverless Function — proxies SoSoValue API calls so the key never reaches the browser.
+// Node.js runtime (not edge) so it can reach any upstream host without network restrictions.
 
 const ALLOWED_HOSTS = ['api.sosovalue.xyz', 'openapi.sosovalue.com'];
 
-export default async function handler(req: Request) {
+export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') {
-    return json({ error: 'Method not allowed' }, 405);
+    return res.status(405).json({ error: 'Method not allowed' });
   }
 
   const apiKey = process.env.SOSOVALUE_API_KEY;
   if (!apiKey) {
-    return json({ error: 'SOSOVALUE_API_KEY not configured' }, 500);
+    return res.status(500).json({ error: 'SOSOVALUE_API_KEY not configured' });
   }
 
-  interface ProxyBody {
-    method: string;
-    url: string;
-    body?: unknown;
-    params?: Record<string, string>;
-  }
+  const { method, url, body, params } = req.body ?? {};
 
-  let payload: ProxyBody;
-  try {
-    payload = await req.json() as ProxyBody;
-  } catch {
-    return json({ error: 'Invalid JSON body' }, 400);
-  }
-  const { method, url, body, params } = payload;
+  if (!url) return res.status(400).json({ error: 'Missing url' });
 
   let target: URL;
   try {
     target = new URL(url);
   } catch {
-    return json({ error: 'Invalid URL' }, 400);
+    return res.status(400).json({ error: 'Invalid URL' });
   }
   if (!ALLOWED_HOSTS.includes(target.hostname)) {
-    return json({ error: 'Forbidden host' }, 403);
+    return res.status(403).json({ error: 'Forbidden host' });
   }
 
   if (params) {
-    Object.entries(params).forEach(([k, v]) => target.searchParams.set(k, v));
+    Object.entries(params as Record<string, unknown>).forEach(([k, v]) =>
+      target.searchParams.set(k, String(v))
+    );
   }
 
-  let upstream: Response;
   try {
-    upstream = await fetch(target.toString(), {
+    const upstream = await fetch(target.toString(), {
       method: method ?? 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -56,22 +42,16 @@ export default async function handler(req: Request) {
       },
       ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
     });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    return json({ error: message }, 500);
+
+    if (!upstream.ok) {
+      return res.status(500).json({
+        error: `Upstream error: ${upstream.status} ${upstream.statusText}`,
+      });
+    }
+
+    const data = await upstream.json();
+    return res.status(upstream.status).json(data);
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message ?? 'Fetch failed' });
   }
-
-  if (!upstream.ok) {
-    return json({ error: `Upstream error: ${upstream.status} ${upstream.statusText}` }, 500);
-  }
-
-  const data = await upstream.json();
-  return json(data, upstream.status);
-}
-
-function json(data: unknown, status: number) {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: { 'Content-Type': 'application/json' },
-  });
 }

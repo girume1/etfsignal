@@ -2,7 +2,10 @@ import type { EtfData, EtfType, NewsItem, HistoricalSignal } from '../types';
 export type { HistoricalInflow, PricePoint } from '../types';
 import type { HistoricalInflow, PricePoint } from '../types';
 
-const ETF_BASE = 'https://api.sosovalue.xyz';
+// openapi.sosovalue.com works from Vercel Node.js functions (no network restriction).
+// api.sosovalue.xyz is kept as fallback for any endpoint not available on the primary host.
+const ETF_BASE = 'https://openapi.sosovalue.com';
+const ETF_BASE_ALT = 'https://api.sosovalue.xyz';
 const BASE_URL = 'https://openapi.sosovalue.com';
 
 // ─── Proxy helper ─────────────────────────────────────────────────────────────
@@ -44,13 +47,20 @@ export async function fetchHistoricalInflows(
   type: EtfType,
   days = 14,
 ): Promise<HistoricalInflow[]> {
-  const json: any = await sosoProxy({
-    method: 'GET',
-    url: `${ETF_BASE}/openapi/v2/etf/etfNetInflowHistory`,
-    params: { type, days },
-  });
-  if (json.code !== 0) throw new Error(json.msg || 'Historical inflows API error');
-  return json.data as HistoricalInflow[];
+  // Try primary host first, fall back to alt host
+  for (const base of [ETF_BASE, ETF_BASE_ALT]) {
+    try {
+      const json: any = await sosoProxy({
+        method: 'GET',
+        url: `${base}/openapi/v2/etf/etfNetInflowHistory`,
+        params: { type, days },
+      });
+      if (json.code === 0) return json.data as HistoricalInflow[];
+    } catch {
+      // try next host
+    }
+  }
+  return []; // graceful empty — sentiment gauge shows "Insufficient data"
 }
 
 // ─── Price History ────────────────────────────────────────────────────────────
