@@ -3,6 +3,7 @@ import { EthereumWalletConnectors } from '@dynamic-labs/ethereum';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { DensityProvider } from './contexts/DensityContext';
 import { DashboardProvider } from './contexts/DashboardContext';
+import { ConnectionStatusProvider } from './contexts/ConnectionStatusContext';
 import { AppShell } from './components/AppShell';
 import { LandingPage } from './pages/LandingPage';
 import { HowItWorksPage } from './pages/HowItWorksPage';
@@ -33,9 +34,11 @@ export default function App() {
             <Route
               path="/app"
               element={
-                <DashboardProvider>
-                  <AppShell />
-                </DashboardProvider>
+                <ConnectionStatusProvider>
+                  <DashboardProvider>
+                    <AppShell />
+                  </DashboardProvider>
+                </ConnectionStatusProvider>
               }
             >
               <Route index          element={<OverviewPage />} />

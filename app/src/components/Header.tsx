@@ -1,81 +1,143 @@
+import { Moon } from 'lucide-react';
 import type { WalletState } from '../types';
-import { DensityToggle } from './DensityToggle';
 import { WalletMenu } from './WalletMenu';
-import { useDensity } from '../contexts/DensityContext';
+import { useDashboard } from '../contexts/DashboardContext';
+import { formatUSD } from '../services/sosovalue';
 
 interface HeaderProps {
   wallet: WalletState;
   onConnectWallet: () => void;
   onDisconnectWallet: () => void;
   lastUpdated: Date | null;
-  demoMode?: boolean;
   onToggleSidebar?: () => void;
 }
 
+function PricePill({
+  icon, label, price, change, color,
+}: {
+  icon: string; label: string; price: string; change?: string; color: string;
+}) {
+  const isPos = !change || change.startsWith('+');
+  return (
+    <div
+      className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-mono transition-all hover:bg-white/5"
+      style={{ border: '1px solid rgba(255,255,255,0.06)' }}
+    >
+      <span className="text-sm leading-none">{icon}</span>
+      <span className="text-slate-400 font-semibold">{label}</span>
+      <span className="text-white font-bold">{price}</span>
+      {change && (
+        <span
+          className="font-semibold text-[10px]"
+          style={{ color: isPos ? '#34D399' : '#F87171' }}
+        >
+          {change}
+        </span>
+      )}
+    </div>
+  );
+}
+
 export function Header({
-  wallet, onConnectWallet, onDisconnectWallet,
-  lastUpdated, demoMode = false, onToggleSidebar,
+  wallet, onConnectWallet, onDisconnectWallet, onToggleSidebar,
 }: HeaderProps) {
-  const { isMobile } = useDensity();
+  const {
+    btcData, ethData,
+    liveBtcPx, liveEthPx, latestBtcPx, latestEthPx,
+    liveConnected,
+  } = useDashboard();
+
+  const btcPrice = liveBtcPx ?? latestBtcPx;
+  const ethPrice = liveEthPx ?? latestEthPx;
+
+  // Total ETF AUM = BTC AUM + ETH AUM
+  const btcAum  = btcData?.totalNetAssets?.value as number | null ?? null;
+  const ethAum  = ethData?.totalNetAssets?.value as number | null ?? null;
+  const totalAum = btcAum !== null && ethAum !== null ? btcAum + ethAum : btcAum ?? ethAum;
+
+  // AUM 24h change %
+  const aumChangePct = btcData?.totalNetAssetsPercentage?.value as number | null ?? null;
+  const aumChangeStr = aumChangePct !== null
+    ? `${aumChangePct >= 0 ? '+' : ''}${(aumChangePct * 100).toFixed(2)}%`
+    : undefined;
 
   return (
     <header
-      style={{ background: 'var(--brand-panel)', borderBottom: '1px solid var(--brand-border)' }}
-      className="px-4 md:px-6 py-3 flex items-center justify-between gap-3 sticky top-0 z-50"
+      className="flex items-center justify-between px-4 gap-3 sticky top-0 z-50 h-14"
+      style={{
+        background: 'rgba(6,12,32,0.97)',
+        borderBottom: '1px solid rgba(0,194,255,0.08)',
+        backdropFilter: 'blur(20px)',
+      }}
     >
-      {/* Logo + hamburger */}
-      <div className="flex items-center gap-3 min-w-0">
+      {/* Mobile hamburger */}
+      <div className="flex items-center gap-2 lg:hidden shrink-0">
         {onToggleSidebar && (
           <button
             onClick={onToggleSidebar}
             aria-label="Toggle navigation"
-            style={{ border: '1px solid var(--brand-border)' }}
-            className="lg:hidden w-8 h-8 rounded-lg flex items-center justify-center text-slate-300 hover:text-white hover:bg-white/5 transition-colors"
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/5 transition-colors"
+            style={{ border: '1px solid rgba(255,255,255,0.08)' }}
           >
-            <span className="text-lg leading-none">≡</span>
+            <span className="text-xl leading-none font-light">≡</span>
           </button>
         )}
+        {/* Mobile logo */}
         <div
+          className="w-7 h-7 rounded-lg flex items-center justify-center text-white font-bold text-xs shrink-0 lg:hidden"
           style={{ background: 'linear-gradient(135deg, #0057FF, #00C2FF)' }}
-          className="w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold text-sm shrink-0"
         >
           E
         </div>
-        <div className="min-w-0">
-          <span className="font-display text-white text-lg tracking-tight">ETFSignal</span>
-          <span style={{ color: 'var(--brand-accent)' }} className="font-display text-lg"> AI</span>
-        </div>
-        <span
-          style={{ background: 'rgba(0,87,255,0.15)', color: 'var(--brand-accent)', border: '1px solid rgba(0,194,255,0.3)' }}
-          className="hidden sm:inline-block text-xs px-2 py-0.5 rounded-full font-mono"
-        >
-          TESTNET
-        </span>
-        {demoMode && (
-          <span
-            style={{ background: 'rgba(251,191,36,0.12)', color: '#FCD34D', border: '1px solid rgba(251,191,36,0.3)' }}
-            className="hidden sm:inline-block text-xs px-2 py-0.5 rounded-full font-mono uppercase tracking-wider"
-            title="SoSoValue API key pending — using representative demo data"
-          >
-            Demo Data
-          </span>
-        )}
       </div>
 
-      {/* Center — live indicator */}
-      <div className="hidden md:flex items-center gap-2 text-xs text-slate-400">
-        <span className="pulse-dot w-2 h-2 rounded-full bg-green-400 inline-block" />
-        <span>Live</span>
-        {lastUpdated && (
-          <span className="text-slate-500">
-            · {lastUpdated.toLocaleTimeString()}
-          </span>
+      {/* Price tickers — center row */}
+      <div className="flex items-center gap-2 flex-1 min-w-0">
+        {btcPrice && (
+          <PricePill
+            icon="🟡"
+            label="BTC"
+            price={`$${btcPrice.toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
+            color="#F59E0B"
+          />
+        )}
+        {ethPrice && (
+          <PricePill
+            icon="🔵"
+            label="ETH"
+            price={`$${ethPrice.toLocaleString(undefined, { maximumFractionDigits: 2 })}`}
+            color="#818CF8"
+          />
+        )}
+        {totalAum !== null && (
+          <PricePill
+            icon="📊"
+            label="TOTAL ETF AUM"
+            price={formatUSD(totalAum).replace('+', '')}
+            change={aumChangeStr}
+            color="#00C2FF"
+          />
+        )}
+
+        {/* Live dot */}
+        {liveConnected && (
+          <div className="hidden md:flex items-center gap-1.5 ml-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+            <span className="text-[10px] font-mono text-green-400">LIVE</span>
+          </div>
         )}
       </div>
 
       {/* Right controls */}
       <div className="flex items-center gap-2 shrink-0">
-        <DensityToggle compact={isMobile} />
+        <button
+          className="hidden md:flex w-8 h-8 items-center justify-center rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors"
+          style={{ border: '1px solid rgba(255,255,255,0.06)' }}
+          title="Toggle theme"
+        >
+          <Moon size={14} />
+        </button>
+
         <WalletMenu
           wallet={wallet}
           onConnect={onConnectWallet}

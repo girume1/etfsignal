@@ -5,6 +5,10 @@ import { QuickStats } from '../../components/QuickStats';
 import { getNewsTitle } from '../../services/sosovalue';
 import type { NewsItem } from '../../types';
 import { NEWS_CATEGORY_MAP } from '../../types';
+import { filterNewsBySearch, filterNewsByCategory } from '../../utils/filters';
+
+// Re-export for backward compatibility and direct testing
+export { filterNewsBySearch, filterNewsByCategory };
 
 function timeAgo(ts: number): string {
   const diff = Date.now() - ts * 1000;
@@ -27,11 +31,8 @@ export default function NewsPage() {
 
   const filtered = useMemo(() => {
     let list: NewsItem[] = news;
-    if (catFilter !== null) list = list.filter(n => n.category === catFilter);
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      list = list.filter(n => getNewsTitle(n).toLowerCase().includes(q));
-    }
+    if (catFilter !== null) list = filterNewsByCategory(list, catFilter);
+    if (search.trim()) list = filterNewsBySearch(list, search);
     return list;
   }, [news, catFilter, search]);
 

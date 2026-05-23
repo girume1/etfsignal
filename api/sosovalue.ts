@@ -14,7 +14,7 @@ export default async function handler(req: Request) {
 
   const apiKey = process.env.SOSOVALUE_API_KEY;
   if (!apiKey) {
-    return json({ noKey: true }, 200);
+    return json({ error: 'SOSOVALUE_API_KEY not configured' }, 500);
   }
 
   interface ProxyBody {
@@ -46,14 +46,24 @@ export default async function handler(req: Request) {
     Object.entries(params).forEach(([k, v]) => target.searchParams.set(k, v));
   }
 
-  const upstream = await fetch(target.toString(), {
-    method: method ?? 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-soso-api-key': apiKey,
-    },
-    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
-  });
+  let upstream: Response;
+  try {
+    upstream = await fetch(target.toString(), {
+      method: method ?? 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-soso-api-key': apiKey,
+      },
+      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return json({ error: message }, 500);
+  }
+
+  if (!upstream.ok) {
+    return json({ error: `Upstream error: ${upstream.status} ${upstream.statusText}` }, 500);
+  }
 
   const data = await upstream.json();
   return json(data, upstream.status);

@@ -7,6 +7,36 @@ interface NewsFeedProps {
   loading: boolean;
 }
 
+// ─── Sentiment analysis (keyword-based) ──────────────────────────────────
+type Sentiment = 'positive' | 'neutral' | 'negative';
+
+const POSITIVE_WORDS = [
+  'surges','surge','rises','rise','bullish','inflow','inflows','record','gains','gain',
+  'approval','milestone','growth','rally','soars','soar','hits','high','strong','boosts',
+  'boost','positive','expands','launch','launches','leading','tops','crosses','adds',
+];
+const NEGATIVE_WORDS = [
+  'falls','fall','drops','drop','bearish','outflow','outflows','decline','declines',
+  'loss','crash','crashes','concern','concerns','risk','risks','regulation','ban',
+  'warns','warning','lawsuit','sell','selling','weak','tumbles','tumble','slides',
+  'retreats','retreat','plunges','plunge','fears','fear',
+];
+
+function getSentiment(title: string): Sentiment {
+  const lower = title.toLowerCase();
+  const pos = POSITIVE_WORDS.filter(w => lower.includes(w)).length;
+  const neg = NEGATIVE_WORDS.filter(w => lower.includes(w)).length;
+  if (pos > neg) return 'positive';
+  if (neg > pos) return 'negative';
+  return 'neutral';
+}
+
+const SENTIMENT_STYLES: Record<Sentiment, { label: string; color: string; bg: string }> = {
+  positive: { label: '▲ Positive', color: '#34D399', bg: 'rgba(52,211,153,0.1)'  },
+  neutral:  { label: '● Neutral',  color: '#94A3B8', bg: 'rgba(148,163,184,0.1)' },
+  negative: { label: '▼ Negative', color: '#F87171', bg: 'rgba(248,113,113,0.1)' },
+};
+
 const CATEGORY_COLORS: Record<number, string> = {
   1: '#60A5FA',  // News — blue
   2: '#A78BFA',  // Research — purple
@@ -58,6 +88,8 @@ export function NewsFeed({ news, loading }: NewsFeedProps) {
               const title = getNewsTitle(item);
               const categoryColor = CATEGORY_COLORS[item.category] || '#94A3B8';
               const categoryLabel = NEWS_CATEGORY_MAP[item.category] || 'Other';
+              const sentiment = getSentiment(title);
+              const sentStyle = SENTIMENT_STYLES[sentiment];
               return (
                 <a
                   key={item.id}
@@ -72,6 +104,13 @@ export function NewsFeed({ news, loading }: NewsFeedProps) {
                       className="text-xs px-1.5 py-0.5 rounded font-medium"
                     >
                       {categoryLabel}
+                    </span>
+                    {/* Sentiment badge */}
+                    <span
+                      style={{ color: sentStyle.color, background: sentStyle.bg }}
+                      className="text-[10px] px-1.5 py-0.5 rounded font-mono font-semibold"
+                    >
+                      {sentStyle.label}
                     </span>
                     <span className="text-xs text-slate-600">{timeAgo(item.releaseTime)}</span>
                   </div>

@@ -27,6 +27,7 @@ export default function OverviewPage() {
     btcData, ethData, btcHist, ethHist,
     activeData, activeHist, activePrice,
     activeLabel, activeTab, setActiveTab,
+    latestBtcPx, latestEthPx, liveBtcPx, liveEthPx,
     loading, lastUpdated, sentiment,
     signal, signalLoading, signalError, handleAnalyze,
     alerts, history, news, refresh,
@@ -40,40 +41,78 @@ export default function OverviewPage() {
 
   return (
     <div>
-      {/* ── Page header ────────────────────────────────────────── */}
+      {/* ── Hero banner ──────────────────────────────────────────── */}
       <div
-        style={{ background: 'var(--brand-panel)', borderBottom: '1px solid var(--brand-border)' }}
-        className="px-5 py-3 flex items-center justify-between gap-4"
+        className="relative overflow-hidden px-5 py-5"
+        style={{
+          background: 'linear-gradient(135deg, rgba(0,87,255,0.12) 0%, rgba(0,194,255,0.05) 50%, rgba(167,139,250,0.08) 100%)',
+          borderBottom: '1px solid rgba(0,194,255,0.1)',
+        }}
       >
-        <div className="flex items-center gap-3">
-          <span className="text-xs font-semibold text-white uppercase tracking-widest font-mono">
-            Market Overview
-          </span>
-          <span
-            style={{ background: 'rgba(0,87,255,0.12)', color: '#60A5FA', border: '1px solid rgba(0,87,255,0.25)' }}
-            className="text-[10px] px-2 py-0.5 rounded font-mono"
-          >
-            COCKPIT
-          </span>
-          {lastUpdated && (
-            <span className="text-[10px] text-slate-600 font-mono hidden sm:inline">
-              Updated {lastUpdated.toLocaleTimeString()}
-            </span>
-          )}
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] text-slate-600 font-mono hidden md:inline">
-            Data by SoSoValue · AI by Claude · Trade on SoDEX
-          </span>
-          <button
-            onClick={refresh}
-            disabled={loading}
-            style={{ border: '1px solid var(--brand-border)', color: '#64748B' }}
-            className="px-2.5 py-1 rounded-lg text-[10px] font-mono hover:text-white hover:bg-white/5 disabled:opacity-40 transition-colors flex items-center gap-1"
-          >
-            <span className={loading ? 'animate-spin inline-block' : ''}>↻</span>
-            {loading ? 'Loading…' : 'Refresh'}
-          </button>
+        {/* Grid bg */}
+        <svg className="absolute inset-0 w-full h-full opacity-[0.035] pointer-events-none" aria-hidden>
+          <defs>
+            <pattern id="dash-grid" width="40" height="40" patternUnits="userSpaceOnUse">
+              <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#00C2FF" strokeWidth="0.5" />
+            </pattern>
+          </defs>
+          <rect width="100%" height="100%" fill="url(#dash-grid)" />
+        </svg>
+
+        <div className="relative flex items-center justify-between gap-6 flex-wrap">
+          <div>
+            <p className="text-[10px] font-mono uppercase tracking-widest mb-1.5 flex items-center gap-2"
+               style={{ color: '#00C2FF' }}>
+              <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse inline-block" />
+              AI Market Analysis
+            </p>
+            <h1 className="font-display text-white text-2xl md:text-3xl leading-tight mb-1">
+              Smart Signals.{' '}
+              <span style={{
+                background: 'linear-gradient(135deg, #00C2FF, #A78BFA)',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                backgroundClip: 'text',
+              }}>
+                Institutional Edge.
+              </span>
+            </h1>
+            <p className="text-slate-400 text-sm">
+              ETF flows. News sentiment. On-chain data. AI turns noise into actionable signals.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3 shrink-0">
+            {lastUpdated && (
+              <span className="text-[10px] text-slate-600 font-mono hidden lg:inline">
+                Updated {lastUpdated.toLocaleTimeString()}
+              </span>
+            )}
+            <button
+              onClick={refresh}
+              disabled={loading}
+              style={{ border: '1px solid rgba(255,255,255,0.1)', color: '#94A3B8' }}
+              className="px-3 py-1.5 rounded-lg text-xs font-mono hover:text-white hover:bg-white/5 disabled:opacity-40 transition-colors flex items-center gap-1.5"
+            >
+              <span className={loading ? 'animate-spin inline-block' : ''}>↻</span>
+              {loading ? 'Loading…' : 'Refresh'}
+            </button>
+            <button
+              onClick={handleAnalyze}
+              disabled={signalLoading || !activeData}
+              className="flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-semibold text-white transition-all hover:opacity-90 disabled:opacity-50"
+              style={{
+                background: 'linear-gradient(135deg, #0057FF, #00C2FF)',
+                boxShadow: '0 0 16px rgba(0,87,255,0.35)',
+              }}
+            >
+              {signalLoading ? (
+                <><span className="animate-spin">↻</span> Analyzing…</>
+              ) : (
+                <><span>✦</span> Analyze Now</>
+              )}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -89,6 +128,7 @@ export default function OverviewPage() {
             btcHistory={btcHist} ethHistory={ethHist}
             activeTab={activeTab} onTabChange={setActiveTab}
             loading={loading}
+            currentPrice={activeTab === 'btc' ? (liveBtcPx ?? latestBtcPx ?? null) : (liveEthPx ?? latestEthPx ?? null)}
           />
           {activeData && (
             <PriceFlowChart inflows={activeHist} prices={activePrice} asset={activeLabel} />
@@ -102,19 +142,23 @@ export default function OverviewPage() {
         <div className={`${mobile ? 'col-span-12' : 'col-span-12 lg:col-span-4'} flex flex-col gap-4`}>
           <SectionLabel>AI Intelligence</SectionLabel>
 
-          {/* Analyze CTA — prominent hero button when no signal yet */}
+          {/* Prompt to analyze — subtle, hero button is now in the top bar */}
           {!signal && !signalLoading && (
-            <button
-              onClick={handleAnalyze}
-              style={{
-                background: 'linear-gradient(135deg, #0057FF 0%, #00C2FF 100%)',
-                boxShadow: '0 0 24px rgba(0,87,255,0.35)',
-              }}
-              className="w-full py-3.5 rounded-xl text-white font-semibold text-sm flex items-center justify-center gap-2 hover:opacity-90 transition-all active:scale-[0.98]"
+            <div
+              className="rounded-xl p-4 text-center"
+              style={{ background: 'rgba(0,87,255,0.07)', border: '1px dashed rgba(0,194,255,0.2)' }}
             >
-              <span className="text-base">✦</span>
-              Generate {activeLabel} AI Signal
-            </button>
+              <p className="text-slate-400 text-sm mb-3">
+                Click <strong className="text-white">Analyze Now</strong> in the header to generate your first {activeLabel} signal.
+              </p>
+              <button
+                onClick={handleAnalyze}
+                className="text-xs font-mono px-3 py-1.5 rounded-lg transition-all hover:opacity-90"
+                style={{ background: 'rgba(0,87,255,0.25)', color: '#00C2FF', border: '1px solid rgba(0,194,255,0.3)' }}
+              >
+                ✦ Generate {activeLabel} Signal
+              </button>
+            </div>
           )}
 
           <SentimentGauge sentiment={sentiment} asset={activeLabel} />

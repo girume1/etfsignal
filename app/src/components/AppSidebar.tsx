@@ -1,13 +1,27 @@
 import { NavLink, useLocation } from 'react-router-dom';
+import {
+  LayoutDashboard, BarChart2, TrendingUp, Zap,
+  Newspaper, ArrowLeftRight, Star, PieChart,
+  Settings, Bot,
+} from 'lucide-react';
 import { useDashboard } from '../contexts/DashboardContext';
-import { formatUSD } from '../services/sosovalue';
 
-const NAV = [
-  { path: '/app',          icon: '⊞', label: 'Overview',  hint: 'Full cockpit view'            },
-  { path: '/app/flows',    icon: '⇅', label: 'Flows',     hint: 'ETF inflows & market share'  },
-  { path: '/app/signals',  icon: '◎', label: 'Signals',   hint: 'AI signals & Ask Claude'      },
-  { path: '/app/alerts',   icon: '⚡', label: 'Alerts',    hint: 'Smart flow & anomaly alerts'  },
-  { path: '/app/news',     icon: '◈', label: 'News',      hint: 'Market news feed'              },
+const NAV_MAIN = [
+  { path: '/app',         icon: LayoutDashboard,  label: 'Dashboard',      exact: true  },
+  { path: '/app/flows',   icon: BarChart2,         label: 'ETF Flows',      exact: false },
+  { path: '/app/signals', icon: Zap,               label: 'AI Signals',     exact: false },
+  { path: '/app/alerts',  icon: TrendingUp,        label: 'Alerts',         exact: false },
+  { path: '/app/news',    icon: Newspaper,         label: 'News & Insights',exact: false },
+];
+
+const NAV_TRADE = [
+  { path: '/app/signals', icon: ArrowLeftRight, label: 'SoDEX Trade',  exact: false },
+];
+
+const NAV_ACCOUNT = [
+  { icon: Star,      label: 'Watchlist',  disabled: true },
+  { icon: PieChart,  label: 'Portfolio',  disabled: true },
+  { icon: Settings,  label: 'Settings',   disabled: true },
 ];
 
 interface AppSidebarProps {
@@ -16,97 +30,189 @@ interface AppSidebarProps {
 }
 
 export function AppSidebar({ open, onClose }: AppSidebarProps) {
-  const { btcData, ethData, alerts, activeTab } = useDashboard();
+  const { alerts } = useDashboard();
   const location = useLocation();
-
   const highAlerts = alerts.filter(a => a.severity === 'high').length;
+
+  function NavItem({
+    path, icon: Icon, label, exact = false, badge = 0, disabled = false,
+  }: {
+    path?: string; icon: any; label: string;
+    exact?: boolean; badge?: number; disabled?: boolean;
+  }) {
+    if (disabled || !path) {
+      return (
+        <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm opacity-35 cursor-not-allowed select-none">
+          <Icon size={16} className="shrink-0 text-slate-500" />
+          <span className="flex-1 text-slate-500">{label}</span>
+          <span className="text-[9px] font-mono text-slate-600 bg-white/5 px-1.5 py-0.5 rounded">SOON</span>
+        </div>
+      );
+    }
+
+    const active = exact
+      ? location.pathname === path
+      : location.pathname.startsWith(path);
+
+    return (
+      <NavLink
+        to={path}
+        end={exact}
+        onClick={onClose}
+        className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 group"
+        style={active ? {
+          background: 'linear-gradient(135deg, rgba(0,87,255,0.2), rgba(0,194,255,0.08))',
+          color: '#fff',
+          border: '1px solid rgba(0,194,255,0.2)',
+          boxShadow: '0 0 20px rgba(0,87,255,0.1)',
+        } : {
+          color: '#64748B',
+          border: '1px solid transparent',
+        }}
+      >
+        <Icon
+          size={16}
+          className="shrink-0 transition-colors"
+          style={{ color: active ? '#00C2FF' : undefined }}
+        />
+        <span className="flex-1">{label}</span>
+        {badge > 0 && (
+          <span className="text-[10px] px-1.5 py-0.5 rounded-full font-mono min-w-[1.25rem] text-center"
+            style={{ background: 'rgba(251,146,60,0.2)', color: '#FB923C', border: '1px solid rgba(251,146,60,0.4)' }}>
+            {badge}
+          </span>
+        )}
+      </NavLink>
+    );
+  }
+
+  function NavSection({ label, children }: { label: string; children: React.ReactNode }) {
+    return (
+      <div className="mb-1">
+        <p className="px-3 mb-1 text-[9px] font-semibold uppercase tracking-widest text-slate-600 font-mono">
+          {label}
+        </p>
+        <div className="space-y-0.5">{children}</div>
+      </div>
+    );
+  }
 
   return (
     <>
       {/* Mobile backdrop */}
       {open && (
-        <div
-          className="fixed inset-0 bg-black/60 z-30 lg:hidden"
-          onClick={onClose}
-        />
+        <div className="fixed inset-0 bg-black/70 z-30 lg:hidden backdrop-blur-sm" onClick={onClose} />
       )}
 
       <aside
-        style={{
-          background: 'var(--brand-panel)',
-          borderRight: '1px solid var(--brand-border)',
-          width: '220px',
-        }}
         className={`
-          fixed top-0 bottom-0 left-0 z-40 flex flex-col pt-[57px]
+          fixed top-0 bottom-0 left-0 z-40 flex flex-col
           transition-transform duration-200 ease-out
-          lg:sticky lg:top-[57px] lg:h-[calc(100vh-57px)] lg:translate-x-0 lg:shrink-0
+          lg:sticky lg:top-0 lg:h-screen lg:translate-x-0 lg:shrink-0
           ${open ? 'translate-x-0' : '-translate-x-full'}
         `}
+        style={{
+          width: 228,
+          background: 'linear-gradient(180deg, rgba(6,12,32,0.98) 0%, rgba(8,14,36,0.97) 100%)',
+          borderRight: '1px solid rgba(0,194,255,0.08)',
+          backdropFilter: 'blur(20px)',
+        }}
       >
-        {/* Nav links */}
-        <nav className="flex-1 px-2 py-4 space-y-0.5 overflow-y-auto">
-          {NAV.map(item => {
-            const exact = item.path === '/app';
-            const active = exact
-              ? location.pathname === '/app'
-              : location.pathname.startsWith(item.path);
+        {/* ── Logo ─────────────────────────────────────────────── */}
+        <div className="px-4 pt-5 pb-4" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+          <div className="flex items-center gap-2.5">
+            <div
+              className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 font-bold text-sm text-white"
+              style={{ background: 'linear-gradient(135deg, #0057FF, #00C2FF)', boxShadow: '0 0 20px rgba(0,87,255,0.4)' }}
+            >
+              E
+            </div>
+            <div>
+              <div className="font-display text-white text-base leading-tight tracking-tight">
+                ETFSignal<span style={{ color: '#00C2FF' }}>AI</span>
+              </div>
+              <div className="text-[9px] text-slate-500 font-mono tracking-wide">AI-Powered ETF Intelligence</div>
+            </div>
+          </div>
+        </div>
 
-            return (
-              <NavLink
+        {/* ── Navigation ───────────────────────────────────────── */}
+        <nav className="flex-1 px-2 py-4 space-y-4 overflow-y-auto">
+          <NavSection label="Main">
+            {NAV_MAIN.map(item => (
+              <NavItem
                 key={item.path}
-                to={item.path}
-                end={exact}
-                onClick={() => onClose()}
-                title={item.hint}
-                style={active
-                  ? { background: 'rgba(0,87,255,0.15)', color: 'white', borderLeft: '2px solid var(--brand-blue)' }
-                  : { color: '#94A3B8', borderLeft: '2px solid transparent' }
-                }
-                className="flex items-center gap-3 px-3 py-2.5 rounded-r-lg text-sm font-medium transition-colors hover:bg-white/5 hover:text-white pl-[calc(0.75rem-2px)]"
-              >
-                <span className="text-base w-5 text-center shrink-0">{item.icon}</span>
-                <span className="flex-1">{item.label}</span>
-                {/* Alerts badge */}
-                {item.path === '/app/alerts' && highAlerts > 0 && (
-                  <span
-                    style={{ background: 'rgba(251,146,60,0.2)', color: '#FB923C', border: '1px solid rgba(251,146,60,0.4)' }}
-                    className="text-[10px] px-1.5 py-0.5 rounded-full font-mono min-w-[1.25rem] text-center"
-                  >
-                    {highAlerts}
-                  </span>
-                )}
-              </NavLink>
-            );
-          })}
+                path={item.path}
+                icon={item.icon}
+                label={item.label}
+                exact={item.exact}
+                badge={item.path === '/app/alerts' ? highAlerts : 0}
+              />
+            ))}
+          </NavSection>
+
+          <NavSection label="Trading">
+            {NAV_TRADE.map(item => (
+              <NavItem key={item.path} path={item.path} icon={item.icon} label={item.label} />
+            ))}
+          </NavSection>
+
+          <NavSection label="Account">
+            {NAV_ACCOUNT.map(item => (
+              <NavItem key={item.label} icon={item.icon} label={item.label} disabled />
+            ))}
+          </NavSection>
         </nav>
 
-        {/* Bottom stats strip */}
+        {/* ── AI Advantage promo card ───────────────────────────── */}
+        <div className="px-3 pb-3">
+          <div
+            className="rounded-xl p-3.5"
+            style={{
+              background: 'linear-gradient(135deg, rgba(0,87,255,0.15), rgba(0,194,255,0.06))',
+              border: '1px solid rgba(0,194,255,0.15)',
+            }}
+          >
+            <div className="flex items-center gap-2 mb-2">
+              <Bot size={14} style={{ color: '#00C2FF' }} />
+              <span className="text-xs font-semibold text-white">AI Advantage</span>
+            </div>
+            <p className="text-[10px] text-slate-400 leading-relaxed mb-3">
+              Our AI analyzes ETF flows, news sentiment &amp; market data to find high-probability trades.
+            </p>
+            <NavLink
+              to="/app/signals"
+              onClick={onClose}
+              className="block text-center text-[11px] font-semibold py-1.5 rounded-lg transition-all hover:opacity-90"
+              style={{ background: 'linear-gradient(135deg, #0057FF, #00C2FF)', color: '#fff' }}
+            >
+              Learn More
+            </NavLink>
+          </div>
+        </div>
+
+        {/* ── Footer ───────────────────────────────────────────── */}
         <div
-          style={{ borderTop: '1px solid var(--brand-border)' }}
-          className="px-3 py-4 space-y-2 text-[11px] font-mono text-slate-500"
+          className="px-4 py-3 flex items-center justify-between"
+          style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}
         >
-          {btcData && (
-            <div className="flex items-center justify-between">
-              <span className="text-slate-600">BTC AUM</span>
-              <span className="text-slate-300">
-                {formatUSD(btcData.totalNetAssets.value).replace('+', '')}
-              </span>
-            </div>
-          )}
-          {ethData && (
-            <div className="flex items-center justify-between">
-              <span className="text-slate-600">ETH AUM</span>
-              <span className="text-slate-300">
-                {formatUSD(ethData.totalNetAssets.value).replace('+', '')}
-              </span>
-            </div>
-          )}
-          <div className="flex items-center justify-between">
-            <span className="text-slate-600">Asset</span>
-            <span style={{ color: activeTab === 'btc' ? '#F59E0B' : '#818CF8' }}>
-              {activeTab.toUpperCase()}
-            </span>
+          <span className="text-[9px] text-slate-600 font-mono">© 2025 ETFSignalAI</span>
+          <div className="flex items-center gap-3">
+            {[
+              { href: 'https://twitter.com', label: 'Twitter', icon: '𝕏' },
+              { href: 'https://t.me/ETFSignalAIBot', label: 'Telegram', icon: '✈' },
+            ].map(s => (
+              <a
+                key={s.label}
+                href={s.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label={s.label}
+                className="text-slate-600 hover:text-slate-300 transition-colors text-sm"
+              >
+                {s.icon}
+              </a>
+            ))}
           </div>
         </div>
       </aside>

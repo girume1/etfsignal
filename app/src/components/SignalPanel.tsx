@@ -1,4 +1,4 @@
-import type { MarketSignal, ActiveTab } from '../types';
+import type { MarketSignal, ActiveTab, SignalWeight } from '../types';
 
 interface SignalPanelProps {
   signal: MarketSignal | null;
@@ -41,6 +41,7 @@ const PREVIEW_FEATURES = [
   { icon: '⬆', label: 'BULLISH / BEARISH / NEUTRAL direction' },
   { icon: '◆', label: '3 key institutional flow drivers' },
   { icon: '⚡', label: 'Actionable trade idea + risk warning' },
+  { icon: '🎯', label: 'AI-generated TP & SL price levels' },
 ];
 
 export function SignalPanel({
@@ -191,6 +192,56 @@ export function SignalPanel({
             </ul>
           </div>
 
+          {/* Signal Breakdown — factor weights */}
+          {signal.weights && signal.weights.length > 0 && (
+            <div
+              style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}
+              className="rounded-lg p-3"
+            >
+              <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-2.5 font-mono">
+                ◈ Signal Breakdown
+              </div>
+              <div className="space-y-2">
+                {signal.weights.map((w: SignalWeight, i: number) => {
+                  const barColor = w.signal === 'positive' ? '#34D399'
+                    : w.signal === 'negative' ? '#F87171'
+                    : '#94A3B8';
+                  return (
+                    <div key={i}>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[10px] text-slate-400 font-mono">{w.factor}</span>
+                        <div className="flex items-center gap-1.5">
+                          <span
+                            className="text-[9px] font-mono px-1 py-0.5 rounded uppercase"
+                            style={{
+                              color: barColor,
+                              background: `${barColor}18`,
+                              border: `1px solid ${barColor}30`,
+                            }}
+                          >
+                            {w.signal}
+                          </span>
+                          <span className="text-[10px] font-mono font-bold" style={{ color: barColor }}>
+                            {w.weight}%
+                          </span>
+                        </div>
+                      </div>
+                      <div
+                        className="h-1 rounded-full overflow-hidden"
+                        style={{ background: 'rgba(255,255,255,0.06)' }}
+                      >
+                        <div
+                          className="h-full rounded-full transition-all duration-700"
+                          style={{ width: `${w.weight}%`, background: barColor, opacity: 0.8 }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Trade idea */}
           <div
             style={{ background: 'rgba(0,87,255,0.1)', border: '1px solid rgba(0,87,255,0.25)' }}
@@ -201,6 +252,70 @@ export function SignalPanel({
             </div>
             <p className="text-sm text-slate-200">{signal.tradeIdea}</p>
           </div>
+
+          {/* Entry Zone */}
+          {signal.entryZone && (
+            <div
+              style={{ background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.25)' }}
+              className="rounded-lg p-3 flex items-center justify-between"
+            >
+              <div>
+                <div className="text-[10px] font-semibold text-indigo-400 mb-1 uppercase tracking-wider font-mono">
+                  🎯 Entry Zone
+                </div>
+                <div className="font-mono font-bold text-indigo-200 text-base">
+                  ${signal.entryZone.low.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                  <span className="text-indigo-500 mx-1.5">—</span>
+                  ${signal.entryZone.high.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                </div>
+              </div>
+              <div
+                className="text-xs font-mono px-2 py-1 rounded"
+                style={{ background: 'rgba(99,102,241,0.15)', color: '#A5B4FC' }}
+              >
+                OPTIMAL
+              </div>
+            </div>
+          )}
+
+          {/* TP / SL levels */}
+          {signal.takeProfit && signal.stopLoss && (
+            <div className="grid grid-cols-2 gap-2">
+              {/* Take Profit */}
+              <div
+                style={{ background: 'rgba(52,211,153,0.07)', border: '1px solid rgba(52,211,153,0.25)' }}
+                className="rounded-lg p-3"
+              >
+                <div className="text-[10px] font-semibold text-green-400 mb-1.5 uppercase tracking-wider font-mono flex items-center gap-1">
+                  <span>↑</span> Take Profit
+                </div>
+                <div className="font-mono font-bold text-green-300 text-base leading-none mb-1">
+                  ${signal.takeProfit.price.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                </div>
+                <div className="text-[10px] text-green-500 font-mono mb-1.5">
+                  +{signal.takeProfit.pct.toFixed(1)}%
+                </div>
+                <p className="text-[10px] text-slate-500 leading-relaxed">{signal.takeProfit.rationale}</p>
+              </div>
+
+              {/* Stop Loss */}
+              <div
+                style={{ background: 'rgba(248,113,113,0.07)', border: '1px solid rgba(248,113,113,0.25)' }}
+                className="rounded-lg p-3"
+              >
+                <div className="text-[10px] font-semibold text-red-400 mb-1.5 uppercase tracking-wider font-mono flex items-center gap-1">
+                  <span>↓</span> Stop Loss
+                </div>
+                <div className="font-mono font-bold text-red-300 text-base leading-none mb-1">
+                  ${signal.stopLoss.price.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                </div>
+                <div className="text-[10px] text-red-500 font-mono mb-1.5">
+                  {signal.stopLoss.pct.toFixed(1)}%
+                </div>
+                <p className="text-[10px] text-slate-500 leading-relaxed">{signal.stopLoss.rationale}</p>
+              </div>
+            </div>
+          )}
 
           {/* Risk warning */}
           <div
@@ -213,37 +328,41 @@ export function SignalPanel({
             <p className="text-xs text-slate-400">{signal.riskWarning}</p>
           </div>
 
-          {/* Trade buttons */}
-          <div className="flex gap-2 pt-1">
+          {/* Execute on SoDEX — prominent CTA */}
+          <div className="flex flex-col gap-2 pt-1">
             <button
-              onClick={() => onTrade('BUY')}
+              onClick={() => onTrade(signal.direction === 'BEARISH' ? 'SELL' : 'BUY')}
               disabled={!walletConnected}
+              className="w-full py-3.5 rounded-xl text-sm font-bold text-white transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               style={{
-                background: walletConnected ? 'rgba(52,211,153,0.15)' : 'rgba(52,211,153,0.05)',
-                border: '1px solid rgba(52,211,153,0.35)',
+                background: walletConnected
+                  ? `linear-gradient(135deg, ${signal.direction === 'BEARISH' ? '#EF4444, #DC2626' : '#059669, #10B981'})`
+                  : 'rgba(255,255,255,0.05)',
+                boxShadow: walletConnected
+                  ? `0 4px 20px ${signal.direction === 'BEARISH' ? 'rgba(239,68,68,0.3)' : 'rgba(16,185,129,0.3)'}`
+                  : 'none',
               }}
-              className="flex-1 py-2.5 rounded-lg text-sm font-semibold text-green-400 transition-all hover:opacity-90 disabled:opacity-30 disabled:cursor-not-allowed"
             >
-              ↑ Long {label}
+              <span>⚡</span>
+              Execute on SoDEX — {signal.direction === 'BEARISH' ? `↓ Short ${label}` : `↑ Long ${label}`}
             </button>
-            <button
-              onClick={() => onTrade('SELL')}
-              disabled={!walletConnected}
-              style={{
-                background: walletConnected ? 'rgba(248,113,113,0.15)' : 'rgba(248,113,113,0.05)',
-                border: '1px solid rgba(248,113,113,0.35)',
-              }}
-              className="flex-1 py-2.5 rounded-lg text-sm font-semibold text-red-400 transition-all hover:opacity-90 disabled:opacity-30 disabled:cursor-not-allowed"
-            >
-              ↓ Short {label}
-            </button>
-          </div>
 
-          {!walletConnected && (
-            <p className="text-[10px] text-center text-slate-600 font-mono">
-              Connect wallet to trade on SoDEX testnet
-            </p>
-          )}
+            {/* Secondary opposite side button */}
+            <button
+              onClick={() => onTrade(signal.direction === 'BEARISH' ? 'BUY' : 'SELL')}
+              disabled={!walletConnected}
+              style={{ border: '1px solid var(--brand-border)', color: '#64748B' }}
+              className="w-full py-2 rounded-lg text-xs font-mono hover:text-white hover:bg-white/5 transition-colors disabled:opacity-20 disabled:cursor-not-allowed"
+            >
+              {signal.direction === 'BEARISH' ? `↑ Long ${label} (counter)` : `↓ Short ${label} (counter)`}
+            </button>
+
+            {!walletConnected && (
+              <p className="text-[10px] text-center text-slate-600 font-mono">
+                Connect wallet to execute on SoDEX testnet
+              </p>
+            )}
+          </div>
 
           <div className="flex items-center justify-between text-[10px] text-slate-600 font-mono pt-1 border-t border-white/5">
             <span>{signal.timestamp.toLocaleTimeString()}</span>

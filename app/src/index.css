@@ -110,3 +110,42 @@ body {
   to   { opacity: 1; transform: translateY(0); }
 }
 .count-in { animation: count-fade-in 0.45s ease-out forwards; }
+
+/* ─── Landing page 3D hero ─── */
+@keyframes hero-float {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(-10px); }
+}
+.hero-float { animation: hero-float 6s ease-in-out infinite; }
+
+@keyframes orb-drift-a {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33%       { transform: translate(40px, -30px) scale(1.08); }
+  66%       { transform: translate(-20px, 20px) scale(0.95); }
+}
+@keyframes orb-drift-b {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33%       { transform: translate(-50px, 20px) scale(1.05); }
+  66%       { transform: translate(30px, -40px) scale(1.1); }
+}
+.orb-a { animation: orb-drift-a 18s ease-in-out infinite; }
+.orb-b { animation: orb-drift-b 22s ease-in-out infinite; }
+
+@keyframes scan-line {
+  0%   { top: -4%; opacity: 0; }
+  5%   { opacity: 0.6; }
+  95%  { opacity: 0.4; }
+  100% { top: 104%; opacity: 0; }
+}
+.scan-line { animation: scan-line 4s linear infinite; }
+
+@keyframes chip-float-a {
+  0%, 100% { transform: translateY(0px) translateX(0px); }
+  50%       { transform: translateY(-6px) translateX(2px); }
+}
+@keyframes chip-float-b {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(5px); }
+}
+.chip-float-a { animation: chip-float-a 4s ease-in-out infinite; }
+.chip-float-b { animation: chip-float-b 5s ease-in-out infinite; }

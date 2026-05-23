@@ -3,6 +3,11 @@ import { useDashboard } from '../../contexts/DashboardContext';
 import { useDensity } from '../../contexts/DensityContext';
 import { QuickStats } from '../../components/QuickStats';
 import type { Alert } from '../../types';
+import { filterAlerts } from '../../utils/filters';
+import type { FilterKind, FilterSeverity } from '../../utils/filters';
+
+// Re-export for backward compatibility and direct testing
+export { filterAlerts };
 
 const KIND_META: Record<Alert['kind'], { icon: string; color: string; bg: string; label: string }> = {
   inflow:    { icon: '▲', color: '#34D399', bg: 'rgba(52,211,153,0.12)',  label: 'INFLOW' },
@@ -11,9 +16,6 @@ const KIND_META: Record<Alert['kind'], { icon: string; color: string; bg: string
   milestone: { icon: '◆', color: '#FCD34D', bg: 'rgba(252,211,77,0.12)',  label: 'MILESTONE' },
   anomaly:   { icon: '⚡', color: '#FB923C', bg: 'rgba(251,146,60,0.14)',  label: 'ANOMALY' },
 };
-
-type FilterKind = Alert['kind'] | 'all';
-type FilterSeverity = Alert['severity'] | 'all';
 
 function timeAgo(ts: number): string {
   const diff = Date.now() - ts;
@@ -32,10 +34,7 @@ export default function AlertsPage() {
   const [kind,     setKind]     = useState<FilterKind>('all');
   const [severity, setSeverity] = useState<FilterSeverity>('all');
 
-  const filtered = alerts.filter(a =>
-    (kind     === 'all' || a.kind     === kind)     &&
-    (severity === 'all' || a.severity === severity)
-  );
+  const filtered = filterAlerts(alerts, kind, severity);
 
   const KINDS:     FilterKind[]     = ['all', 'inflow', 'outflow', 'rotation', 'milestone', 'anomaly'];
   const SEVERITIES: FilterSeverity[] = ['all', 'high', 'med', 'low'];

@@ -1,7 +1,7 @@
 import type { EtfData, EtfFund, ActiveTab } from '../types';
 import type { HistoricalInflow } from '../services/sosovalue';
 import { formatUSD } from '../services/sosovalue';
-import { InflowChart } from './InflowChart';
+import { TradingChart } from './TradingChart';
 
 interface EtfPanelProps {
   btcData: EtfData | null;
@@ -11,6 +11,7 @@ interface EtfPanelProps {
   activeTab: ActiveTab;
   onTabChange: (tab: ActiveTab) => void;
   loading: boolean;
+  currentPrice?: number | null;
 }
 
 // ─── Anomaly detection ────────────────────────────────────────────────────
@@ -18,25 +19,37 @@ interface EtfPanelProps {
 // inflow and largest outflow of the day on the fund breakdown. Pure client-side
 // so it works identically with live or mock data.
 
-type AnomalyKind = 'topInflow' | 'topOutflow' | 'lowFee';
-interface AnomalyMap { [fundId: string]: AnomalyKind[] }
+export type AnomalyKind = 'topInflow' | 'topOutflow' | 'lowFee';
+export interface AnomalyMap { [fundId: string]: AnomalyKind[] }
 
-function detectAnomalies(funds: EtfFund[]): AnomalyMap {
-  const m: AnomalyMap = {};
+export function detectAnomalies(funds: EtfFund[]): AnomalyMap {
+  const m: AnomalyMap = Object.create(null) as AnomalyMap;
+
+  // Low fee flagging is independent of inflow data
+  const lowFeeThreshold = 0.002; // 20 bps or less
+  funds
+    .filter(f => (f.fee.value ?? 1) <= lowFeeThreshold)
+    .forEach(f => (m[f.id] ??= []).push('lowFee'));
+
   const withFlow = funds.filter(f => f.dailyNetInflow.value !== null);
   if (withFlow.length === 0) return m;
 
   const topInflow  = withFlow.reduce((best, f) => (f.dailyNetInflow.value! > best.dailyNetInflow.value! ? f : best));
   const topOutflow = withFlow.reduce((worst, f) => (f.dailyNetInflow.value! < worst.dailyNetInflow.value! ? f : worst));
-  if ((topInflow.dailyNetInflow.value  || 0) >  50_000_000) (m[topInflow.id]  ||= []).push('topInflow');
-  if ((topOutflow.dailyNetInflow.value || 0) < -25_000_000) (m[topOutflow.id] ||= []).push('topOutflow');
-
-  const lowFeeThreshold = 0.002; // 20 bps or less
-  funds
-    .filter(f => (f.fee.value ?? 1) <= lowFeeThreshold)
-    .forEach(f => (m[f.id] ||= []).push('lowFee'));
+  if ((topInflow.dailyNetInflow.value  || 0) >  50_000_000) (m[topInflow.id]  ??= []).push('topInflow');
+  if ((topOutflow.dailyNetInflow.value || 0) < -25_000_000) (m[topOutflow.id] ??= []).push('topOutflow');
 
   return m;
+}
+
+// ─── Top funds sort/slice (pure, testable) ────────────────────────────────
+// Returns up to 10 funds sorted by absolute daily net inflow descending.
+// Funds with null inflow are excluded.
+export function getTopFunds<T extends { dailyNetInflow: { value: number | null } }>(funds: T[], limit = 10): T[] {
+  return funds
+    .filter(f => f.dailyNetInflow.value !== null)
+    .sort((a, b) => Math.abs(b.dailyNetInflow.value!) - Math.abs(a.dailyNetInflow.value!))
+    .slice(0, limit);
 }
 
 const ANOMALY_STYLES: Record<AnomalyKind, { label: string; color: string; bg: string }> = {
@@ -44,6 +57,51 @@ const ANOMALY_STYLES: Record<AnomalyKind, { label: string; color: string; bg: st
   topOutflow: { label: '▼ Top Outflow', color: '#F87171', bg: 'rgba(248,113,113,0.12)' },
   lowFee:     { label: '◆ Low Fee',     color: '#60A5FA', bg: 'rgba(96,165,250,0.12)'  },
 };
+
+// ─── Fund brand colors ────────────────────────────────────────────────────
+const FUND_COLORS: Record<string, string> = {
+  IBIT:  '#F7931A', FBTC:  '#00693E', ARKB:  '#FF6B35',
+  BITB:  '#1D4ED8', HODL:  '#7C3AED', BRRR:  '#0891B2',
+  BTCO:  '#DB2777', EZBC:  '#D97706', GBTC:  '#6D28D9',
+  ETHA:  '#627EEA', FETH:  '#00693E', ETHW:  '#3B82F6',
+  CETH:  '#F59E0B', ETHV:  '#8B5CF6', QETH:  '#06B6D4',
+  EZET:  '#10B981', ETHE:  '#6366F1', ETH:   '#627EEA',
+  BTC:   '#F7931A',
+};
+
+function FundAvatar({ ticker }: { ticker: string }) {
+  const color = FUND_COLORS[ticker] ?? '#6366F1';
+  return (
+    <div
+      className="w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0"
+      style={{ background: `${color}30`, border: `1.5px solid ${color}60`, color }}
+    >
+      {ticker.slice(0, 3)}
+    </div>
+  );
+}
+
+// ─── Mini trend sparkline (SVG) ───────────────────────────────────────────
+function TrendSpark({ value }: { value: number | null }) {
+  if (value === null) return <span className="text-slate-600 text-xs font-mono">—</span>;
+  const positive = value >= 0;
+  const color = positive ? '#34D399' : '#F87171';
+  // simple arrow-style spark
+  return (
+    <svg width="40" height="20" viewBox="0 0 40 20">
+      <polyline
+        points={positive
+          ? '2,16 10,12 18,14 26,8 34,6 38,4'
+          : '2,4 10,6 18,8 26,12 34,14 38,16'}
+        fill="none"
+        stroke={color}
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
 
 // ─── Tiny presentational helpers ──────────────────────────────────────────
 
@@ -71,16 +129,21 @@ function FundRow({ fund, anomalies }: { fund: EtfFund; anomalies: AnomalyKind[] 
   const netAssets   = fund.netAssets.value;
   const fee         = fund.fee.value;
   const isPositive  = dailyInflow !== null ? dailyInflow >= 0 : null;
+  const flowColor   = isPositive === null ? '#94A3B8' : isPositive ? '#34D399' : '#F87171';
 
   return (
     <div
       style={{ borderBottom: '1px solid var(--brand-border)' }}
-      className="flex items-center justify-between py-3 px-1 text-sm hover:bg-white/5 transition-colors rounded"
+      className="flex items-center gap-3 py-3 px-1 text-sm hover:bg-white/5 transition-colors rounded"
     >
+      {/* Logo avatar */}
+      <FundAvatar ticker={fund.ticker} />
+
+      {/* Name + anomaly badges */}
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="font-semibold text-white">{fund.ticker}</span>
-          <span className="text-slate-500 text-xs">{fund.institute.split(' ')[0]}</span>
+          <span className="text-slate-500 text-xs truncate">{fund.institute.split(' ')[0]}</span>
         </div>
         {anomalies.length > 0 && (
           <div className="flex gap-1 mt-1 flex-wrap">
@@ -99,27 +162,34 @@ function FundRow({ fund, anomalies }: { fund: EtfFund; anomalies: AnomalyKind[] 
           </div>
         )}
       </div>
-      <div className="flex gap-6 text-right shrink-0">
+
+      {/* Stats */}
+      <div className="flex items-center gap-4 text-right shrink-0">
+        <div className="hidden sm:block">
+          <div className="text-xs text-slate-500">Net Assets</div>
+          <div className="font-mono text-xs text-slate-300">{formatUSD(netAssets)}</div>
+        </div>
         <div>
           <div className="text-xs text-slate-500">Daily Flow</div>
-          <div className="font-mono text-sm" style={{ color: isPositive === null ? '#94A3B8' : isPositive ? '#34D399' : '#F87171' }}>
+          <div className="font-mono text-sm font-semibold" style={{ color: flowColor }}>
             {formatUSD(dailyInflow)}
           </div>
         </div>
-        <div>
-          <div className="text-xs text-slate-500">Net Assets</div>
-          <div className="font-mono text-sm text-slate-300">{formatUSD(netAssets)}</div>
-        </div>
-        <div>
+        <div className="hidden md:block">
           <div className="text-xs text-slate-500">Fee</div>
-          <div className="font-mono text-sm text-slate-400">{fee !== null ? `${(fee * 100).toFixed(2)}%` : '—'}</div>
+          <div className="font-mono text-xs text-slate-400">{fee !== null ? `${(fee * 100).toFixed(2)}%` : '—'}</div>
+        </div>
+        {/* Trend spark */}
+        <div className="hidden sm:flex flex-col items-center">
+          <div className="text-xs text-slate-500 mb-0.5">Trend</div>
+          <TrendSpark value={dailyInflow} />
         </div>
       </div>
     </div>
   );
 }
 
-export function EtfPanel({ btcData, ethData, btcHistory, ethHistory, activeTab, onTabChange, loading }: EtfPanelProps) {
+export function EtfPanel({ btcData, ethData, btcHistory, ethHistory, activeTab, onTabChange, loading, currentPrice }: EtfPanelProps) {
   const data    = activeTab === 'btc' ? btcData    : ethData;
   const history = activeTab === 'btc' ? btcHistory : ethHistory;
   const label   = activeTab === 'btc' ? 'BTC' : 'ETH';
@@ -129,12 +199,7 @@ export function EtfPanel({ btcData, ethData, btcHistory, ethHistory, activeTab, 
 
   const anomalies = data ? detectAnomalies(data.list) : {};
 
-  const topFunds = data
-    ? data.list
-        .filter(f => f.dailyNetInflow.value !== null)
-        .sort((a, b) => Math.abs(b.dailyNetInflow.value!) - Math.abs(a.dailyNetInflow.value!))
-        .slice(0, 8)
-    : [];
+  const topFunds = data ? getTopFunds(data.list) : [];
 
   return (
     <div className="flex flex-col gap-4">
@@ -166,11 +231,14 @@ export function EtfPanel({ btcData, ethData, btcHistory, ethHistory, activeTab, 
         <MetricCard label="Cum. Net Inflow" value={loading ? 'Loading...' : formatUSD(data?.cumNetInflow.value ?? null)} positive={data?.cumNetInflow.value !== null ? (data?.cumNetInflow.value ?? 0) >= 0 : null} />
       </div>
 
-      {/* Historical inflow sparkline */}
-      {loading
-        ? <div className="shimmer h-28 rounded-xl" />
-        : <InflowChart data={history} label={`${label} Daily Net Inflow · 14d`} />
-      }
+      {/* Real TradingView-style candlestick chart (Binance data) */}
+      <TradingChart
+        symbol={activeTab === 'btc' ? 'BTCUSDT' : 'ETHUSDT'}
+        asset={label as 'BTC' | 'ETH'}
+        interval="1d"
+        limit={60}
+        currentPrice={currentPrice}
+      />
 
       {/* Fund breakdown */}
       <div
@@ -197,6 +265,29 @@ export function EtfPanel({ btcData, ethData, btcHistory, ethHistory, activeTab, 
               />
             ))
         }
+
+        {/* SoSoValue attribution */}
+        <div className="mt-3 pt-2.5 border-t border-white/5 flex items-center justify-between">
+          <a
+            href="https://sosovalue.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1.5 text-[10px] text-slate-600 hover:text-slate-400 transition-colors font-mono"
+          >
+            <span
+              className="inline-flex items-center justify-center w-4 h-4 rounded text-white font-bold text-[9px]"
+              style={{ background: 'linear-gradient(135deg,#7C3AED,#4F46E5)' }}
+            >
+              S
+            </span>
+            Data by SoSoValue ↗
+          </a>
+          {data?.dailyNetInflow.lastUpdateDate && (
+            <span className="text-[10px] text-slate-700 font-mono">
+              Updated {data.dailyNetInflow.lastUpdateDate}
+            </span>
+          )}
+        </div>
       </div>
     </div>
   );

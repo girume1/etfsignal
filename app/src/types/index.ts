@@ -47,6 +47,24 @@ export interface NewsItem {
 
 export type SignalDirection = 'BULLISH' | 'BEARISH' | 'NEUTRAL';
 
+export interface TpSlLevel {
+  price: number;
+  pct: number;
+  rationale: string;
+}
+
+export interface EntryZone {
+  low: number;
+  high: number;
+}
+
+/** One row in the AI-generated signal breakdown (weights sum to ~100). */
+export interface SignalWeight {
+  factor: string;
+  weight: number;          // 0–100
+  signal: 'positive' | 'negative' | 'neutral';
+}
+
 export interface MarketSignal {
   direction: SignalDirection;
   confidence: number; // 0-100
@@ -55,7 +73,12 @@ export interface MarketSignal {
   keyFactors: string[];
   tradeIdea: string;
   riskWarning: string;
+  entryZone: EntryZone;
+  takeProfit: TpSlLevel;
+  stopLoss: TpSlLevel;
   timestamp: Date;
+  /** Factor-level weighting breakdown produced by the AI model. */
+  weights?: SignalWeight[];
 }
 
 // ─── SoDEX Types ───────────────────────────────────────────────────────────
@@ -112,6 +135,18 @@ export interface SentimentScore {
   label: string;          // e.g. "Cautiously bullish"
   momentum: number;       // -1 to 1
   inflowTrend: number[];  // recent daily inflows
+}
+
+// ─── Historical Data ───────────────────────────────────────────────────────
+
+export interface HistoricalInflow {
+  date: string;   // YYYY-MM-DD
+  inflow: number; // USD
+}
+
+export interface PricePoint {
+  date: string;
+  price: number;
 }
 
 // ─── App State ─────────────────────────────────────────────────────────────
