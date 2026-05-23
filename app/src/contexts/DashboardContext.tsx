@@ -72,6 +72,11 @@ interface DashboardContextValue {
 
 const DashboardContext = createContext<DashboardContextValue | null>(null);
 
+/** Unwrap a PromiseSettledResult — safe in .tsx (no JSX-generic ambiguity). */
+function settled<T>(r: PromiseSettledResult<T>): T | null {
+  return r.status === 'fulfilled' ? r.value : null;
+}
+
 export function DashboardProvider({ children }: { children: ReactNode }) {
   // ── ETF data ────────────────────────────────────────────────────────────
   const [btcData,     setBtcData]     = useState<EtfData | null>(null);
@@ -150,20 +155,16 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
         fetchSignalHistory(),
       ]);
 
-      // <T,> trailing comma prevents TSX parser from treating <T> as JSX
-      const ok = <T,>(r: PromiseSettledResult<T>): T | null =>
-        r.status === 'fulfilled' ? r.value : null;
-
-      const btc  = ok(btcR);
-      const eth  = ok(ethR);
-      const bInf = ok(bInfR) ?? [];
-      const eInf = ok(eInfR) ?? [];
+      const btc  = settled(btcR);
+      const eth  = settled(ethR);
+      const bInf = settled(bInfR) ?? [];
+      const eInf = settled(eInfR) ?? [];
 
       if (btc) { setBtcData(btc); }
       if (eth) { setEthData(eth); }
       setBtcHist(bInf); setEthHist(eInf);
-      setBtcPrice(ok(bPxR) ?? []); setEthPrice(ok(ePxR) ?? []);
-      setHistory(ok(histR) ?? []);
+      setBtcPrice(settled(bPxR) ?? []); setEthPrice(settled(ePxR) ?? []);
+      setHistory(settled(histR) ?? []);
 
       // Alerts: derive whenever we have at least one ETF dataset
       if (btc || eth) {
@@ -174,7 +175,7 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
         ));
       }
 
-      const newsData = ok(newsR);
+      const newsData = settled(newsR);
       if (newsData) setNews(newsData.list);
 
       setLastUpdated(new Date());
