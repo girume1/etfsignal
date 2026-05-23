@@ -37,3 +37,7 @@ pnpm-debug.log*
 
 # pnpm
 .pnpm-debug.log
+
+# Local dev tools (not needed in repo)
+dev-proxy.js
+.env.example

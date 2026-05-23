@@ -150,7 +150,8 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
         fetchSignalHistory(),
       ]);
 
-      const ok = <T>(r: PromiseSettledResult<T>): T | null =>
+      // <T,> trailing comma prevents TSX parser from treating <T> as JSX
+      const ok = <T,>(r: PromiseSettledResult<T>): T | null =>
         r.status === 'fulfilled' ? r.value : null;
 
       const btc  = ok(btcR);
