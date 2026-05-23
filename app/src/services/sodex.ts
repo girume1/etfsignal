@@ -58,7 +58,7 @@ export async function placeSpotOrder(
 ): Promise<PlaceOrderResult> {
   try {
     const nonce = Date.now();
-    const symbolID = order.symbol === 'BTC-USDT' ? 1 : 2; // testnet symbol IDs
+    const symbolID = order.symbol === 'BTC-USDC' ? 1 : 2; // SoDEX testnet: USDC quote pairs
 
     const orderItem = {
       clOrdID: `etfsignal-${nonce}`,

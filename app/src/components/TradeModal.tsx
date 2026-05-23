@@ -62,7 +62,7 @@ export function TradeModal({ signal, side, symbol, onConfirm, onClose }: TradeMo
             </div>
             <div>
               <div className="font-semibold text-white">{isLong ? 'Long' : 'Short'} {symbol}</div>
-              <div className="text-xs text-slate-500">SoDEX Testnet · Market Order</div>
+              <div className="text-xs text-slate-500">SoDEX Testnet · Market Order · USDC</div>
             </div>
           </div>
           <button onClick={onClose} className="text-slate-500 hover:text-white text-xl">✕</button>
@@ -106,7 +106,15 @@ export function TradeModal({ signal, side, symbol, onConfirm, onClose }: TradeMo
               <div className="text-xs font-semibold text-yellow-400 mb-1">⚠ Risk Warning</div>
               <p className="text-xs text-slate-400">{signal.riskWarning}</p>
               <p className="text-xs text-slate-500 mt-2">
-                This is a <strong className="text-yellow-500">testnet</strong> trade using simulated funds. Past signals do not guarantee future performance. Not financial advice.
+                This is a <strong className="text-yellow-500">testnet</strong> trade. Need USDC?{' '}
+                <a
+                  href="https://testnet.sodex.com/faucet"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-400 hover:text-blue-300 underline"
+                >
+                  Get from SoDEX Faucet ↗
+                </a>
               </p>
             </div>
 

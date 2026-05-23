@@ -273,7 +273,8 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     if (!r.success) throw new Error(r.error);
   }, [signer]);
 
-  const symbol = activeTab === 'btc' ? 'BTC-USDT' : 'ETH-USDT';
+  // SoDEX testnet uses USDC as the quote currency (get from https://testnet.sodex.com/faucet)
+  const symbol = activeTab === 'btc' ? 'BTC-USDC' : 'ETH-USDC';
 
   const value: DashboardContextValue = {
     btcData, ethData, btcHist, ethHist, btcPrice, ethPrice,
