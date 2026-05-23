@@ -5,7 +5,12 @@
 // Requires: TELEGRAM_BOT_TOKEN env var (or edit BOT_TOKEN below)
 // Webhook will point to: https://etfsignal.vercel.app/api/telegram
 
-const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || 'REDACTED_BOT_TOKEN';
+const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+if (!BOT_TOKEN) {
+  console.error('❌ TELEGRAM_BOT_TOKEN env var is not set.');
+  console.error('   Run: TELEGRAM_BOT_TOKEN=your_token node scripts/setup-telegram-webhook.js');
+  process.exit(1);
+}
 const WEBHOOK_URL = 'https://etfsignal.vercel.app/api/telegram';
 
 async function main() {
