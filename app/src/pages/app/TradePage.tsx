@@ -1,0 +1,225 @@
+import { useDashboard } from '../../contexts/DashboardContext';
+import { ArrowLeftRight, Zap, TrendingUp, TrendingDown } from 'lucide-react';
+
+export default function TradePage() {
+  const {
+    wallet, activeTab, setActiveTab,
+    signal, signalLoading,
+    openTradeModal, handleAnalyze,
+    liveBtcPx, liveEthPx, latestBtcPx, latestEthPx,
+  } = useDashboard();
+
+  const assets = [
+    {
+      id: 'btc' as const,
+      label: 'BTC',
+      icon: '₿',
+      name: 'Bitcoin',
+      price: liveBtcPx ?? latestBtcPx ?? null,
+      pair: 'vBTC / vUSDC',
+    },
+    {
+      id: 'eth' as const,
+      label: 'ETH',
+      icon: 'Ξ',
+      name: 'Ethereum',
+      price: liveEthPx ?? latestEthPx ?? null,
+      pair: 'vETH / vUSDC',
+    },
+  ];
+
+  const currentAsset = assets.find(a => a.id === activeTab)!;
+  const signalDir = signal?.direction ?? null;
+
+  return (
+    <div className="max-w-xl mx-auto px-4 py-8 flex flex-col gap-6">
+      {/* Header */}
+      <div>
+        <div className="flex items-center gap-2 mb-1">
+          <ArrowLeftRight size={18} style={{ color: '#FF7637' }} />
+          <h1 className="text-xl font-bold text-white">SoDEX Trade</h1>
+        </div>
+        <p className="text-sm text-slate-400">
+          Trade BTC &amp; ETH perpetuals on SoDEX testnet · chain 138565
+        </p>
+      </div>
+
+      {/* Asset selector */}
+      <div
+        style={{ background: 'var(--brand-card)', border: '1px solid var(--brand-border)' }}
+        className="rounded-xl p-1 flex gap-1"
+      >
+        {assets.map(a => (
+          <button
+            key={a.id}
+            onClick={() => setActiveTab(a.id)}
+            className="flex-1 py-2.5 rounded-lg text-sm font-semibold transition-all flex items-center justify-center gap-2"
+            style={activeTab === a.id
+              ? { background: 'rgba(255,118,55,0.15)', color: '#FF7637', border: '1px solid rgba(255,118,55,0.3)' }
+              : { color: '#64748B', border: '1px solid transparent' }
+            }
+          >
+            <span className="font-mono">{a.icon}</span>
+            {a.label}
+            {a.price && (
+              <span className="font-mono text-xs text-slate-400">
+                ${a.price.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* Pair info card */}
+      <div
+        style={{ background: 'var(--brand-card)', border: '1px solid var(--brand-border)' }}
+        className="rounded-xl p-5 flex items-center justify-between"
+      >
+        <div>
+          <div className="text-xs text-slate-500 font-mono uppercase tracking-wider mb-1">Trading pair</div>
+          <div className="text-xl font-bold font-mono text-white">{currentAsset.pair}</div>
+          <div className="text-xs text-slate-500 mt-1">SoDEX Testnet · Perpetual</div>
+        </div>
+        {currentAsset.price && (
+          <div className="text-right">
+            <div className="text-xs text-slate-500 font-mono uppercase tracking-wider mb-1">Market price</div>
+            <div className="text-2xl font-bold font-mono text-white">
+              ${currentAsset.price.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* AI Signal context (if available) */}
+      {signal && (
+        <div
+          style={{
+            background: signalDir === 'BULLISH'
+              ? 'rgba(52,211,153,0.08)'
+              : signalDir === 'BEARISH'
+              ? 'rgba(248,113,113,0.08)'
+              : 'rgba(148,163,184,0.08)',
+            border: `1px solid ${
+              signalDir === 'BULLISH' ? 'rgba(52,211,153,0.25)'
+              : signalDir === 'BEARISH' ? 'rgba(248,113,113,0.25)'
+              : 'rgba(148,163,184,0.2)'
+            }`,
+          }}
+          className="rounded-xl p-4"
+        >
+          <div className="flex items-center gap-2 mb-2">
+            <Zap size={13} style={{ color: '#00FFA7' }} />
+            <span className="text-xs font-semibold uppercase tracking-wider font-mono" style={{ color: '#00FFA7' }}>
+              AI Signal · {currentAsset.label}
+            </span>
+            <span
+              className="text-xs font-mono px-2 py-0.5 rounded-full"
+              style={{
+                background: signalDir === 'BULLISH'
+                  ? 'rgba(52,211,153,0.15)'
+                  : signalDir === 'BEARISH'
+                  ? 'rgba(248,113,113,0.15)'
+                  : 'rgba(148,163,184,0.12)',
+                color: signalDir === 'BULLISH' ? '#34D399' : signalDir === 'BEARISH' ? '#F87171' : '#94A3B8',
+              }}
+            >
+              {signalDir} · {signal.confidence}%
+            </span>
+          </div>
+          <p className="text-sm text-slate-300 leading-relaxed">{signal.headline}</p>
+        </div>
+      )}
+
+      {/* No signal nudge */}
+      {!signal && !signalLoading && (
+        <div
+          style={{ background: 'rgba(0,255,167,0.05)', border: '1px dashed rgba(0,255,167,0.18)' }}
+          className="rounded-xl p-4 flex items-start gap-3"
+        >
+          <Zap size={16} style={{ color: '#00FFA7', marginTop: 2 }} className="shrink-0" />
+          <div>
+            <p className="text-sm text-slate-300 font-medium mb-1">Get an AI signal first</p>
+            <p className="text-xs text-slate-500 leading-relaxed mb-3">
+              Run Claude's ETF flow analysis to get a BULLISH / BEARISH direction before executing. Signals improve your entry timing.
+            </p>
+            <button
+              onClick={handleAnalyze}
+              className="text-xs font-semibold px-3 py-1.5 rounded-lg transition-all hover:opacity-90"
+              style={{ background: '#00FFA7', color: '#06080B' }}
+            >
+              ✦ Analyze {currentAsset.label} now
+            </button>
+          </div>
+        </div>
+      )}
+
+      {signalLoading && (
+        <div className="flex items-center gap-3 text-sm text-slate-400 px-1">
+          <div
+            className="w-4 h-4 rounded-full border-2 border-transparent animate-spin shrink-0"
+            style={{ borderTopColor: '#00FFA7' }}
+          />
+          Analyzing {currentAsset.label} ETF flows…
+        </div>
+      )}
+
+      {/* Trade buttons */}
+      <div className="grid grid-cols-2 gap-3">
+        <button
+          onClick={() => openTradeModal('BUY')}
+          disabled={!wallet.connected}
+          className="py-4 rounded-xl font-bold text-base transition-all active:scale-[0.98] disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          style={{
+            background: wallet.connected
+              ? 'linear-gradient(135deg, #059669, #10B981)'
+              : 'rgba(255,255,255,0.05)',
+            color: '#fff',
+            boxShadow: wallet.connected ? '0 4px 20px rgba(16,185,129,0.3)' : 'none',
+          }}
+        >
+          <TrendingUp size={16} />
+          Long {currentAsset.label}
+        </button>
+
+        <button
+          onClick={() => openTradeModal('SELL')}
+          disabled={!wallet.connected}
+          className="py-4 rounded-xl font-bold text-base transition-all active:scale-[0.98] disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          style={{
+            background: wallet.connected
+              ? 'linear-gradient(135deg, #EF4444, #DC2626)'
+              : 'rgba(255,255,255,0.05)',
+            color: '#fff',
+            boxShadow: wallet.connected ? '0 4px 20px rgba(239,68,68,0.3)' : 'none',
+          }}
+        >
+          <TrendingDown size={16} />
+          Short {currentAsset.label}
+        </button>
+      </div>
+
+      {!wallet.connected && (
+        <p className="text-xs text-center text-slate-600 font-mono -mt-2">
+          Connect wallet above to enable trading on SoDEX testnet
+        </p>
+      )}
+
+      {/* Info strip */}
+      <div
+        style={{ background: 'var(--brand-panel)', border: '1px solid var(--brand-border)' }}
+        className="rounded-xl p-4 grid grid-cols-3 gap-4 text-center"
+      >
+        {[
+          { label: 'Network', value: 'ValueChain' },
+          { label: 'Chain ID', value: '138565' },
+          { label: 'Settlement', value: 'vUSDC' },
+        ].map(item => (
+          <div key={item.label}>
+            <div className="text-[10px] text-slate-500 uppercase tracking-wider font-mono mb-1">{item.label}</div>
+            <div className="text-sm font-semibold font-mono text-slate-200">{item.value}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}

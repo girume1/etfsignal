@@ -29,6 +29,22 @@
   --brand-border-std:  rgba(255,255,255,0.12);
 }
 
+/* ─── Light theme overrides ─── */
+[data-theme="light"] {
+  --brand-dark:       #F0F4F8;
+  --brand-panel:      #E2E8F0;
+  --brand-card:       #FFFFFF;
+  --brand-border:     rgba(0,0,0,0.08);
+  --brand-border-std: rgba(0,0,0,0.14);
+  --brand-teal-glow:  rgba(0,200,130,0.08);
+}
+[data-theme="light"] body {
+  color: #0F172A;
+}
+[data-theme="light"] ::-webkit-scrollbar-thumb {
+  background: rgba(0,0,0,0.2);
+}
+
 * { box-sizing: border-box; }
 
 body {

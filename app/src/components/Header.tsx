@@ -1,7 +1,8 @@
-import { Moon } from 'lucide-react';
+import { Moon, Sun } from 'lucide-react';
 import type { WalletState } from '../types';
 import { WalletMenu } from './WalletMenu';
 import { useDashboard } from '../contexts/DashboardContext';
+import { useTheme } from '../contexts/ThemeContext';
 import { formatUSD } from '../services/sosovalue';
 
 interface HeaderProps {
@@ -46,6 +47,7 @@ export function Header({
     liveBtcPx, liveEthPx, latestBtcPx, latestEthPx,
     liveConnected,
   } = useDashboard();
+  const { theme, toggleTheme } = useTheme();
 
   const btcPrice = liveBtcPx ?? latestBtcPx;
   const ethPrice = liveEthPx ?? latestEthPx;
@@ -131,11 +133,16 @@ export function Header({
       {/* Right controls */}
       <div className="flex items-center gap-2 shrink-0">
         <button
-          className="hidden md:flex w-8 h-8 items-center justify-center rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors"
-          style={{ border: '1px solid rgba(255,255,255,0.06)' }}
-          title="Toggle theme"
+          onClick={toggleTheme}
+          className="hidden md:flex w-8 h-8 items-center justify-center rounded-lg transition-colors"
+          style={{
+            border: '1px solid rgba(255,255,255,0.06)',
+            color: theme === 'light' ? '#FF7637' : '#64748B',
+            background: theme === 'light' ? 'rgba(255,118,55,0.08)' : 'transparent',
+          }}
+          title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
         >
-          <Moon size={14} />
+          {theme === 'dark' ? <Moon size={14} /> : <Sun size={14} />}
         </button>
 
         <WalletMenu

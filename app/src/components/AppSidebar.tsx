@@ -15,7 +15,7 @@ const NAV_MAIN = [
 ];
 
 const NAV_TRADE = [
-  { path: '/app/signals', icon: ArrowLeftRight, label: 'SoDEX Trade',  exact: false },
+  { path: '/app/trade', icon: ArrowLeftRight, label: 'SoDEX Trade',  exact: false },
 ];
 
 const NAV_ACCOUNT = [
