@@ -53,10 +53,10 @@ export function WalletMenu({ wallet, onConnect, onDisconnect }: WalletMenuProps)
         onClick={() => setOpen(o => !o)}
         style={{
           background: open
-            ? 'rgba(0,87,255,0.25)'
-            : 'rgba(0,87,255,0.15)',
-          border: '1px solid rgba(0,87,255,0.4)',
-          color: '#93C5FD',
+            ? 'rgba(255,118,55,0.25)'
+            : 'rgba(255,118,55,0.15)',
+          border: '1px solid rgba(255,118,55,0.3)',
+          color: '#FF7637',
         }}
         className="px-3 py-1.5 rounded-lg text-xs md:text-sm font-medium transition-all hover:opacity-90 flex items-center gap-2"
       >
@@ -78,13 +78,13 @@ export function WalletMenu({ wallet, onConnect, onDisconnect }: WalletMenuProps)
         >
           {/* Address block */}
           <div
-            style={{ background: 'rgba(0,87,255,0.08)', borderBottom: '1px solid var(--brand-border)' }}
+            style={{ background: 'rgba(255,118,55,0.06)', borderBottom: '1px solid var(--brand-border)' }}
             className="px-4 py-4"
           >
             <div className="flex items-center gap-3 mb-3">
               {/* Jazzicon-style avatar */}
               <div
-                style={{ background: 'linear-gradient(135deg, #0057FF, #00C2FF, #A78BFA)' }}
+                style={{ background: 'linear-gradient(135deg, #FF7637, #E86530)' }}
                 className="w-10 h-10 rounded-full shrink-0"
               />
               <div className="min-w-0">
@@ -125,7 +125,7 @@ export function WalletMenu({ wallet, onConnect, onDisconnect }: WalletMenuProps)
               className="flex items-center gap-3 px-4 py-2.5 hover:bg-white/5 transition-colors"
             >
               <span
-                style={{ background: 'rgba(0,194,255,0.1)', color: 'var(--brand-accent)' }}
+                style={{ background: 'rgba(255,118,55,0.1)', color: 'var(--brand-accent)' }}
                 className="w-7 h-7 rounded-lg flex items-center justify-center text-sm font-mono shrink-0"
               >
                 ↗

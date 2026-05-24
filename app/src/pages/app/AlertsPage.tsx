@@ -12,7 +12,7 @@ export { filterAlerts };
 const KIND_META: Record<Alert['kind'], { icon: string; color: string; bg: string; label: string }> = {
   inflow:    { icon: '▲', color: '#34D399', bg: 'rgba(52,211,153,0.12)',  label: 'INFLOW' },
   outflow:   { icon: '▼', color: '#F87171', bg: 'rgba(248,113,113,0.12)', label: 'OUTFLOW' },
-  rotation:  { icon: '⇄', color: '#A78BFA', bg: 'rgba(167,139,250,0.12)', label: 'ROTATION' },
+  rotation:  { icon: '⇄', color: '#FF7637', bg: 'rgba(255,118,55,0.12)', label: 'ROTATION' },
   milestone: { icon: '◆', color: '#FCD34D', bg: 'rgba(252,211,77,0.12)',  label: 'MILESTONE' },
   anomaly:   { icon: '⚡', color: '#FB923C', bg: 'rgba(251,146,60,0.14)',  label: 'ANOMALY' },
 };
@@ -54,7 +54,7 @@ export default function AlertsPage() {
           </div>
           <button
             onClick={refresh} disabled={loading}
-            style={{ color: 'var(--brand-accent)', border: '1px solid rgba(0,194,255,0.3)' }}
+            style={{ color: 'var(--brand-accent)', border: '1px solid rgba(255,118,55,0.3)' }}
             className="px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-white/5 disabled:opacity-40"
           >
             ↻ Refresh

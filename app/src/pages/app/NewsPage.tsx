@@ -53,7 +53,7 @@ export default function NewsPage() {
           </div>
           <button
             onClick={refresh} disabled={loading}
-            style={{ color: 'var(--brand-accent)', border: '1px solid rgba(0,194,255,0.3)' }}
+            style={{ color: 'var(--brand-accent)', border: '1px solid rgba(255,118,55,0.3)' }}
             className="px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-white/5 disabled:opacity-40"
           >
             ↻ Refresh
@@ -124,7 +124,7 @@ export default function NewsPage() {
                 >
                   <div className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-wider text-slate-500">
                     <span
-                      style={{ background: 'rgba(0,194,255,0.08)', color: 'var(--brand-accent)', border: '1px solid rgba(0,194,255,0.15)' }}
+                      style={{ background: 'rgba(255,118,55,0.08)', color: 'var(--brand-accent)', border: '1px solid rgba(255,118,55,0.15)' }}
                       className="px-1.5 py-0.5 rounded"
                     >
                       {cat}

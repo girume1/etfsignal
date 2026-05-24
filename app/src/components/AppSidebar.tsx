@@ -61,10 +61,10 @@ export function AppSidebar({ open, onClose }: AppSidebarProps) {
         onClick={onClose}
         className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 group"
         style={active ? {
-          background: 'linear-gradient(135deg, rgba(0,87,255,0.2), rgba(0,194,255,0.08))',
+          background: 'rgba(255,118,55,0.12)',
           color: '#fff',
-          border: '1px solid rgba(0,194,255,0.2)',
-          boxShadow: '0 0 20px rgba(0,87,255,0.1)',
+          border: '1px solid rgba(255,118,55,0.25)',
+          boxShadow: '0 0 20px rgba(255,118,55,0.08)',
         } : {
           color: '#64748B',
           border: '1px solid transparent',
@@ -73,7 +73,7 @@ export function AppSidebar({ open, onClose }: AppSidebarProps) {
         <Icon
           size={16}
           className="shrink-0 transition-colors"
-          style={{ color: active ? '#00C2FF' : undefined }}
+          style={{ color: active ? '#FF7637' : undefined }}
         />
         <span className="flex-1">{label}</span>
         {badge > 0 && (
@@ -113,8 +113,8 @@ export function AppSidebar({ open, onClose }: AppSidebarProps) {
         `}
         style={{
           width: 228,
-          background: 'linear-gradient(180deg, rgba(6,12,32,0.98) 0%, rgba(8,14,36,0.97) 100%)',
-          borderRight: '1px solid rgba(0,194,255,0.08)',
+          background: '#1A1B1F',
+          borderRight: '1px solid rgba(255,118,55,0.1)',
           backdropFilter: 'blur(20px)',
         }}
       >
@@ -123,13 +123,13 @@ export function AppSidebar({ open, onClose }: AppSidebarProps) {
           <div className="flex items-center gap-2.5">
             <div
               className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 font-bold text-sm text-white"
-              style={{ background: 'linear-gradient(135deg, #0057FF, #00C2FF)', boxShadow: '0 0 20px rgba(0,87,255,0.4)' }}
+              style={{ background: '#FF7637', boxShadow: '0 0 20px rgba(255,118,55,0.3)' }}
             >
               E
             </div>
             <div>
               <div className="font-display text-white text-base leading-tight tracking-tight">
-                ETFSignal<span style={{ color: '#00C2FF' }}>AI</span>
+                ETFSignal<span style={{ color: '#FF7637' }}>AI</span>
               </div>
               <div className="text-[9px] text-slate-500 font-mono tracking-wide">AI-Powered ETF Intelligence</div>
             </div>
@@ -169,12 +169,12 @@ export function AppSidebar({ open, onClose }: AppSidebarProps) {
           <div
             className="rounded-xl p-3.5"
             style={{
-              background: 'linear-gradient(135deg, rgba(0,87,255,0.15), rgba(0,194,255,0.06))',
-              border: '1px solid rgba(0,194,255,0.15)',
+              background: 'linear-gradient(135deg, rgba(255,118,55,0.15), rgba(255,118,55,0.06))',
+              border: '1px solid rgba(255,118,55,0.15)',
             }}
           >
             <div className="flex items-center gap-2 mb-2">
-              <Bot size={14} style={{ color: '#00C2FF' }} />
+              <Bot size={14} style={{ color: '#FF7637' }} />
               <span className="text-xs font-semibold text-white">AI Advantage</span>
             </div>
             <p className="text-[10px] text-slate-400 leading-relaxed mb-3">
@@ -184,7 +184,7 @@ export function AppSidebar({ open, onClose }: AppSidebarProps) {
               to="/app/signals"
               onClick={onClose}
               className="block text-center text-[11px] font-semibold py-1.5 rounded-lg transition-all hover:opacity-90"
-              style={{ background: 'linear-gradient(135deg, #0057FF, #00C2FF)', color: '#fff' }}
+              style={{ background: '#FF7637', color: '#fff' }}
             >
               Learn More
             </NavLink>

@@ -9,7 +9,7 @@ export function HowItWorksPage() {
       subtitle: 'Live institutional data',
       desc: 'ETFSignal AI fetches real-time data from the SoSoValue API: BTC and ETH spot ETF metrics including daily inflows, net assets, cumulative flows, and per-fund breakdowns from BlackRock, Fidelity, Grayscale, and 8 other issuers.',
       tech: ['SoSoValue REST API', 'Polling every 5 minutes', 'BTC + ETH spot ETFs'],
-      color: '#0057FF',
+      color: '#FF7637',
     },
     {
       num: '02',
@@ -17,7 +17,7 @@ export function HowItWorksPage() {
       subtitle: 'Categorized news context',
       desc: 'Live news feed pulled from the same SoSoValue API — filtered by category (on-chain events, institutional reports, price alerts, research, official tweets) and matched to the relevant currency.',
       tech: ['News feed endpoint', '9 category types', 'Multilingual content'],
-      color: '#00C2FF',
+      color: '#FF7637',
     },
     {
       num: '03',
@@ -25,7 +25,7 @@ export function HowItWorksPage() {
       subtitle: 'AI synthesis',
       desc: 'Claude AI receives a structured payload of ETF flow data + recent news headlines. It analyzes the institutional money movement patterns, cross-references news context, and synthesizes everything into a directional signal.',
       tech: ['Claude Sonnet 4', 'Structured JSON output', 'Hidden via serverless'],
-      color: '#A78BFA',
+      color: '#FF7637',
     },
     {
       num: '04',
@@ -53,7 +53,7 @@ export function HowItWorksPage() {
       <section className="px-6 pt-20 pb-16 text-center relative overflow-hidden">
         <div
           className="absolute inset-0 opacity-20 pointer-events-none"
-          style={{ background: 'radial-gradient(ellipse at top, #0057FF 0%, transparent 60%)' }}
+          style={{ background: 'radial-gradient(ellipse at top, rgba(255,118,55,0.3) 0%, transparent 60%)' }}
         />
 
         <div className="relative max-w-4xl mx-auto">
@@ -138,7 +138,7 @@ export function HowItWorksPage() {
             className="rounded-2xl overflow-hidden"
           >
             <table className="w-full text-sm">
-              <thead style={{ background: 'rgba(0,87,255,0.05)' }}>
+              <thead style={{ background: 'rgba(255,118,55,0.05)' }}>
                 <tr>
                   <th className="px-6 py-4 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Source</th>
                   <th className="px-6 py-4 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Endpoint</th>
@@ -172,7 +172,7 @@ export function HowItWorksPage() {
         </h2>
         <Link
           to="/app"
-          style={{ background: 'linear-gradient(135deg, #0057FF, #00C2FF)' }}
+          style={{ background: '#FF7637' }}
           className="inline-flex items-center gap-3 px-10 py-5 rounded-xl text-white font-semibold text-lg transition-all hover:scale-105"
         >
           Launch the Dashboard

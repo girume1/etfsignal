@@ -9,9 +9,9 @@ import { SignalHistory } from '../../components/SignalHistory';
 // ── How it works steps ────────────────────────────────────────────────────────
 
 const HOW_STEPS = [
-  { color: '#00C2FF', text: 'ETF flow data is fetched from SoSoValue across all 10–12 funds per asset.' },
-  { color: '#0057FF', text: 'A flow sentiment score (0–100) is computed from inflow momentum and breadth.' },
-  { color: '#A78BFA', text: 'Claude AI synthesizes flows + market news into a directional signal.' },
+  { color: '#FF7637', text: 'ETF flow data is fetched from SoSoValue across all 10–12 funds per asset.' },
+  { color: '#FF7637', text: 'A flow sentiment score (0–100) is computed from inflow momentum and breadth.' },
+  { color: '#FF7637', text: 'Claude AI synthesizes flows + market news into a directional signal.' },
   { color: '#34D399', text: 'You review the signal and optionally execute on SoDEX testnet.' },
 ];
 
@@ -91,15 +91,15 @@ export default function SignalsPage() {
         <div className={`${gap} max-w-screen-2xl mx-auto w-full`}>
           <div
             style={{
-              background: 'linear-gradient(135deg, rgba(0,87,255,0.15) 0%, rgba(0,194,255,0.08) 100%)',
-              border: '1px solid rgba(0,87,255,0.3)',
-              boxShadow: '0 0 40px rgba(0,87,255,0.1)',
+              background: 'linear-gradient(135deg, rgba(255,118,55,0.15) 0%, rgba(255,118,55,0.08) 100%)',
+              border: '1px solid rgba(255,118,55,0.3)',
+              boxShadow: '0 0 40px rgba(255,118,55,0.1)',
             }}
             className="rounded-2xl p-8 flex flex-col items-center text-center gap-5"
           >
             <div
               className="w-16 h-16 rounded-full flex items-center justify-center text-2xl"
-              style={{ background: 'rgba(0,87,255,0.15)', border: '1px solid rgba(0,87,255,0.3)' }}
+              style={{ background: 'rgba(255,118,55,0.15)', border: '1px solid rgba(255,118,55,0.3)' }}
             >
               ✦
             </div>
@@ -137,8 +137,8 @@ export default function SignalsPage() {
             <button
               onClick={handleAnalyze}
               style={{
-                background: 'linear-gradient(135deg, #0057FF 0%, #00C2FF 100%)',
-                boxShadow: '0 0 24px rgba(0,87,255,0.4)',
+                background: '#FF7637',
+                boxShadow: '0 0 24px rgba(255,118,55,0.4)',
               }}
               className="px-8 py-3.5 rounded-xl text-white font-semibold text-sm flex items-center gap-2 hover:opacity-90 transition-all active:scale-[0.98]"
             >

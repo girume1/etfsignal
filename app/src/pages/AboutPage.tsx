@@ -10,7 +10,7 @@ export function AboutPage() {
       <section className="px-6 pt-20 pb-16 relative overflow-hidden">
         <div
           className="absolute inset-0 opacity-20 pointer-events-none"
-          style={{ background: 'radial-gradient(ellipse at top right, #00C2FF 0%, transparent 60%)' }}
+          style={{ background: 'radial-gradient(ellipse at top right, rgba(255,118,55,0.3) 0%, transparent 60%)' }}
         />
 
         <div className="relative max-w-4xl mx-auto text-center">
@@ -35,7 +35,7 @@ export function AboutPage() {
         >
           <div className="flex flex-col md:flex-row items-start gap-8">
             <div
-              style={{ background: 'linear-gradient(135deg, #0057FF, #00C2FF)' }}
+              style={{ background: '#FF7637' }}
               className="w-24 h-24 rounded-2xl flex items-center justify-center text-white font-display text-4xl shrink-0"
             >
               M
@@ -63,7 +63,7 @@ export function AboutPage() {
                     href={link.href}
                     target="_blank"
                     rel="noopener noreferrer"
-                    style={{ background: 'rgba(0,194,255,0.05)', border: '1px solid var(--brand-border)' }}
+                    style={{ background: 'rgba(255,118,55,0.05)', border: '1px solid var(--brand-border)' }}
                     className="px-3 py-2.5 rounded-lg hover:border-blue-500/50 transition-all"
                   >
                     <div className="text-xs text-slate-500">{link.icon} {link.label}</div>
@@ -113,8 +113,8 @@ export function AboutPage() {
             <div className="space-y-4">
               {[
                 { wave: 'Wave 1', status: '✓', state: 'Shipped', label: 'Concept + Full Scaffold + APIs Integrated', color: '#34D399' },
-                { wave: 'Wave 2', status: '◯', state: 'Next', label: 'Real-time WebSocket · Historical charts · Polished trade flow', color: '#00C2FF' },
-                { wave: 'Wave 3', status: '◯', state: 'Planned', label: 'Portfolio tracker · Copy-trading · Final demo polish', color: '#0057FF' },
+                { wave: 'Wave 2', status: '◯', state: 'Next', label: 'Real-time WebSocket · Historical charts · Polished trade flow', color: '#FF7637' },
+                { wave: 'Wave 3', status: '◯', state: 'Planned', label: 'Portfolio tracker · Copy-trading · Final demo polish', color: '#FF7637' },
               ].map(w => (
                 <div
                   key={w.wave}
@@ -143,7 +143,7 @@ export function AboutPage() {
         </h2>
         <Link
           to="/app"
-          style={{ background: 'linear-gradient(135deg, #0057FF, #00C2FF)' }}
+          style={{ background: '#FF7637' }}
           className="inline-flex items-center gap-3 px-10 py-5 rounded-xl text-white font-semibold text-lg transition-all hover:scale-105"
         >
           Launch the Dashboard

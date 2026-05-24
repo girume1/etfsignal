@@ -65,8 +65,8 @@ export function Header({
     <header
       className="flex items-center justify-between px-4 gap-3 sticky top-0 z-50 h-14"
       style={{
-        background: 'rgba(6,12,32,0.97)',
-        borderBottom: '1px solid rgba(0,194,255,0.08)',
+        background: 'rgba(18,18,18,0.97)',
+        borderBottom: '1px solid rgba(255,118,55,0.08)',
         backdropFilter: 'blur(20px)',
       }}
     >
@@ -85,7 +85,7 @@ export function Header({
         {/* Mobile logo */}
         <div
           className="w-7 h-7 rounded-lg flex items-center justify-center text-white font-bold text-xs shrink-0 lg:hidden"
-          style={{ background: 'linear-gradient(135deg, #0057FF, #00C2FF)' }}
+          style={{ background: '#FF7637' }}
         >
           E
         </div>
@@ -115,7 +115,7 @@ export function Header({
             label="TOTAL ETF AUM"
             price={formatUSD(totalAum).replace('+', '')}
             change={aumChangeStr}
-            color="#00C2FF"
+            color="#FF7637"
           />
         )}
 
