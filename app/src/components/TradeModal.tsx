@@ -279,12 +279,15 @@ export function TradeModal({ signal, side, symbol, onConfirm, onClose }: TradeMo
           <div className="text-center py-6">
             <div className="text-4xl mb-4">{result.success ? '✅' : '❌'}</div>
             <p className={`text-lg font-semibold mb-2 ${result.success ? 'text-green-400' : 'text-red-400'}`}>
-              {result.success ? 'Order Signed!' : 'Order Failed'}
+              {result.success ? 'Order Placed!' : 'Order Failed'}
             </p>
             {result.success ? (
               <>
-                <p className="text-sm text-slate-400 mb-4">
-                  EIP-712 signature generated on SoDEX Testnet.
+                <p className="text-sm text-slate-400 mb-1">
+                  Your {isLong ? 'long' : 'short'} order was submitted to SoDEX Testnet.
+                </p>
+                <p className="text-xs text-slate-600 mb-4">
+                  {marketType === 'spot' ? 'Spot' : 'Futures'} · {amount} {currency} · {sodexSymbol}
                 </p>
                 <a
                   href={`https://testnet.sodex.com/trade/${marketType}/${sodexSymbol}`}
@@ -293,14 +296,11 @@ export function TradeModal({ signal, side, symbol, onConfirm, onClose }: TradeMo
                   style={{ background: 'linear-gradient(135deg,#00C2FF,#A78BFA)' }}
                   className="inline-block px-5 py-2.5 rounded-xl text-white font-semibold text-sm hover:opacity-90 transition-opacity"
                 >
-                  Execute on SoDEX {marketType === 'spot' ? 'Spot' : 'Futures'} ↗
+                  View on SoDEX ↗
                 </a>
-                <p className="text-xs text-slate-600 mt-3">
-                  Direct API integration coming soon.
-                </p>
               </>
             ) : (
-              <p className="text-sm text-slate-400 mb-4">{result.message}</p>
+              <p className="text-sm text-slate-400 mb-4 whitespace-pre-line">{result.message}</p>
             )}
             <button
               onClick={onClose}
