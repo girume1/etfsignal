@@ -125,11 +125,16 @@ export async function placeSpotOrder(
       body: JSON.stringify({ ...payload.params, signature: typedSig, nonce }),
     });
 
-    const result = await response.json();
+    // SoDEX sometimes returns HTML on error — parse safely
+    const raw = await response.text();
+    let result: any = {};
+    try { result = JSON.parse(raw); } catch {
+      return { success: false, error: `SoDEX error (HTTP ${response.status}): ${raw.slice(0, 120)}` };
+    }
     if (result.code === 0) {
       return { success: true, orderId: result.data?.orderId };
     }
-    return { success: false, error: result.msg || 'Order failed' };
+    return { success: false, error: result.msg || `Order failed (code ${result.code})` };
   } catch (err: any) {
     return { success: false, error: err.message || 'Unknown error' };
   }
