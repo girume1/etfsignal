@@ -1,10 +1,12 @@
 import { NavLink, useLocation } from 'react-router-dom';
+import { useState } from 'react';
 import {
   LayoutDashboard, BarChart2, TrendingUp, Zap,
   Newspaper, ArrowLeftRight, Star, PieChart,
   Settings, Bot,
 } from 'lucide-react';
 import { useDashboard } from '../contexts/DashboardContext';
+import { AIAdvantageModal } from './AIAdvantageModal';
 
 const NAV_MAIN = [
   { path: '/app',         icon: LayoutDashboard,  label: 'Dashboard',      exact: true  },
@@ -33,6 +35,7 @@ export function AppSidebar({ open, onClose }: AppSidebarProps) {
   const { alerts } = useDashboard();
   const location = useLocation();
   const highAlerts = alerts.filter(a => a.severity === 'high').length;
+  const [showAIModal, setShowAIModal] = useState(false);
 
   function NavItem({
     path, icon: Icon, label, exact = false, badge = 0, disabled = false,
@@ -59,7 +62,7 @@ export function AppSidebar({ open, onClose }: AppSidebarProps) {
         to={path}
         end={exact}
         onClick={onClose}
-        className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 group"
+        className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium nav-item${active ? ' nav-item-active' : ''}`}
         style={active ? {
           background: 'rgba(0,255,167,0.08)',
           color: '#fff',
@@ -180,14 +183,13 @@ export function AppSidebar({ open, onClose }: AppSidebarProps) {
             <p className="text-[10px] text-slate-400 leading-relaxed mb-3">
               Our AI analyzes ETF flows, news sentiment &amp; market data to find high-probability trades.
             </p>
-            <NavLink
-              to="/app/signals"
-              onClick={onClose}
-              className="block text-center text-[11px] font-semibold py-1.5 rounded-lg transition-all hover:opacity-90"
+            <button
+              onClick={() => setShowAIModal(true)}
+              className="block w-full text-center text-[11px] font-semibold py-1.5 rounded-lg transition-all hover:opacity-90"
               style={{ background: '#00FFA7', color: '#06080B' }}
             >
               Learn More
-            </NavLink>
+            </button>
           </div>
         </div>
 
@@ -216,6 +218,7 @@ export function AppSidebar({ open, onClose }: AppSidebarProps) {
           </div>
         </div>
       </aside>
+      {showAIModal && <AIAdvantageModal onClose={() => setShowAIModal(false)} />}
     </>
   );
 }

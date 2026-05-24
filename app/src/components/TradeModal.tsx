@@ -285,20 +285,28 @@ export function TradeModal({
                 </div>
               </div>
 
-              {/* Zero balance nudge */}
-              {isBalanceZero && !balLoading && (
+              {/* Zero / no balance nudge */}
+              {(isBalanceZero || available === null) && !balLoading && (
                 <div
-                  style={{ background: 'rgba(59,130,246,0.06)', border: '1px solid rgba(59,130,246,0.2)' }}
-                  className="rounded-lg px-3 py-2 mb-2 flex items-center justify-between"
+                  style={{ background: 'rgba(0,255,167,0.05)', border: '1px solid rgba(0,255,167,0.18)' }}
+                  className="rounded-xl px-3 py-3 mb-2"
                 >
-                  <span className="text-xs text-blue-300">No {currency} balance on SoDEX</span>
-                  <a
-                    href="https://testnet.sodex.com/faucet"
-                    target="_blank" rel="noopener noreferrer"
-                    className="text-xs text-blue-400 hover:text-blue-300 underline font-semibold"
-                  >
-                    Get {quoteAsset} ↗
-                  </a>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-semibold text-slate-300">No {quoteAsset} on SoDEX Testnet</span>
+                    <a
+                      href="https://testnet.sodex.com/faucet"
+                      target="_blank" rel="noopener noreferrer"
+                      className="text-xs font-bold hover:opacity-80 transition-opacity"
+                      style={{ color: '#00FFA7' }}
+                    >
+                      Get USDC ↗
+                    </a>
+                  </div>
+                  <ol className="text-[10px] text-slate-500 space-y-0.5 list-none">
+                    <li>① Go to <a href="https://testnet.sodex.com" target="_blank" rel="noopener noreferrer" className="text-slate-400 underline">testnet.sodex.com</a> → connect wallet</li>
+                    <li>② Visit Faucet → claim testnet USDC</li>
+                    <li>③ Come back and click ↺ to refresh balance</li>
+                  </ol>
                 </div>
               )}
 

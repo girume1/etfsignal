@@ -34,6 +34,11 @@ export interface TradingChartProps {
   currentPrice?: number | null;
 }
 
+// ─── Kline cache (avoids re-fetching on BTC↔ETH tab switch) ──────────────────
+
+const klineCache = new Map<string, { bars: KlineBar[]; ts: number }>();
+const CACHE_TTL  = 5 * 60 * 1000; // 5 minutes
+
 // ─── Binance KLINES (public, no auth, browser CORS allowed) ──────────────────
 
 async function fetchKlines(
@@ -41,6 +46,10 @@ async function fetchKlines(
   interval: string,
   limit: number,
 ): Promise<KlineBar[]> {
+  const cacheKey = `${symbol}-${interval}-${limit}`;
+  const cached   = klineCache.get(cacheKey);
+  if (cached && Date.now() - cached.ts < CACHE_TTL) return cached.bars;
+
   const url =
     `https://api.binance.com/api/v3/klines` +
     `?symbol=${symbol}&interval=${interval}&limit=${limit}`;
@@ -60,6 +69,8 @@ async function fetchKlines(
     close:  parseFloat(k[4]),
     volume: parseFloat(k[5]),
   }));
+  klineCache.set(cacheKey, { bars, ts: Date.now() });
+  return bars;
 }
 
 // ─── MA calculation ───────────────────────────────────────────────────────────

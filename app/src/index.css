@@ -138,6 +138,33 @@ body {
 .data-row { transition: background 0.2s ease; }
 .data-row:hover { background: rgba(0,255,167,0.04); }
 
+/* ─── Universal interactive hover ─── */
+.hover-surface {
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.hover-surface:hover {
+  background: rgba(255,255,255,0.06) !important;
+}
+
+/* ─── Nav item hover (more visible on ultra-dark bg) ─── */
+.nav-item {
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.nav-item:hover:not(.nav-item-active) {
+  background: rgba(255,255,255,0.06) !important;
+  color: #CBD5E1 !important;
+}
+
+/* ─── Card hover lift ─── */
+.card-hover {
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+.card-hover:hover {
+  transform: translateY(-1px);
+  border-color: rgba(0,255,167,0.18) !important;
+  box-shadow: 0 4px 20px rgba(0,255,167,0.06);
+}
+
 /* ─── Count-in animation ─── */
 @keyframes count-fade-in {
   from { opacity: 0; transform: translateY(4px); }

@@ -427,6 +427,96 @@ export function LandingPage() {
         </div>
       </section>
 
+      {/* ── COMMUNITY VOTES ──────────────────────────────────────────────────── */}
+      <section className="px-6 py-20" style={{ background: 'var(--brand-dark)' }}>
+        <div className="max-w-6xl mx-auto">
+          <motion.div
+            className="text-center mb-12"
+            initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeUp}
+          >
+            <div
+              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-mono mb-4"
+              style={{ background: 'rgba(0,255,167,0.08)', border: '1px solid rgba(0,255,167,0.2)', color: '#00FFA7' }}
+            >
+              ★ SoSoValue Buildathon · Wave 1 Votes
+            </div>
+            <h2 className="font-display text-white text-3xl md:text-4xl mb-3">
+              What the community said
+            </h2>
+            <p className="text-slate-400 text-sm max-w-lg mx-auto">
+              Independent reviews from the SoSoValue Buildathon Wave 1 evaluation panel.
+            </p>
+          </motion.div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {[
+              {
+                handle: '@0xmiharbi',
+                stars: 5,
+                quote: 'One of the strongest submissions overall. ETFSignal AI is a polished, well-engineered, and highly usable product with outstanding dashboard quality and UX.',
+              },
+              {
+                handle: '@Davislambo',
+                stars: 5,
+                quote: 'The full pipeline from SoSoValue ETF flows through Claude AI analysis to EIP712 trade execution on SoDEX is genuinely built and deployed, not just described.',
+              },
+              {
+                handle: '@SmartCoded',
+                stars: 5,
+                quote: 'Server-side Claude proxy keeping the API key off the browser is exactly right. The sentiment gauge with zone colors makes ETF flow readable to retail.',
+              },
+              {
+                handle: '@takimi',
+                stars: 5,
+                quote: 'Impressive technical depth and "Bloomberg-esque" professional UI. Integrating SoSoValue data with a Claude AI layer provides actionable intelligence, not just raw numbers.',
+              },
+              {
+                handle: '@jzddd',
+                stars: 4,
+                quote: 'Well-structured prototype with good product clarity. The wallet-gated dashboard and signal interface are stronger than many other submissions.',
+              },
+              {
+                handle: '@crypto4chun',
+                stars: 4,
+                quote: 'Nice UI/UX — this creates a professional trading experience with clear practical value. The SoSoValue data integration is well executed.',
+              },
+            ].map((v, i) => (
+              <motion.div
+                key={i}
+                initial="hidden" whileInView="visible" viewport={{ once: true }}
+                variants={fadeUp} custom={i * 0.5}
+                style={{ background: 'var(--brand-card)', border: '1px solid var(--brand-border)' }}
+                className="rounded-xl p-5 flex flex-col gap-3 card-hover"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div
+                      className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white"
+                      style={{ background: 'linear-gradient(135deg, #00FFA7, #00CC88)', color: '#06080B' }}
+                    >
+                      {v.handle[1].toUpperCase()}
+                    </div>
+                    <span className="text-sm font-semibold text-slate-300">{v.handle}</span>
+                  </div>
+                  <div className="flex gap-0.5">
+                    {Array(5).fill(0).map((_, si) => (
+                      <span key={si} className="text-xs" style={{ color: si < v.stars ? '#00FFA7' : '#334155' }}>★</span>
+                    ))}
+                  </div>
+                </div>
+                <p className="text-sm text-slate-400 leading-relaxed flex-1">"{v.quote}"</p>
+                <div
+                  className="text-[10px] font-mono px-2 py-1 rounded self-start"
+                  style={{ background: 'rgba(0,255,167,0.08)', color: '#00FFA7' }}
+                >
+                  ✓ Voted · Wave 1
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* ── FINAL CTA ────────────────────────────────────────────────────────── */}
       <section className="px-6 py-28 relative overflow-hidden" style={{ background: 'var(--brand-panel)' }}>
         <div
