@@ -177,25 +177,25 @@ export async function placeSpotOrder(
     // 3. Fetch real account ID for this wallet
     const aid = await fetchAccountId(address);
 
-    // 4. Build the batch-order request body
+    // 4. Build the batch-order request body (PascalCase field names per SoDEX API)
     const orderItem: Record<string, unknown> = {
-      clOrdID:      `etfsignal-${nonce}`,
-      modifier:     1,
-      side:         order.side === 'BUY' ? 1 : 2,
-      type:         order.type === 'MARKET' ? 2 : 1,
-      timeInForce:  3,                        // IOC — required for market orders
-      quantity:     String(order.quantity),   // DecimalString
-      reduceOnly:   false,
-      positionSide: 1,
+      Symbol:       sodexSym,
+      ClOrdID:      `etfsignal-${nonce}`,
+      Modifier:     1,
+      Side:         order.side === 'BUY' ? 1 : 2,
+      Type:         order.type === 'MARKET' ? 2 : 1,
+      TimeInForce:  3,                        // IOC — required for market orders
+      Quantity:     String(order.quantity),   // DecimalString
+      ReduceOnly:   false,
+      PositionSide: 1,
     };
     if (order.type === 'LIMIT' && order.price) {
-      orderItem.price = String(order.price);  // DecimalString
+      orderItem.Price = String(order.price);  // DecimalString
     }
 
     const requestBody = {
-      aid,
-      sym: sodexSym,
-      os: [orderItem],
+      AccountID: aid,
+      Orders:    [orderItem],
     };
 
     // 5. EIP-712 sign the request body
