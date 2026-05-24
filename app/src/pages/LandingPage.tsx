@@ -22,16 +22,16 @@ const FEATURES = [
     icon: '⬡',
     title: 'Institutional Data',
     desc: 'Live BTC & ETH spot ETF flows from BlackRock, Fidelity, Grayscale, and 9 more funds — continuously refreshed via SoSoValue.',
-    color: '#FF7637',
-    glow: 'rgba(255,118,55,0.15)',
+    color: '#00FFA7',
+    glow: 'rgba(0,255,167,0.12)',
   },
   {
     num: '02',
     icon: '✦',
     title: 'Claude AI Signals',
     desc: 'Synthesizes ETF flows + breaking news into directional signals with confidence scores, factor weights, TP/SL levels, and risk warnings.',
-    color: '#FF7637',
-    glow: 'rgba(255,118,55,0.15)',
+    color: '#00FFA7',
+    glow: 'rgba(0,255,167,0.12)',
   },
   {
     num: '03',
@@ -52,7 +52,7 @@ const STATS = [
 
 const TECH = [
   { name: 'SoSoValue',  sub: 'ETF Data API',     color: '#7C3AED' },
-  { name: 'Claude AI',  sub: 'Signal Engine',     color: '#FF7637' },
+  { name: 'Claude AI',  sub: 'Signal Engine',     color: '#00FFA7' },
   { name: 'SoDEX',      sub: 'Testnet Exchange',  color: '#34D399' },
   { name: 'ValueChain', sub: 'L1 Network',        color: '#F59E0B' },
   { name: 'EIP-712',    sub: 'Typed Signing',     color: '#94A3B8' },
@@ -70,22 +70,22 @@ export function LandingPage() {
         <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden>
           <div
             className="orb-a absolute -top-32 -left-32 w-[600px] h-[600px] rounded-full opacity-25"
-            style={{ background: 'radial-gradient(circle, rgba(255,118,55,0.4) 0%, transparent 65%)', filter: 'blur(80px)' }}
+            style={{ background: 'radial-gradient(circle, rgba(0,255,167,0.3) 0%, transparent 65%)', filter: 'blur(80px)' }}
           />
           <div
             className="orb-b absolute -bottom-32 right-0 w-[500px] h-[500px] rounded-full opacity-20"
-            style={{ background: 'radial-gradient(circle, rgba(255,118,55,0.3) 0%, transparent 65%)', filter: 'blur(80px)' }}
+            style={{ background: 'radial-gradient(circle, rgba(0,255,167,0.25) 0%, transparent 65%)', filter: 'blur(80px)' }}
           />
           <div
             className="absolute top-1/2 left-1/3 w-64 h-64 rounded-full opacity-10"
-            style={{ background: 'radial-gradient(circle, rgba(255,118,55,0.3) 0%, transparent 70%)', filter: 'blur(60px)' }}
+            style={{ background: 'radial-gradient(circle, rgba(0,255,167,0.25) 0%, transparent 70%)', filter: 'blur(60px)' }}
           />
 
           {/* Fine grid */}
           <svg className="absolute inset-0 w-full h-full opacity-[0.03]">
             <defs>
               <pattern id="lp-grid" width="40" height="40" patternUnits="userSpaceOnUse">
-                <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(255,118,55,0.4)" strokeWidth="0.5" />
+                <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(0,255,167,0.35)" strokeWidth="0.5" />
               </pattern>
             </defs>
             <rect width="100%" height="100%" fill="url(#lp-grid)" />
@@ -94,7 +94,7 @@ export function LandingPage() {
           {/* Diagonal accent line */}
           <div
             className="absolute top-0 right-1/3 w-px h-full opacity-10"
-            style={{ background: 'linear-gradient(to bottom, transparent, #FF7637 30%, #FF7637 70%, transparent)' }}
+            style={{ background: 'linear-gradient(to bottom, transparent, #00FFA7 30%, #00FFA7 70%, transparent)' }}
           />
         </div>
 
@@ -107,7 +107,7 @@ export function LandingPage() {
             {/* Buildathon badge */}
             <div
               className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full mb-8 slide-up"
-              style={{ background: 'rgba(255,118,55,0.1)', border: '1px solid rgba(255,118,55,0.3)' }}
+              style={{ background: 'rgba(0,255,167,0.07)', border: '1px solid rgba(0,255,167,0.25)' }}
             >
               <span className="pulse-dot w-1.5 h-1.5 rounded-full bg-green-400 inline-block" />
               <span
@@ -127,7 +127,7 @@ export function LandingPage() {
               <br />
               <span
                 style={{
-                  background: 'linear-gradient(135deg, #FF7637 0%, #FF7637 45%, #FF7637 100%)',
+                  background: 'linear-gradient(135deg, #00FFA7 0%, #00FFA7 45%, #00FFA7 100%)',
                   WebkitBackgroundClip: 'text',
                   WebkitTextFillColor: 'transparent',
                   backgroundClip: 'text',
@@ -184,8 +184,8 @@ export function LandingPage() {
             >
               {[
                 { dot: '#10B981', label: 'SoSoValue ETF data' },
-                { dot: '#FF7637', label: 'Claude AI powered' },
-                { dot: '#FF7637', label: 'EIP-712 signed orders' },
+                { dot: '#00FFA7', label: 'Claude AI powered' },
+                { dot: '#00FFA7', label: 'EIP-712 signed orders' },
                 { dot: '#F59E0B', label: 'Testnet only' },
               ].map(b => (
                 <div
@@ -283,7 +283,7 @@ export function LandingPage() {
                 <div
                   className="font-display text-4xl md:text-5xl mb-2"
                   style={{
-                    background: '#FF7637',
+                    background: '#00FFA7',
                     WebkitBackgroundClip: 'text',
                     WebkitTextFillColor: 'transparent',
                     backgroundClip: 'text',
@@ -431,7 +431,7 @@ export function LandingPage() {
       <section className="px-6 py-28 relative overflow-hidden" style={{ background: 'var(--brand-panel)' }}>
         <div
           className="absolute inset-0 opacity-40 pointer-events-none"
-          style={{ background: 'radial-gradient(ellipse at center, rgba(255,118,55,0.18) 0%, transparent 65%)' }}
+          style={{ background: 'radial-gradient(ellipse at center, rgba(0,255,167,0.1) 0%, transparent 65%)' }}
           aria-hidden
         />
 

@@ -56,7 +56,7 @@ function CustomTooltip({ active, payload, label }: CustomTooltipProps) {
     }}>
       <div style={{ color: '#94A3B8', marginBottom: 6 }}>{label}</div>
       {price && (
-        <div style={{ color: '#00C2FF' }}>
+        <div style={{ color: '#00FFA7' }}>
           Price: ${price.value.toLocaleString()}
         </div>
       )}
@@ -120,7 +120,7 @@ export function PriceFlowChart({ inflows, prices, asset }: PriceFlowChartProps) 
         </div>
         <div className="flex gap-3 text-[10px] font-mono">
           <span className="flex items-center gap-1">
-            <span className="inline-block w-3 h-[2px]" style={{ background: '#00C2FF' }} /> Price
+            <span className="inline-block w-3 h-[2px]" style={{ background: '#00FFA7' }} /> Price
           </span>
           <span className="flex items-center gap-1">
             <span className="inline-block w-2 h-2 rounded-sm" style={{ background: '#34D399' }} /> Inflow
@@ -136,8 +136,8 @@ export function PriceFlowChart({ inflows, prices, asset }: PriceFlowChartProps) 
         <ComposedChart data={data} margin={{ top: 4, right: 40, bottom: 0, left: 0 }}>
           <defs>
             <linearGradient id="priceGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%"  stopColor="#00C2FF" stopOpacity={0.2} />
-              <stop offset="95%" stopColor="#00C2FF" stopOpacity={0} />
+              <stop offset="5%"  stopColor="#00FFA7" stopOpacity={0.2} />
+              <stop offset="95%" stopColor="#00FFA7" stopOpacity={0} />
             </linearGradient>
           </defs>
 
@@ -188,10 +188,10 @@ export function PriceFlowChart({ inflows, prices, asset }: PriceFlowChartProps) 
           <Line
             yAxisId="price"
             dataKey="price"
-            stroke="#00C2FF"
+            stroke="#00FFA7"
             strokeWidth={2}
             dot={false}
-            activeDot={{ r: 4, fill: '#00C2FF', strokeWidth: 0 }}
+            activeDot={{ r: 4, fill: '#00FFA7', strokeWidth: 0 }}
             type="monotone"
           />
         </ComposedChart>

@@ -96,7 +96,7 @@ export function AskAI({ asset, etfData, signal }: AskAIProps) {
                 <button
                   key={s}
                   onClick={() => send(s)}
-                  style={{ background: 'rgba(0,194,255,0.08)', border: '1px solid rgba(0,194,255,0.2)' }}
+                  style={{ background: 'rgba(0,255,167,0.06)', border: '1px solid rgba(0,255,167,0.18)' }}
                   className="text-[11px] px-2.5 py-1.5 rounded-lg text-slate-300 hover:text-white hover:border-cyan-400/40 transition-colors text-left leading-snug"
                 >
                   {s}
@@ -109,7 +109,7 @@ export function AskAI({ asset, etfData, signal }: AskAIProps) {
           <div key={i} className={`flex ${t.role === 'user' ? 'justify-end' : 'justify-start'}`}>
             <div
               style={t.role === 'user'
-                ? { background: 'rgba(0,87,255,0.15)', border: '1px solid rgba(0,87,255,0.3)' }
+                ? { background: 'rgba(0,255,167,0.1)', border: '1px solid rgba(0,255,167,0.25)' }
                 : { background: 'rgba(167,139,250,0.08)', border: '1px solid rgba(167,139,250,0.25)' }}
               className="max-w-[85%] rounded-xl px-3 py-2 text-xs text-slate-200 leading-relaxed whitespace-pre-wrap"
             >

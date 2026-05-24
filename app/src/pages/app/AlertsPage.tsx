@@ -12,7 +12,7 @@ export { filterAlerts };
 const KIND_META: Record<Alert['kind'], { icon: string; color: string; bg: string; label: string }> = {
   inflow:    { icon: '▲', color: '#34D399', bg: 'rgba(52,211,153,0.12)',  label: 'INFLOW' },
   outflow:   { icon: '▼', color: '#F87171', bg: 'rgba(248,113,113,0.12)', label: 'OUTFLOW' },
-  rotation:  { icon: '⇄', color: '#FF7637', bg: 'rgba(255,118,55,0.12)', label: 'ROTATION' },
+  rotation:  { icon: '⇄', color: '#00FFA7', bg: 'rgba(0,255,167,0.08)', label: 'ROTATION' },
   milestone: { icon: '◆', color: '#FCD34D', bg: 'rgba(252,211,77,0.12)',  label: 'MILESTONE' },
   anomaly:   { icon: '⚡', color: '#FB923C', bg: 'rgba(251,146,60,0.14)',  label: 'ANOMALY' },
 };
@@ -54,7 +54,7 @@ export default function AlertsPage() {
           </div>
           <button
             onClick={refresh} disabled={loading}
-            style={{ color: 'var(--brand-accent)', border: '1px solid rgba(255,118,55,0.3)' }}
+            style={{ color: 'var(--brand-accent)', border: '1px solid rgba(0,255,167,0.25)' }}
             className="px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-white/5 disabled:opacity-40"
           >
             ↻ Refresh
@@ -72,7 +72,7 @@ export default function AlertsPage() {
               <button
                 key={k}
                 onClick={() => setKind(k)}
-                style={k === kind ? { background: 'var(--brand-blue)', color: 'white' } : { color: '#94A3B8' }}
+                style={k === kind ? { background: '#00FFA7', color: '#06080B' } : { color: '#94A3B8' }}
                 className="text-xs font-mono uppercase tracking-wider px-2.5 py-1.5 rounded transition-colors hover:text-white"
               >
                 {k === 'all' ? 'All Types' : KIND_META[k].label}
@@ -91,7 +91,7 @@ export default function AlertsPage() {
                 <button
                   key={s}
                   onClick={() => setSeverity(s)}
-                  style={s === severity ? { background: 'var(--brand-blue)', color: 'white' } : { color: color ?? '#94A3B8' }}
+                  style={s === severity ? { background: '#00FFA7', color: '#06080B' } : { color: color ?? '#94A3B8' }}
                   className="text-xs font-mono uppercase tracking-wider px-2.5 py-1.5 rounded transition-colors hover:text-white"
                 >
                   {s === 'all' ? 'All Severity' : s}

@@ -168,7 +168,7 @@ export default function FlowsPage() {
             Flow Analysis
           </span>
           <span
-            style={{ background: 'rgba(0,87,255,0.12)', color: '#60A5FA', border: '1px solid rgba(0,87,255,0.25)' }}
+            style={{ background: 'rgba(0,255,167,0.1)', color: '#00FFA7', border: '1px solid rgba(0,255,167,0.25)' }}
             className="text-[10px] px-2 py-0.5 rounded font-mono"
           >
             14-DAY

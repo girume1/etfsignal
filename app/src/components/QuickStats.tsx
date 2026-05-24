@@ -19,7 +19,7 @@ export function QuickStats() {
         ? `$${displayBtcPx.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
         : '—',
       sub: liveConnected ? '● live' : btcData ? 'from API' : '',
-      color: liveConnected ? '#34D399' : '#60A5FA',
+      color: liveConnected ? '#34D399' : '#00FFA7',
     },
     {
       label: 'ETH Price',
@@ -27,7 +27,7 @@ export function QuickStats() {
         ? `$${displayEthPx.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
         : '—',
       sub: liveConnected ? '● live' : ethData ? 'from API' : '',
-      color: liveConnected ? '#34D399' : '#A78BFA',
+      color: liveConnected ? '#34D399' : '#00FFA7',
     },
     {
       label: `${activeLabel} Sentiment`,

@@ -78,7 +78,7 @@ export function WalletMenu({ wallet, onConnect, onDisconnect }: WalletMenuProps)
         >
           {/* Address block */}
           <div
-            style={{ background: 'rgba(255,118,55,0.06)', borderBottom: '1px solid var(--brand-border)' }}
+            style={{ background: 'rgba(0,255,167,0.04)', borderBottom: '1px solid var(--brand-border)' }}
             className="px-4 py-4"
           >
             <div className="flex items-center gap-3 mb-3">

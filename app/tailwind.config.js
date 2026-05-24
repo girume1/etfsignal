@@ -5,12 +5,12 @@ export default {
     extend: {
       colors: {
         brand: {
-          blue: "#0057FF",
-          accent: "#00C2FF",
-          dark: "#0A0F1E",
-          panel: "#0D1428",
-          card: "#111827",
-          border: "#1E2D4A",
+          orange: "#FF7637",
+          teal:   "#00FFA7",
+          dark:   "#06080B",
+          panel:  "#04101B",
+          card:   "#0B0B0B",
+          border: "rgba(255,255,255,0.07)",
         }
       },
       fontFamily: {

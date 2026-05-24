@@ -29,8 +29,8 @@ export function HeroVisualizer() {
   const ry = hovered ? mouse.x  * 14 - 4  : -4;
 
   const funds = [
-    { label: 'IBIT', base: 312, vari: 18, color: '#00C2FF' },
-    { label: 'FBTC', base: 142, vari: 14, color: '#0057FF' },
+    { label: 'IBIT', base: 312, vari: 18, color: '#00FFA7' },
+    { label: 'FBTC', base: 142, vari: 14, color: '#00CC88' },
     { label: 'ARKB', base:  48, vari:  8, color: '#A78BFA' },
     { label: 'BITB', base:  22, vari:  6, color: '#34D399' },
   ];
@@ -65,21 +65,21 @@ export function HeroVisualizer() {
         </div>
       </div>
 
-      {/* Bottom-left: Confidence */}
+      {/* Bottom-left: Confidence — teal */}
       <div
         className="absolute -bottom-5 -left-4 z-20 chip-float-b"
-        style={{ filter: 'drop-shadow(0 8px 24px rgba(0,87,255,0.35))' }}
+        style={{ filter: 'drop-shadow(0 8px 24px rgba(0,255,167,0.28))' }}
       >
         <div
           className="rounded-2xl px-4 py-2.5"
           style={{
-            background: 'linear-gradient(135deg, rgba(0,87,255,0.2), rgba(0,194,255,0.08))',
-            border: '1px solid rgba(0,194,255,0.4)',
+            background: 'linear-gradient(135deg, rgba(0,255,167,0.14), rgba(0,255,167,0.06))',
+            border: '1px solid rgba(0,255,167,0.35)',
             backdropFilter: 'blur(16px)',
           }}
         >
           <div className="text-[9px] text-slate-400 font-mono tracking-widest mb-0.5">AI CONFIDENCE</div>
-          <div className="text-xl font-bold font-mono" style={{ color: '#00C2FF' }}>82%</div>
+          <div className="text-xl font-bold font-mono" style={{ color: '#00FFA7' }}>82%</div>
         </div>
       </div>
 
@@ -105,7 +105,7 @@ export function HeroVisualizer() {
       <div
         className="absolute -bottom-10 left-1/2 -translate-x-1/2 w-3/4 h-16 pointer-events-none"
         style={{
-          background: 'radial-gradient(ellipse, rgba(0,87,255,0.35) 0%, transparent 70%)',
+          background: 'radial-gradient(ellipse, rgba(0,255,167,0.2) 0%, transparent 70%)',
           filter: 'blur(20px)',
         }}
       />
@@ -119,25 +119,25 @@ export function HeroVisualizer() {
           transformStyle: 'preserve-3d',
           willChange: 'transform',
           borderRadius: '1.25rem',
-          background: 'linear-gradient(145deg, rgba(15,22,45,0.97) 0%, rgba(10,15,35,0.95) 100%)',
-          border: '1px solid rgba(0,194,255,0.18)',
+          background: 'linear-gradient(145deg, rgba(4,16,27,0.97) 0%, rgba(6,8,11,0.95) 100%)',
+          border: '1px solid rgba(0,255,167,0.12)',
           boxShadow: `
-            0 0 0 1px rgba(0,194,255,0.06),
+            0 0 0 1px rgba(0,255,167,0.05),
             0 30px 80px rgba(0,0,0,0.7),
-            0 0 100px rgba(0,87,255,0.12),
+            0 0 100px rgba(0,255,167,0.06),
             inset 0 1px 0 rgba(255,255,255,0.04)
           `,
         }}
       >
         {/* Subtle grid bg */}
         <svg
-          className="absolute inset-0 w-full h-full pointer-events-none opacity-[0.045]"
+          className="absolute inset-0 w-full h-full pointer-events-none opacity-[0.04]"
           style={{ borderRadius: '1.25rem' }}
           aria-hidden
         >
           <defs>
             <pattern id="hv-grid" width="28" height="28" patternUnits="userSpaceOnUse">
-              <path d="M 28 0 L 0 0 0 28" fill="none" stroke="#00C2FF" strokeWidth="0.5" />
+              <path d="M 28 0 L 0 0 0 28" fill="none" stroke="#00FFA7" strokeWidth="0.5" />
             </pattern>
           </defs>
           <rect width="100%" height="100%" fill="url(#hv-grid)" />
@@ -147,7 +147,7 @@ export function HeroVisualizer() {
         <div
           className="scan-line absolute left-0 right-0 h-px pointer-events-none"
           style={{
-            background: 'linear-gradient(90deg, transparent, rgba(0,194,255,0.5), transparent)',
+            background: 'linear-gradient(90deg, transparent, rgba(0,255,167,0.4), transparent)',
             zIndex: 1,
           }}
         />
@@ -204,18 +204,18 @@ export function HeroVisualizer() {
               <svg viewBox="0 0 240 140" className="w-full h-full">
                 <defs>
                   <linearGradient id="lg-in" x1="0" x2="1" y1="0" y2="0">
-                    <stop offset="0%"   stopColor="#00C2FF" stopOpacity="0" />
-                    <stop offset="60%"  stopColor="#00C2FF" stopOpacity="0.8" />
-                    <stop offset="100%" stopColor="#0057FF" stopOpacity="0.9" />
+                    <stop offset="0%"   stopColor="#00FFA7" stopOpacity="0" />
+                    <stop offset="60%"  stopColor="#00FFA7" stopOpacity="0.8" />
+                    <stop offset="100%" stopColor="#00CC88" stopOpacity="0.9" />
                   </linearGradient>
                   <linearGradient id="lg-out" x1="0" x2="1" y1="0" y2="0">
                     <stop offset="0%"   stopColor="#A78BFA" stopOpacity="0.9" />
                     <stop offset="100%" stopColor="#34D399" stopOpacity="0" />
                   </linearGradient>
                   <radialGradient id="rg-core" cx="50%" cy="50%" r="50%">
-                    <stop offset="0%"   stopColor="#00C2FF" stopOpacity="0.5" />
-                    <stop offset="65%"  stopColor="#0057FF" stopOpacity="0.12" />
-                    <stop offset="100%" stopColor="#0057FF" stopOpacity="0" />
+                    <stop offset="0%"   stopColor="#00FFA7" stopOpacity="0.35" />
+                    <stop offset="65%"  stopColor="#00CC88" stopOpacity="0.1" />
+                    <stop offset="100%" stopColor="#00CC88" stopOpacity="0" />
                   </radialGradient>
                 </defs>
                 {[28, 56, 84, 112].map((y, i) => (
@@ -231,8 +231,8 @@ export function HeroVisualizer() {
                   />
                 ))}
                 <circle cx="120" cy="70" r="42" fill="url(#rg-core)" />
-                <circle cx="120" cy="70" r="23" fill="#060C20" stroke="#00C2FF" strokeWidth="1.2" className="signal-glow" />
-                <text x="120" y="67" textAnchor="middle" fontSize="8" fontFamily="JetBrains Mono,monospace" fill="#00C2FF" letterSpacing="1.5">CLAUDE</text>
+                <circle cx="120" cy="70" r="23" fill="#04101B" stroke="#00FFA7" strokeWidth="1.2" className="signal-glow" />
+                <text x="120" y="67" textAnchor="middle" fontSize="8" fontFamily="JetBrains Mono,monospace" fill="#00FFA7" letterSpacing="1.5">CLAUDE</text>
                 <text x="120" y="78" textAnchor="middle" fontSize="6.5" fontFamily="JetBrains Mono,monospace" fill="#64748B">sonnet-4</text>
                 <path d="M 143 70 C 185 70, 205 70, 240 70" stroke="url(#lg-out)" strokeWidth="2" fill="none" strokeDasharray="6 4" className="flow-dash" />
                 <polygon points="232,66 240,70 232,74" fill="#34D399" className="pulse-dot" />
@@ -261,7 +261,7 @@ export function HeroVisualizer() {
                       className="h-full rounded-full transition-all duration-1000"
                       style={{
                         width: `${78 + Math.round(jitter(0) * 8)}%`,
-                        background: 'linear-gradient(90deg,#00C2FF,#34D399)',
+                        background: 'linear-gradient(90deg,#00FFA7,#34D399)',
                       }}
                     />
                   </div>

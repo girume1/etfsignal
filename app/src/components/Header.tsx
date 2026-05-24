@@ -65,8 +65,8 @@ export function Header({
     <header
       className="flex items-center justify-between px-4 gap-3 sticky top-0 z-50 h-14"
       style={{
-        background: 'rgba(18,18,18,0.97)',
-        borderBottom: '1px solid rgba(255,118,55,0.08)',
+        background: 'rgba(6,8,11,0.92)',
+        borderBottom: '1px solid rgba(255,255,255,0.06)',
         backdropFilter: 'blur(20px)',
       }}
     >

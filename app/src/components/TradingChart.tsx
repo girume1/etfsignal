@@ -260,7 +260,7 @@ export function TradingChart({
               {asset}/USDT
             </span>
             <span
-              style={{ background: 'rgba(0,87,255,0.12)', color: '#60A5FA', border: '1px solid rgba(0,87,255,0.2)' }}
+              style={{ background: 'rgba(0,255,167,0.1)', color: '#00FFA7', border: '1px solid rgba(0,255,167,0.22)' }}
               className="text-[9px] px-1.5 py-0.5 rounded font-mono"
             >
               {LABEL_MAP[interval] ?? interval}

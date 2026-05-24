@@ -9,9 +9,9 @@ import { SignalHistory } from '../../components/SignalHistory';
 // ── How it works steps ────────────────────────────────────────────────────────
 
 const HOW_STEPS = [
-  { color: '#FF7637', text: 'ETF flow data is fetched from SoSoValue across all 10–12 funds per asset.' },
-  { color: '#FF7637', text: 'A flow sentiment score (0–100) is computed from inflow momentum and breadth.' },
-  { color: '#FF7637', text: 'Claude AI synthesizes flows + market news into a directional signal.' },
+  { color: '#00FFA7', text: 'ETF flow data is fetched from SoSoValue across all 10–12 funds per asset.' },
+  { color: '#00FFA7', text: 'A flow sentiment score (0–100) is computed from inflow momentum and breadth.' },
+  { color: '#00FFA7', text: 'Claude AI synthesizes flows + market news into a directional signal.' },
   { color: '#34D399', text: 'You review the signal and optionally execute on SoDEX testnet.' },
 ];
 
@@ -56,7 +56,7 @@ export default function SignalsPage() {
               onClick={() => setActiveTab(t)}
               style={
                 active
-                  ? { background: 'var(--brand-blue)', color: 'white' }
+                  ? { background: '#00FFA7', color: '#06080B' }
                   : { color: '#94A3B8', border: '1px solid var(--brand-border)' }
               }
               className="px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors uppercase tracking-wider flex items-center gap-2"
@@ -91,15 +91,15 @@ export default function SignalsPage() {
         <div className={`${gap} max-w-screen-2xl mx-auto w-full`}>
           <div
             style={{
-              background: 'linear-gradient(135deg, rgba(255,118,55,0.15) 0%, rgba(255,118,55,0.08) 100%)',
-              border: '1px solid rgba(255,118,55,0.3)',
-              boxShadow: '0 0 40px rgba(255,118,55,0.1)',
+              background: 'linear-gradient(135deg, rgba(0,255,167,0.08) 0%, rgba(0,255,167,0.04) 100%)',
+              border: '1px solid rgba(0,255,167,0.2)',
+              boxShadow: '0 0 40px rgba(0,255,167,0.07)',
             }}
             className="rounded-2xl p-8 flex flex-col items-center text-center gap-5"
           >
             <div
               className="w-16 h-16 rounded-full flex items-center justify-center text-2xl"
-              style={{ background: 'rgba(255,118,55,0.15)', border: '1px solid rgba(255,118,55,0.3)' }}
+              style={{ background: 'rgba(0,255,167,0.1)', border: '1px solid rgba(0,255,167,0.25)' }}
             >
               ✦
             </div>

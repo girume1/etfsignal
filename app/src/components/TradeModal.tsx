@@ -462,7 +462,7 @@ export function TradeModal({
                   href={`https://testnet.sodex.com/trade/${marketType}/${sodexSymbol}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  style={{ background: 'linear-gradient(135deg,#00C2FF,#A78BFA)' }}
+                  style={{ background: 'linear-gradient(135deg,#00FFA7,#A78BFA)', color: '#06080B' }}
                   className="inline-block px-5 py-2.5 rounded-xl text-white font-semibold text-sm hover:opacity-90 transition-opacity"
                 >
                   View on SoDEX ↗

@@ -80,9 +80,9 @@ export function SignalPanel({
           <div className="text-center">
             <div
               className="w-12 h-12 rounded-full mx-auto mb-3 flex items-center justify-center"
-              style={{ background: 'rgba(0,87,255,0.1)', border: '1px solid rgba(0,87,255,0.25)' }}
+              style={{ background: 'rgba(0,255,167,0.08)', border: '1px solid rgba(0,255,167,0.2)' }}
             >
-              <span className="text-xl" style={{ color: 'var(--brand-blue)' }}>✦</span>
+              <span className="text-xl" style={{ color: '#00FFA7' }}>✦</span>
             </div>
             <p className="text-slate-300 text-sm font-medium">No signal yet</p>
             <p className="text-slate-500 text-xs mt-1">
@@ -92,12 +92,12 @@ export function SignalPanel({
 
           {/* Feature preview */}
           <div
-            style={{ background: 'rgba(0,87,255,0.05)', border: '1px dashed rgba(0,87,255,0.2)' }}
+            style={{ background: 'rgba(0,255,167,0.04)', border: '1px dashed rgba(0,255,167,0.18)' }}
             className="rounded-lg p-3 space-y-2"
           >
             {PREVIEW_FEATURES.map((f, i) => (
               <div key={i} className="flex items-center gap-2.5 text-xs text-slate-500">
-                <span style={{ color: 'rgba(0,194,255,0.5)' }}>{f.icon}</span>
+                <span style={{ color: 'rgba(0,255,167,0.55)' }}>{f.icon}</span>
                 {f.label}
               </div>
             ))}
@@ -120,8 +120,8 @@ export function SignalPanel({
           className="rounded-xl p-8 flex flex-col items-center justify-center gap-4"
         >
           <div className="relative w-12 h-12">
-            <div className="absolute inset-0 rounded-full border-2 border-blue-500/20" />
-            <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-blue-500 animate-spin" />
+            <div className="absolute inset-0 rounded-full border-2" style={{ borderColor: 'rgba(0,255,167,0.18)' }} />
+            <div className="absolute inset-0 rounded-full border-2 border-transparent animate-spin" style={{ borderTopColor: '#00FFA7' }} />
             <div className="absolute inset-0 flex items-center justify-center text-base">✦</div>
           </div>
           <div className="text-center">
@@ -244,10 +244,10 @@ export function SignalPanel({
 
           {/* Trade idea */}
           <div
-            style={{ background: 'rgba(0,87,255,0.1)', border: '1px solid rgba(0,87,255,0.25)' }}
+            style={{ background: 'rgba(0,255,167,0.07)', border: '1px solid rgba(0,255,167,0.2)' }}
             className="rounded-lg p-3"
           >
-            <div className="text-[10px] font-semibold text-blue-400 mb-1 uppercase tracking-wider font-mono">
+            <div className="text-[10px] font-semibold mb-1 uppercase tracking-wider font-mono" style={{ color: '#00FFA7' }}>
               ⚡ Trade Idea
             </div>
             <p className="text-sm text-slate-200">{signal.tradeIdea}</p>

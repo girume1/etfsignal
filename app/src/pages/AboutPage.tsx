@@ -10,7 +10,7 @@ export function AboutPage() {
       <section className="px-6 pt-20 pb-16 relative overflow-hidden">
         <div
           className="absolute inset-0 opacity-20 pointer-events-none"
-          style={{ background: 'radial-gradient(ellipse at top right, rgba(255,118,55,0.3) 0%, transparent 60%)' }}
+          style={{ background: 'radial-gradient(ellipse at top right, rgba(0,255,167,0.15) 0%, transparent 60%)' }}
         />
 
         <div className="relative max-w-4xl mx-auto text-center">
@@ -35,8 +35,8 @@ export function AboutPage() {
         >
           <div className="flex flex-col md:flex-row items-start gap-8">
             <div
-              style={{ background: '#FF7637' }}
-              className="w-24 h-24 rounded-2xl flex items-center justify-center text-white font-display text-4xl shrink-0"
+              style={{ background: '#00FFA7' }}
+              className="w-24 h-24 rounded-2xl flex items-center justify-center text-[#06080B] font-display text-4xl shrink-0"
             >
               M
             </div>
@@ -63,7 +63,7 @@ export function AboutPage() {
                     href={link.href}
                     target="_blank"
                     rel="noopener noreferrer"
-                    style={{ background: 'rgba(255,118,55,0.05)', border: '1px solid var(--brand-border)' }}
+                    style={{ background: 'rgba(0,255,167,0.04)', border: '1px solid var(--brand-border)' }}
                     className="px-3 py-2.5 rounded-lg hover:border-blue-500/50 transition-all"
                   >
                     <div className="text-xs text-slate-500">{link.icon} {link.label}</div>
@@ -113,8 +113,8 @@ export function AboutPage() {
             <div className="space-y-4">
               {[
                 { wave: 'Wave 1', status: '✓', state: 'Shipped', label: 'Concept + Full Scaffold + APIs Integrated', color: '#34D399' },
-                { wave: 'Wave 2', status: '◯', state: 'Next', label: 'Real-time WebSocket · Historical charts · Polished trade flow', color: '#FF7637' },
-                { wave: 'Wave 3', status: '◯', state: 'Planned', label: 'Portfolio tracker · Copy-trading · Final demo polish', color: '#FF7637' },
+                { wave: 'Wave 2', status: '◯', state: 'Next', label: 'Real-time WebSocket · Historical charts · Polished trade flow', color: '#00FFA7' },
+                { wave: 'Wave 3', status: '◯', state: 'Planned', label: 'Portfolio tracker · Copy-trading · Final demo polish', color: '#00FFA7' },
               ].map(w => (
                 <div
                   key={w.wave}

@@ -7,8 +7,8 @@ interface MarketShareDonutProps {
 }
 
 const PALETTE = [
-  '#00C2FF', '#0057FF', '#A78BFA', '#34D399',
-  '#FCD34D', '#FB923C', '#F87171', '#60A5FA',
+  '#00FFA7', '#00CC88', '#A78BFA', '#34D399',
+  '#FCD34D', '#FB923C', '#F87171', '#818CF8',
 ];
 
 interface SliceItem {

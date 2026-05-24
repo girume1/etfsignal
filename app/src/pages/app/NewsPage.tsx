@@ -53,7 +53,7 @@ export default function NewsPage() {
           </div>
           <button
             onClick={refresh} disabled={loading}
-            style={{ color: 'var(--brand-accent)', border: '1px solid rgba(255,118,55,0.3)' }}
+            style={{ color: 'var(--brand-accent)', border: '1px solid rgba(0,255,167,0.25)' }}
             className="px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-white/5 disabled:opacity-40"
           >
             ↻ Refresh
@@ -76,7 +76,7 @@ export default function NewsPage() {
           >
             <button
               onClick={() => setCatFilter(null)}
-              style={catFilter === null ? { background: 'var(--brand-blue)', color: 'white' } : { color: '#94A3B8' }}
+              style={catFilter === null ? { background: '#00FFA7', color: '#06080B' } : { color: '#94A3B8' }}
               className="text-xs font-mono uppercase tracking-wider px-2.5 py-1.5 rounded transition-colors hover:text-white whitespace-nowrap"
             >
               All
@@ -85,7 +85,7 @@ export default function NewsPage() {
               <button
                 key={c}
                 onClick={() => setCatFilter(c)}
-                style={catFilter === c ? { background: 'var(--brand-blue)', color: 'white' } : { color: '#94A3B8' }}
+                style={catFilter === c ? { background: '#00FFA7', color: '#06080B' } : { color: '#94A3B8' }}
                 className="text-xs font-mono uppercase tracking-wider px-2.5 py-1.5 rounded transition-colors hover:text-white whitespace-nowrap"
               >
                 {NEWS_CATEGORY_MAP[c] ?? `Cat ${c}`}
@@ -124,7 +124,7 @@ export default function NewsPage() {
                 >
                   <div className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-wider text-slate-500">
                     <span
-                      style={{ background: 'rgba(255,118,55,0.08)', color: 'var(--brand-accent)', border: '1px solid rgba(255,118,55,0.15)' }}
+                      style={{ background: 'rgba(0,255,167,0.07)', color: 'var(--brand-accent)', border: '1px solid rgba(0,255,167,0.18)' }}
                       className="px-1.5 py-0.5 rounded"
                     >
                       {cat}

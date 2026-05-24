@@ -47,9 +47,9 @@ export function DensityToggle({ compact = false }: { compact?: boolean }) {
         onClick={() => setAuto(!auto)}
         title={auto ? 'Auto-adapt to viewport (on)' : 'Auto-adapt off — manual mode'}
         style={{
-          background: auto ? 'rgba(0,194,255,0.12)' : 'transparent',
+          background: auto ? 'rgba(0,255,167,0.1)' : 'transparent',
           color: auto ? 'var(--brand-accent)' : '#64748B',
-          border: `1px solid ${auto ? 'rgba(0,194,255,0.3)' : 'var(--brand-border)'}`,
+          border: `1px solid ${auto ? 'rgba(0,255,167,0.28)' : 'var(--brand-border)'}`,
         }}
         className="text-[10px] font-mono uppercase tracking-wider px-1.5 py-1 rounded transition-colors"
       >

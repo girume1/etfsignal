@@ -15,7 +15,7 @@ export function Nav() {
     >
       <Link to="/" className="flex items-center gap-3 group">
         <div
-          style={{ background: 'linear-gradient(135deg, #0057FF, #00C2FF)' }}
+          style={{ background: '#FF7637' }}
           className="w-9 h-9 rounded-lg flex items-center justify-center text-white font-bold transition-transform group-hover:scale-105"
         >
           E
@@ -41,7 +41,7 @@ export function Nav() {
 
       <Link
         to="/app"
-        style={{ background: 'linear-gradient(135deg, #0057FF, #00C2FF)' }}
+        style={{ background: '#FF7637' }}
         className="px-5 py-2 rounded-lg text-white text-sm font-semibold transition-all hover:opacity-90 hover:scale-105"
       >
         Launch App →

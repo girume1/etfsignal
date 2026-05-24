@@ -9,12 +9,12 @@ interface DemoBannerProps {
 export function DemoBanner({ onDismiss }: DemoBannerProps) {
   return (
     <div
-      style={{ background: 'rgba(0,194,255,0.08)', borderBottom: '1px solid rgba(0,194,255,0.25)' }}
+      style={{ background: 'rgba(0,255,167,0.06)', borderBottom: '1px solid rgba(0,255,167,0.2)' }}
       className="px-6 py-2.5 flex items-center justify-between gap-4 text-sm"
     >
       <div className="flex items-center gap-3 min-w-0">
         <span
-          style={{ background: 'rgba(0,194,255,0.2)', border: '1px solid rgba(0,194,255,0.4)' }}
+          style={{ background: 'rgba(0,255,167,0.15)', border: '1px solid rgba(0,255,167,0.35)' }}
           className="font-mono text-[10px] uppercase tracking-widest px-2 py-0.5 rounded text-cyan-300 shrink-0"
         >
           Demo Mode

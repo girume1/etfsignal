@@ -45,15 +45,15 @@ export default function OverviewPage() {
       <div
         className="relative overflow-hidden px-5 py-5"
         style={{
-          background: 'linear-gradient(135deg, rgba(255,118,55,0.12) 0%, rgba(255,118,55,0.05) 50%, rgba(255,118,55,0.08) 100%)',
-          borderBottom: '1px solid rgba(255,118,55,0.1)',
+          background: 'linear-gradient(135deg, rgba(0,255,167,0.07) 0%, rgba(0,255,167,0.03) 50%, rgba(0,255,167,0.05) 100%)',
+          borderBottom: '1px solid rgba(0,255,167,0.08)',
         }}
       >
         {/* Grid bg */}
         <svg className="absolute inset-0 w-full h-full opacity-[0.035] pointer-events-none" aria-hidden>
           <defs>
             <pattern id="dash-grid" width="40" height="40" patternUnits="userSpaceOnUse">
-              <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(255,118,55,0.4)" strokeWidth="0.5" />
+              <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(0,255,167,0.4)" strokeWidth="0.5" />
             </pattern>
           </defs>
           <rect width="100%" height="100%" fill="url(#dash-grid)" />
@@ -62,14 +62,14 @@ export default function OverviewPage() {
         <div className="relative flex items-center justify-between gap-6 flex-wrap">
           <div>
             <p className="text-[10px] font-mono uppercase tracking-widest mb-1.5 flex items-center gap-2"
-               style={{ color: '#FF7637' }}>
+               style={{ color: '#00FFA7' }}>
               <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse inline-block" />
               AI Market Analysis
             </p>
             <h1 className="font-display text-white text-2xl md:text-3xl leading-tight mb-1">
               Smart Signals.{' '}
               <span style={{
-                background: '#FF7637',
+                background: '#00FFA7',
                 WebkitBackgroundClip: 'text',
                 WebkitTextFillColor: 'transparent',
                 backgroundClip: 'text',
@@ -146,7 +146,7 @@ export default function OverviewPage() {
           {!signal && !signalLoading && (
             <div
               className="rounded-xl p-4 text-center"
-              style={{ background: 'rgba(255,118,55,0.07)', border: '1px dashed rgba(255,118,55,0.2)' }}
+              style={{ background: 'rgba(0,255,167,0.05)', border: '1px dashed rgba(0,255,167,0.2)' }}
             >
               <p className="text-slate-400 text-sm mb-3">
                 Click <strong className="text-white">Analyze Now</strong> in the header to generate your first {activeLabel} signal.
@@ -154,7 +154,7 @@ export default function OverviewPage() {
               <button
                 onClick={handleAnalyze}
                 className="text-xs font-mono px-3 py-1.5 rounded-lg transition-all hover:opacity-90"
-                style={{ background: 'rgba(255,118,55,0.25)', color: '#FF7637', border: '1px solid rgba(255,118,55,0.3)' }}
+                style={{ background: 'rgba(0,255,167,0.15)', color: '#00FFA7', border: '1px solid rgba(0,255,167,0.3)' }}
               >
                 ✦ Generate {activeLabel} Signal
               </button>

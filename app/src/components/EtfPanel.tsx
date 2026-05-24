@@ -55,7 +55,7 @@ export function getTopFunds<T extends { dailyNetInflow: { value: number | null }
 const ANOMALY_STYLES: Record<AnomalyKind, { label: string; color: string; bg: string }> = {
   topInflow:  { label: '⚡ Top Inflow',  color: '#34D399', bg: 'rgba(52,211,153,0.12)'  },
   topOutflow: { label: '▼ Top Outflow', color: '#F87171', bg: 'rgba(248,113,113,0.12)' },
-  lowFee:     { label: '◆ Low Fee',     color: '#60A5FA', bg: 'rgba(96,165,250,0.12)'  },
+  lowFee:     { label: '◆ Low Fee',     color: '#00FFA7', bg: 'rgba(0,255,167,0.1)'   },
 };
 
 // ─── Fund brand colors ────────────────────────────────────────────────────
@@ -213,8 +213,8 @@ export function EtfPanel({ btcData, ethData, btcHistory, ethHistory, activeTab, 
             key={tab}
             onClick={() => onTabChange(tab)}
             style={activeTab === tab
-              ? { background: 'var(--brand-blue)', color: 'white' }
-              : { color: '#64748B' }
+              ? { background: 'rgba(0,255,167,0.12)', color: '#00FFA7', border: '1px solid rgba(0,255,167,0.25)' }
+              : { color: '#64748B', border: '1px solid transparent' }
             }
             className="flex-1 py-2 rounded-lg text-sm font-semibold uppercase tracking-wide transition-all"
           >

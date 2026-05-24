@@ -61,10 +61,10 @@ export function AppSidebar({ open, onClose }: AppSidebarProps) {
         onClick={onClose}
         className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 group"
         style={active ? {
-          background: 'rgba(255,118,55,0.12)',
+          background: 'rgba(0,255,167,0.08)',
           color: '#fff',
-          border: '1px solid rgba(255,118,55,0.25)',
-          boxShadow: '0 0 20px rgba(255,118,55,0.08)',
+          border: '1px solid rgba(0,255,167,0.2)',
+          boxShadow: '0 0 20px rgba(0,255,167,0.06)',
         } : {
           color: '#64748B',
           border: '1px solid transparent',
@@ -73,12 +73,12 @@ export function AppSidebar({ open, onClose }: AppSidebarProps) {
         <Icon
           size={16}
           className="shrink-0 transition-colors"
-          style={{ color: active ? '#FF7637' : undefined }}
+          style={{ color: active ? '#00FFA7' : undefined }}
         />
         <span className="flex-1">{label}</span>
         {badge > 0 && (
           <span className="text-[10px] px-1.5 py-0.5 rounded-full font-mono min-w-[1.25rem] text-center"
-            style={{ background: 'rgba(251,146,60,0.2)', color: '#FB923C', border: '1px solid rgba(251,146,60,0.4)' }}>
+            style={{ background: 'rgba(0,255,167,0.15)', color: '#00FFA7', border: '1px solid rgba(0,255,167,0.35)' }}>
             {badge}
           </span>
         )}
@@ -113,9 +113,9 @@ export function AppSidebar({ open, onClose }: AppSidebarProps) {
         `}
         style={{
           width: 228,
-          background: '#1A1B1F',
-          borderRight: '1px solid rgba(255,118,55,0.1)',
-          backdropFilter: 'blur(20px)',
+          background: '#04101B',
+          borderRight: '1px solid rgba(255,255,255,0.06)',
+          backdropFilter: 'blur(24px)',
         }}
       >
         {/* ── Logo ─────────────────────────────────────────────── */}
@@ -169,12 +169,12 @@ export function AppSidebar({ open, onClose }: AppSidebarProps) {
           <div
             className="rounded-xl p-3.5"
             style={{
-              background: 'linear-gradient(135deg, rgba(255,118,55,0.15), rgba(255,118,55,0.06))',
-              border: '1px solid rgba(255,118,55,0.15)',
+              background: 'linear-gradient(135deg, rgba(0,255,167,0.1), rgba(0,255,167,0.04))',
+              border: '1px solid rgba(0,255,167,0.15)',
             }}
           >
             <div className="flex items-center gap-2 mb-2">
-              <Bot size={14} style={{ color: '#FF7637' }} />
+              <Bot size={14} style={{ color: '#00FFA7' }} />
               <span className="text-xs font-semibold text-white">AI Advantage</span>
             </div>
             <p className="text-[10px] text-slate-400 leading-relaxed mb-3">
@@ -184,7 +184,7 @@ export function AppSidebar({ open, onClose }: AppSidebarProps) {
               to="/app/signals"
               onClick={onClose}
               className="block text-center text-[11px] font-semibold py-1.5 rounded-lg transition-all hover:opacity-90"
-              style={{ background: '#FF7637', color: '#fff' }}
+              style={{ background: '#00FFA7', color: '#06080B' }}
             >
               Learn More
             </NavLink>
