@@ -2,7 +2,8 @@ import { ethers } from 'ethers';
 import type { TradeOrder } from '../types';
 
 const TESTNET_REST = 'https://testnet-gw.sodex.dev/api/v1/spot';
-const CHAIN_ID = 138565; // SoDEX testnet
+const CHAIN_ID     = 138565;         // SoDEX testnet (ValueChain)
+const CHAIN_ID_HEX = '0x21D45';     // hex for wallet_switchEthereumChain
 
 // ─── EIP712 Domain ────────────────────────────────────────────────────────
 
@@ -15,29 +16,61 @@ const domain = {
 
 const types = {
   EIP712Domain: [
-    { name: 'name', type: 'string' },
-    { name: 'version', type: 'string' },
-    { name: 'chainId', type: 'uint256' },
+    { name: 'name',             type: 'string'  },
+    { name: 'version',          type: 'string'  },
+    { name: 'chainId',          type: 'uint256' },
     { name: 'verifyingContract', type: 'address' },
   ],
   ExchangeAction: [
     { name: 'payloadHash', type: 'bytes32' },
-    { name: 'nonce', type: 'uint64' },
+    { name: 'nonce',       type: 'uint64'  },
   ],
 };
+
+// ─── Network switch ───────────────────────────────────────────────────────
+// Must be on SoDEX testnet before EIP-712 signing or the wallet will reject it.
+
+async function ensureSoDEXNetwork(): Promise<void> {
+  if (!window.ethereum) throw new Error('No wallet found. Please install MetaMask.');
+
+  const currentChain = await window.ethereum.request({ method: 'eth_chainId' });
+  if (parseInt(currentChain, 16) === CHAIN_ID) return; // already on correct chain
+
+  try {
+    // Try switching — works if the user already added SoDEX testnet
+    await window.ethereum.request({
+      method: 'wallet_switchEthereumChain',
+      params: [{ chainId: CHAIN_ID_HEX }],
+    });
+  } catch (switchErr: any) {
+    // Error 4902 = chain not added to wallet yet
+    if (switchErr.code === 4902) {
+      throw new Error(
+        'SoDEX Testnet is not in your wallet yet.\n\n' +
+        '1. Go to https://testnet.sodex.com and connect your wallet — it will auto-add the network.\n' +
+        '2. Come back here and try again.'
+      );
+    }
+    throw new Error(`Could not switch to SoDEX Testnet: ${switchErr.message ?? switchErr}`);
+  }
+}
 
 // ─── Signing ──────────────────────────────────────────────────────────────
 
 export async function signOrder(
   signer: ethers.Signer,
   payload: object,
-  nonce: number
+  nonce: number,
 ): Promise<string> {
   const payloadJson = JSON.stringify(payload);
   const payloadHash = ethers.keccak256(ethers.toUtf8Bytes(payloadJson));
 
   const message = { payloadHash, nonce };
-  const sig = await (signer as any).signTypedData(domain, { ExchangeAction: types.ExchangeAction }, message);
+  const sig = await (signer as any).signTypedData(
+    domain,
+    { ExchangeAction: types.ExchangeAction },
+    message,
+  );
 
   // Prepend byte 0x01 for typed signature
   return '0x01' + sig.slice(2);
@@ -54,20 +87,23 @@ export interface PlaceOrderResult {
 export async function placeSpotOrder(
   signer: ethers.Signer,
   accountId: number,
-  order: TradeOrder
+  order: TradeOrder,
 ): Promise<PlaceOrderResult> {
   try {
-    const nonce = Date.now();
-    const symbolID = order.symbol === 'BTC-USDC' ? 1 : 2; // SoDEX testnet: USDC quote pairs
+    // Switch to SoDEX testnet before signing — otherwise wallet rejects EIP-712
+    await ensureSoDEXNetwork();
+
+    const nonce    = Date.now();
+    const symbolID = order.symbol === 'BTC-USDC' ? 1 : 2; // SoDEX testnet USDC pairs
 
     const orderItem = {
-      clOrdID: `etfsignal-${nonce}`,
-      modifier: 1,
-      side: order.side === 'BUY' ? 1 : 2,
-      type: order.type === 'MARKET' ? 2 : 1,
-      timeInForce: 3,
-      quantity: order.quantity,
-      reduceOnly: false,
+      clOrdID:      `etfsignal-${nonce}`,
+      modifier:     1,
+      side:         order.side === 'BUY' ? 1 : 2,
+      type:         order.type === 'MARKET' ? 2 : 1,
+      timeInForce:  3,
+      quantity:     order.quantity,
+      reduceOnly:   false,
       positionSide: 1,
       ...(order.type === 'LIMIT' && order.price ? { price: order.price } : {}),
     };
@@ -109,7 +145,7 @@ export async function connectWallet(): Promise<{ signer: ethers.Signer; address:
   try {
     const provider = new ethers.BrowserProvider(window.ethereum);
     await provider.send('eth_requestAccounts', []);
-    const signer = await provider.getSigner();
+    const signer  = await provider.getSigner();
     const address = await signer.getAddress();
     return { signer, address };
   } catch {
