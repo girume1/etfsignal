@@ -94,8 +94,8 @@ export async function fetchHistoricalInflows(
     return d.toISOString().slice(0, 10);
   };
   const DEMO: Record<EtfType, number[]> = {
-    BTC: [412, -89, 235, 180, -45, 312,  98, -23, 156, 290, -67, 178, 234,  89],
-    ETH: [123, -45,  89,  67, -23, 145,  56, -12,  89, 134, -34,  78, 112,  45],
+    'us-btc-spot': [412, -89, 235, 180, -45, 312,  98, -23, 156, 290, -67, 178, 234,  89],
+    'us-eth-spot': [123, -45,  89,  67, -23, 145,  56, -12,  89, 134, -34,  78, 112,  45],
   };
   return DEMO[type].map((inflow, i) => ({ date: makeDate(13 - i), inflow }));
 }
