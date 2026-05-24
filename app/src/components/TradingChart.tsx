@@ -61,7 +61,7 @@ async function fetchKlines(
   const raw: [number, string, string, string, string, string, ...unknown[]][] =
     await res.json();
 
-  return raw.map(k => ({
+  const bars = raw.map(k => ({
     time:   Math.floor(k[0] / 1000) as UTCTimestamp,
     open:   parseFloat(k[1]),
     high:   parseFloat(k[2]),
