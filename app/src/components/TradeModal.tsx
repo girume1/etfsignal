@@ -1,17 +1,19 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { MarketSignal, OrderSide, TradeOrder } from '../types';
+import { fetchBalances } from '../services/sodex';
 
 interface TradeModalProps {
   signal: MarketSignal;
   side: OrderSide;
   symbol: string;
+  walletAddress?: string | null;
   onConfirm: (order: TradeOrder) => Promise<void>;
   onClose: () => void;
 }
 
 const PERCENTS = [0, 25, 50, 75, 100];
 
-export function TradeModal({ signal, side, symbol, onConfirm, onClose }: TradeModalProps) {
+export function TradeModal({ signal, side, symbol, walletAddress, onConfirm, onClose }: TradeModalProps) {
   const baseAsset   = symbol.split('-')[0]; // BTC or ETH
   const quoteAsset  = symbol.split('-')[1]; // USDC
   // SoDEX URL uses underscores: BTC_USDC
@@ -26,16 +28,40 @@ export function TradeModal({ signal, side, symbol, onConfirm, onClose }: TradeMo
   const [submitting,   setSubmitting]   = useState(false);
   const [result,       setResult]       = useState<{ success: boolean; message: string } | null>(null);
 
+  // Balances: { BTC: '0.1234', USDC: '987.65', ETH: '0.5' }
+  const [balances,     setBalances]     = useState<Record<string, string>>({});
+  const [balLoading,   setBalLoading]   = useState(false);
+
+  // Fetch real wallet balances from SoDEX when the modal opens
+  useEffect(() => {
+    if (!walletAddress) return;
+    setBalLoading(true);
+    fetchBalances(walletAddress)
+      .then(setBalances)
+      .catch(() => setBalances({}))
+      .finally(() => setBalLoading(false));
+  }, [walletAddress]);
+
   const isLong    = side === 'BUY';
   const color     = isLong ? '#34D399' : '#F87171';
   const bgColor   = isLong ? 'rgba(52,211,153,0.08)' : 'rgba(248,113,113,0.08)';
   const borderCol = isLong ? 'rgba(52,211,153,0.3)'  : 'rgba(248,113,113,0.3)';
 
+  // Available balance for the currently-selected currency
+  const availableRaw = balances[currency];
+  const available    = availableRaw !== undefined ? parseFloat(availableRaw) : null;
+
+  function formatBalance(val: number | null): string {
+    if (val === null) return '—';
+    if (currency === baseAsset) return val.toFixed(6).replace(/\.?0+$/, '') || '0';
+    return val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
   function handlePct(p: number) {
     setPct(p);
-    // Simulate balance scaling: 0.01 BTC = 100% balance
-    const base = currency === baseAsset ? 0.1 : 1000;
-    setAmount(((base * p) / 100).toFixed(currency === baseAsset ? 4 : 2));
+    // Use real balance if available, otherwise fall back to demo values
+    const base = available ?? (currency === baseAsset ? 0.1 : 1000);
+    setAmount(((base * p) / 100).toFixed(currency === baseAsset ? 6 : 2));
   }
 
   async function handleSubmit() {
@@ -140,7 +166,22 @@ export function TradeModal({ signal, side, symbol, onConfirm, onClose }: TradeMo
             <div className="mb-3">
               <div className="flex items-center justify-between mb-1.5">
                 <label className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Amount</label>
-                <span className="text-xs text-slate-600">Quantity</span>
+                {/* Available to Trade */}
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-slate-500">Available:</span>
+                  {balLoading ? (
+                    <span className="inline-block w-3 h-3 border border-slate-600 border-t-slate-400 rounded-full animate-spin" />
+                  ) : (
+                    <button
+                      onClick={() => available !== null && (setAmount(available.toFixed(currency === baseAsset ? 6 : 2)), setPct(100))}
+                      className="text-xs font-semibold tabular-nums transition-colors hover:opacity-80"
+                      style={{ color: available !== null ? color : '#64748b' }}
+                      title="Click to use full balance"
+                    >
+                      {formatBalance(available)} {currency}
+                    </button>
+                  )}
+                </div>
               </div>
 
               <div className="flex items-center gap-2">
@@ -174,11 +215,22 @@ export function TradeModal({ signal, side, symbol, onConfirm, onClose }: TradeMo
                       {[baseAsset, quoteAsset].map(c => (
                         <button
                           key={c}
-                          onClick={() => { setCurrency(c); setDropOpen(false); setPct(0); setAmount(c === baseAsset ? '0.01' : '100'); }}
+                          onClick={() => {
+                            const bal = balances[c];
+                            setCurrency(c);
+                            setDropOpen(false);
+                            setPct(0);
+                            setAmount(bal !== undefined ? '0' : (c === baseAsset ? '0.01' : '100'));
+                          }}
                           className="w-full px-4 py-2.5 text-left text-sm hover:bg-white/5 transition-colors font-medium"
                           style={{ color: c === currency ? color : 'white' }}
                         >
-                          {c}
+                          <div>{c}</div>
+                          {balances[c] !== undefined && (
+                            <div className="text-xs text-slate-500 mt-0.5">
+                              {parseFloat(balances[c]).toFixed(c === baseAsset ? 4 : 2)}
+                            </div>
+                          )}
                         </button>
                       ))}
                     </div>

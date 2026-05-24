@@ -84,6 +84,51 @@ async function fetchAccountId(address: string): Promise<number> {
   return Number(aid);
 }
 
+// ─── Balances ─────────────────────────────────────────────────────────────────
+// Returns { BTC: '0.1234', USDC: '987.65', ETH: '0.5' }  (v-prefix stripped)
+
+export async function fetchBalances(address: string): Promise<Record<string, string>> {
+  // Try dedicated balances endpoint first, then fall back to account state
+  const paths = [
+    `/accounts/${address}/balances`,
+    `/accounts/${address}/state`,
+  ];
+
+  for (const path of paths) {
+    try {
+      const res = await fetch(`${TESTNET_GW}${path}`);
+      const raw = await res.text();
+      let json: any = {};
+      try { json = JSON.parse(raw); } catch { continue; }
+
+      if (json.code !== 0) continue;
+
+      // Balances can live at data.balances, data.assets, or data.list
+      const list: any[] =
+        json.data?.balances ??
+        json.data?.assets   ??
+        json.data?.list     ??
+        [];
+
+      if (!Array.isArray(list) || list.length === 0) continue;
+
+      const map: Record<string, string> = {};
+      for (const b of list) {
+        const raw_asset: string = b.asset ?? b.currency ?? b.coin ?? b.symbol ?? '';
+        if (!raw_asset) continue;
+        // Strip leading 'v' that SoDEX testnet adds (vBTC → BTC, vUSDC → USDC)
+        const displayAsset = raw_asset.startsWith('v') ? raw_asset.slice(1) : raw_asset;
+        const avail = String(b.available ?? b.free ?? b.avail ?? b.balance ?? '0');
+        map[displayAsset] = avail;
+      }
+
+      if (Object.keys(map).length > 0) return map;
+    } catch { /* try next path */ }
+  }
+
+  return {}; // silent failure — UI shows '—'
+}
+
 // ─── EIP-712 signing ──────────────────────────────────────────────────────────
 
 export async function signOrder(

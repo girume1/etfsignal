@@ -60,6 +60,7 @@ export function AppShell() {
       {tradeModal && signal && (
         <TradeModal
           signal={signal} side={tradeModal.side} symbol={symbol}
+          walletAddress={wallet.address}
           onConfirm={confirmTrade} onClose={closeTradeModal}
         />
       )}
