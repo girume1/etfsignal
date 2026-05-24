@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import type { MarketSignal, OrderSide, TradeOrder } from '../types';
 import { fetchBalances } from '../services/sodex';
 
@@ -7,33 +7,39 @@ interface TradeModalProps {
   side: OrderSide;
   symbol: string;
   walletAddress?: string | null;
+  currentPrice?: number;
   onConfirm: (order: TradeOrder) => Promise<void>;
   onClose: () => void;
 }
 
 const PERCENTS = [0, 25, 50, 75, 100];
 
-export function TradeModal({ signal, side, symbol, walletAddress, onConfirm, onClose }: TradeModalProps) {
+export function TradeModal({
+  signal, side, symbol, walletAddress, currentPrice, onConfirm, onClose,
+}: TradeModalProps) {
   const baseAsset   = symbol.split('-')[0]; // BTC or ETH
   const quoteAsset  = symbol.split('-')[1]; // USDC
-  // SoDEX URL uses underscores: BTC_USDC
   const sodexSymbol = symbol.replace('-', '_');
 
+  // ── Order state ──────────────────────────────────────────────────────────
   const [currency,     setCurrency]     = useState<string>(baseAsset);
   const [marketType,   setMarketType]   = useState<'spot' | 'futures'>('spot');
+  const [orderType,    setOrderType]    = useState<'MARKET' | 'LIMIT'>('MARKET');
   const [amount,       setAmount]       = useState('0.01');
+  const [limitPrice,   setLimitPrice]   = useState(
+    currentPrice ? currentPrice.toFixed(2) : ''
+  );
   const [pct,          setPct]          = useState(0);
   const [dropOpen,     setDropOpen]     = useState(false);
   const [acknowledged, setAcknowledged] = useState(false);
   const [submitting,   setSubmitting]   = useState(false);
   const [result,       setResult]       = useState<{ success: boolean; message: string } | null>(null);
 
-  // Balances: { BTC: '0.1234', USDC: '987.65', ETH: '0.5' }
-  const [balances,     setBalances]     = useState<Record<string, string>>({});
-  const [balLoading,   setBalLoading]   = useState(false);
+  // ── Balance state ────────────────────────────────────────────────────────
+  const [balances,   setBalances]   = useState<Record<string, string>>({});
+  const [balLoading, setBalLoading] = useState(false);
 
-  // Fetch real wallet balances from SoDEX when the modal opens
-  useEffect(() => {
+  const loadBalances = useCallback(() => {
     if (!walletAddress) return;
     setBalLoading(true);
     fetchBalances(walletAddress)
@@ -42,39 +48,78 @@ export function TradeModal({ signal, side, symbol, walletAddress, onConfirm, onC
       .finally(() => setBalLoading(false));
   }, [walletAddress]);
 
+  useEffect(() => { loadBalances(); }, [loadBalances]);
+
+  // Pre-fill limit price when currentPrice changes (e.g. live tick)
+  useEffect(() => {
+    if (currentPrice && orderType === 'LIMIT' && !limitPrice) {
+      setLimitPrice(currentPrice.toFixed(2));
+    }
+  }, [currentPrice, orderType, limitPrice]);
+
+  // ── Derived colours ──────────────────────────────────────────────────────
   const isLong    = side === 'BUY';
   const color     = isLong ? '#34D399' : '#F87171';
   const bgColor   = isLong ? 'rgba(52,211,153,0.08)' : 'rgba(248,113,113,0.08)';
   const borderCol = isLong ? 'rgba(52,211,153,0.3)'  : 'rgba(248,113,113,0.3)';
 
-  // Available balance for the currently-selected currency
+  // ── Balance helpers ──────────────────────────────────────────────────────
   const availableRaw = balances[currency];
   const available    = availableRaw !== undefined ? parseFloat(availableRaw) : null;
+  const isBalanceZero = available !== null && available === 0;
 
   function formatBalance(val: number | null): string {
     if (val === null) return '—';
-    if (currency === baseAsset) return val.toFixed(6).replace(/\.?0+$/, '') || '0';
+    if (currency === baseAsset)
+      return val.toFixed(6).replace(/\.?0+$/, '') || '0';
     return val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
 
+  // ── % slider ─────────────────────────────────────────────────────────────
   function handlePct(p: number) {
     setPct(p);
-    // Use real balance if available, otherwise fall back to demo values
     const base = available ?? (currency === baseAsset ? 0.1 : 1000);
     setAmount(((base * p) / 100).toFixed(currency === baseAsset ? 6 : 2));
   }
 
+  // ── Submit ───────────────────────────────────────────────────────────────
   async function handleSubmit() {
     if (!acknowledged) return;
+    if (orderType === 'LIMIT' && !limitPrice) return;
     setSubmitting(true);
     try {
-      await onConfirm({ symbol, side, type: 'MARKET', quantity: amount });
+      await onConfirm({
+        symbol,
+        side,
+        type: orderType,
+        quantity: amount,
+        ...(orderType === 'LIMIT' ? { price: limitPrice } : {}),
+      });
       setResult({ success: true, message: '' });
     } catch (err: any) {
       setResult({ success: false, message: err.message || 'Order failed' });
     } finally {
       setSubmitting(false);
     }
+  }
+
+  // ── Segment button helper ─────────────────────────────────────────────────
+  function SegmentBtn({
+    active, onClick, children,
+  }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+    return (
+      <button
+        onClick={onClick}
+        className="flex-1 py-2 rounded-lg text-sm font-semibold capitalize transition-all"
+        style={{
+          background: active ? bgColor : 'transparent',
+          color:      active ? color   : '#64748b',
+          border:     active ? `1px solid ${borderCol}` : '1px solid transparent',
+        }}
+      >
+        {children}
+      </button>
+    );
   }
 
   return (
@@ -84,7 +129,14 @@ export function TradeModal({ signal, side, symbol, walletAddress, onConfirm, onC
 
       {/* Modal */}
       <div
-        style={{ background: 'var(--brand-panel)', border: `1px solid ${borderCol}`, maxWidth: '440px', width: '100%' }}
+        style={{
+          background: 'var(--brand-panel)',
+          border: `1px solid ${borderCol}`,
+          maxWidth: '440px',
+          width: '100%',
+          maxHeight: '90vh',
+          overflowY: 'auto',
+        }}
         className="relative rounded-2xl p-6 shadow-2xl"
       >
         {/* Header */}
@@ -98,7 +150,9 @@ export function TradeModal({ signal, side, symbol, walletAddress, onConfirm, onC
             </div>
             <div>
               <div className="font-semibold text-white">{isLong ? 'Long' : 'Short'} {symbol}</div>
-              <div className="text-xs text-slate-500">SoDEX Testnet · {marketType === 'spot' ? 'Spot' : 'Futures'} · {quoteAsset}</div>
+              <div className="text-xs text-slate-500">
+                SoDEX Testnet · {marketType === 'spot' ? 'Spot' : 'Futures'} · {orderType === 'MARKET' ? 'Market' : 'Limit'} · {quoteAsset}
+              </div>
             </div>
           </div>
           <button onClick={onClose} className="text-slate-500 hover:text-white text-xl leading-none">✕</button>
@@ -106,28 +160,30 @@ export function TradeModal({ signal, side, symbol, walletAddress, onConfirm, onC
 
         {!result ? (
           <>
-            {/* Spot / Futures toggle */}
+            {/* ── Row 1: Spot / Futures ──────────────────────────────────── */}
+            <div
+              style={{ background: 'var(--brand-card)', border: '1px solid var(--brand-border)' }}
+              className="flex rounded-xl p-1 mb-2 gap-1"
+            >
+              <SegmentBtn active={marketType === 'spot'}    onClick={() => setMarketType('spot')}>📈 Spot</SegmentBtn>
+              <SegmentBtn active={marketType === 'futures'} onClick={() => setMarketType('futures')}>⚡ Futures</SegmentBtn>
+            </div>
+
+            {/* ── Row 2: Market / Limit ──────────────────────────────────── */}
             <div
               style={{ background: 'var(--brand-card)', border: '1px solid var(--brand-border)' }}
               className="flex rounded-xl p-1 mb-4 gap-1"
             >
-              {(['spot', 'futures'] as const).map(t => (
-                <button
-                  key={t}
-                  onClick={() => setMarketType(t)}
-                  className="flex-1 py-2 rounded-lg text-sm font-semibold capitalize transition-all"
-                  style={{
-                    background: marketType === t ? bgColor : 'transparent',
-                    color: marketType === t ? color : '#64748b',
-                    border: marketType === t ? `1px solid ${borderCol}` : '1px solid transparent',
-                  }}
-                >
-                  {t === 'spot' ? '📈 Spot' : '⚡ Futures'}
-                </button>
-              ))}
+              <SegmentBtn active={orderType === 'MARKET'} onClick={() => setOrderType('MARKET')}>⚡ Market</SegmentBtn>
+              <SegmentBtn active={orderType === 'LIMIT'}  onClick={() => {
+                setOrderType('LIMIT');
+                if (!limitPrice && currentPrice) setLimitPrice(currentPrice.toFixed(2));
+              }}>
+                🎯 Limit
+              </SegmentBtn>
             </div>
 
-            {/* Futures transfer warning */}
+            {/* ── Futures transfer warning ──────────────────────────────── */}
             {marketType === 'futures' && (
               <div
                 style={{ background: 'rgba(168,139,250,0.08)', border: '1px solid rgba(168,139,250,0.25)' }}
@@ -150,7 +206,7 @@ export function TradeModal({ signal, side, symbol, walletAddress, onConfirm, onC
               </div>
             )}
 
-            {/* Signal context */}
+            {/* ── Signal context ────────────────────────────────────────── */}
             <div
               style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--brand-border)' }}
               className="rounded-xl p-3 mb-4"
@@ -162,27 +218,89 @@ export function TradeModal({ signal, side, symbol, walletAddress, onConfirm, onC
               </div>
             </div>
 
-            {/* Amount + Currency selector */}
+            {/* ── Limit price input ─────────────────────────────────────── */}
+            {orderType === 'LIMIT' && (
+              <div className="mb-3">
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Limit Price</label>
+                  {currentPrice && (
+                    <button
+                      onClick={() => setLimitPrice(currentPrice.toFixed(2))}
+                      className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
+                    >
+                      Use market: ${currentPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </button>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-slate-400 pl-1">$</span>
+                  <input
+                    type="number"
+                    value={limitPrice}
+                    onChange={e => setLimitPrice(e.target.value)}
+                    placeholder="0.00"
+                    min="0.01"
+                    step="0.01"
+                    style={{ background: 'var(--brand-card)', border: `1px solid ${borderCol}`, color: 'white' }}
+                    className="flex-1 px-4 py-3 rounded-xl font-mono text-lg focus:outline-none transition-colors"
+                  />
+                  <span className="text-xs text-slate-500 pr-1">{quoteAsset}</span>
+                </div>
+              </div>
+            )}
+
+            {/* ── Amount + Currency selector ────────────────────────────── */}
             <div className="mb-3">
               <div className="flex items-center justify-between mb-1.5">
                 <label className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Amount</label>
-                {/* Available to Trade */}
+
+                {/* Available balance */}
                 <div className="flex items-center gap-1.5">
                   <span className="text-xs text-slate-500">Available:</span>
                   {balLoading ? (
                     <span className="inline-block w-3 h-3 border border-slate-600 border-t-slate-400 rounded-full animate-spin" />
                   ) : (
                     <button
-                      onClick={() => available !== null && (setAmount(available.toFixed(currency === baseAsset ? 6 : 2)), setPct(100))}
+                      onClick={() => {
+                        if (available !== null && available > 0) {
+                          setAmount(available.toFixed(currency === baseAsset ? 6 : 2));
+                          setPct(100);
+                        }
+                      }}
                       className="text-xs font-semibold tabular-nums transition-colors hover:opacity-80"
-                      style={{ color: available !== null ? color : '#64748b' }}
+                      style={{ color: available !== null && available > 0 ? color : '#64748b' }}
                       title="Click to use full balance"
                     >
                       {formatBalance(available)} {currency}
                     </button>
                   )}
+                  <button
+                    onClick={loadBalances}
+                    disabled={balLoading}
+                    className="text-slate-600 hover:text-slate-400 transition-colors disabled:opacity-40 text-xs"
+                    title="Refresh balance"
+                  >
+                    ↺
+                  </button>
                 </div>
               </div>
+
+              {/* Zero balance nudge */}
+              {isBalanceZero && !balLoading && (
+                <div
+                  style={{ background: 'rgba(59,130,246,0.06)', border: '1px solid rgba(59,130,246,0.2)' }}
+                  className="rounded-lg px-3 py-2 mb-2 flex items-center justify-between"
+                >
+                  <span className="text-xs text-blue-300">No {currency} balance on SoDEX</span>
+                  <a
+                    href="https://testnet.sodex.com/faucet"
+                    target="_blank" rel="noopener noreferrer"
+                    className="text-xs text-blue-400 hover:text-blue-300 underline font-semibold"
+                  >
+                    Get {quoteAsset} ↗
+                  </a>
+                </div>
+              )}
 
               <div className="flex items-center gap-2">
                 {/* Amount input */}
@@ -216,11 +334,10 @@ export function TradeModal({ signal, side, symbol, walletAddress, onConfirm, onC
                         <button
                           key={c}
                           onClick={() => {
-                            const bal = balances[c];
                             setCurrency(c);
                             setDropOpen(false);
                             setPct(0);
-                            setAmount(bal !== undefined ? '0' : (c === baseAsset ? '0.01' : '100'));
+                            setAmount(c === baseAsset ? '0.01' : '100');
                           }}
                           className="w-full px-4 py-2.5 text-left text-sm hover:bg-white/5 transition-colors font-medium"
                           style={{ color: c === currency ? color : 'white' }}
@@ -239,9 +356,8 @@ export function TradeModal({ signal, side, symbol, walletAddress, onConfirm, onC
               </div>
             </div>
 
-            {/* % Slider */}
+            {/* ── % slider ─────────────────────────────────────────────── */}
             <div className="mb-4">
-              {/* Track with dots */}
               <div className="relative flex items-center justify-between px-1 mb-2">
                 <div
                   className="absolute left-1 right-1 h-0.5 rounded-full"
@@ -257,14 +373,12 @@ export function TradeModal({ signal, side, symbol, walletAddress, onConfirm, onC
                     onClick={() => handlePct(p)}
                     className="relative z-10 w-3 h-3 rounded-full border-2 transition-all duration-150 hover:scale-125"
                     style={{
-                      background: p <= pct ? color : 'var(--brand-card)',
+                      background:  p <= pct ? color : 'var(--brand-card)',
                       borderColor: p <= pct ? color : 'var(--brand-border)',
                     }}
                   />
                 ))}
               </div>
-
-              {/* Labels */}
               <div className="flex items-center justify-between px-0.5">
                 {PERCENTS.map(p => (
                   <button
@@ -279,23 +393,16 @@ export function TradeModal({ signal, side, symbol, walletAddress, onConfirm, onC
               </div>
             </div>
 
-            {/* Risk warning */}
+            {/* ── Risk warning ──────────────────────────────────────────── */}
             <div
               style={{ background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.2)' }}
               className="rounded-xl p-3 mb-4"
             >
               <div className="text-xs font-semibold text-yellow-400 mb-1">⚠ Risk Warning</div>
               <p className="text-xs text-slate-400 leading-relaxed">{signal.riskWarning}</p>
-              <p className="text-xs text-slate-600 mt-1.5">
-                Testnet only. Need {quoteAsset}?{' '}
-                <a href="https://testnet.sodex.com/faucet" target="_blank" rel="noopener noreferrer"
-                  className="text-blue-400 hover:text-blue-300 underline">
-                  SoDEX Faucet ↗
-                </a>
-              </p>
             </div>
 
-            {/* Acknowledgment */}
+            {/* ── Acknowledgment ────────────────────────────────────────── */}
             <label className="flex items-start gap-3 mb-4 cursor-pointer">
               <input
                 type="checkbox"
@@ -308,26 +415,35 @@ export function TradeModal({ signal, side, symbol, walletAddress, onConfirm, onC
               </span>
             </label>
 
-            {/* Submit */}
+            {/* ── Submit button ─────────────────────────────────────────── */}
             <button
               onClick={handleSubmit}
-              disabled={!acknowledged || submitting}
+              disabled={!acknowledged || submitting || (orderType === 'LIMIT' && !limitPrice)}
               style={{
                 background: acknowledged
-                  ? (isLong ? 'linear-gradient(135deg,rgba(52,211,153,0.25),rgba(52,211,153,0.15))' : 'linear-gradient(135deg,rgba(248,113,113,0.25),rgba(248,113,113,0.15))')
+                  ? (isLong
+                      ? 'linear-gradient(135deg,rgba(52,211,153,0.25),rgba(52,211,153,0.15))'
+                      : 'linear-gradient(135deg,rgba(248,113,113,0.25),rgba(248,113,113,0.15))')
                   : 'rgba(255,255,255,0.04)',
                 border: `1px solid ${acknowledged ? borderCol : 'transparent'}`,
                 color: acknowledged ? color : '#475569',
               }}
               className="w-full py-3.5 rounded-xl font-semibold text-base transition-all flex items-center justify-center gap-2 disabled:cursor-not-allowed"
             >
-              {submitting
-                ? <><span className="inline-block w-4 h-4 border-2 border-current/30 border-t-current rounded-full animate-spin" /> Submitting...</>
-                : `Confirm ${isLong ? 'Long' : 'Short'} ${amount} ${currency}`
-              }
+              {submitting ? (
+                <>
+                  <span className="inline-block w-4 h-4 border-2 border-current/30 border-t-current rounded-full animate-spin" />
+                  Submitting...
+                </>
+              ) : orderType === 'LIMIT' ? (
+                `Place Limit ${isLong ? 'Buy' : 'Sell'} · ${amount} ${currency} @ $${limitPrice || '—'}`
+              ) : (
+                `Confirm ${isLong ? 'Long' : 'Short'} ${amount} ${currency}`
+              )}
             </button>
           </>
         ) : (
+          /* ── Result screen ─────────────────────────────────────────── */
           <div className="text-center py-6">
             <div className="text-4xl mb-4">{result.success ? '✅' : '❌'}</div>
             <p className={`text-lg font-semibold mb-2 ${result.success ? 'text-green-400' : 'text-red-400'}`}>
@@ -336,10 +452,11 @@ export function TradeModal({ signal, side, symbol, walletAddress, onConfirm, onC
             {result.success ? (
               <>
                 <p className="text-sm text-slate-400 mb-1">
-                  Your {isLong ? 'long' : 'short'} order was submitted to SoDEX Testnet.
+                  Your {isLong ? 'long' : 'short'} {orderType === 'LIMIT' ? 'limit' : 'market'} order was submitted to SoDEX Testnet.
                 </p>
                 <p className="text-xs text-slate-600 mb-4">
-                  {marketType === 'spot' ? 'Spot' : 'Futures'} · {amount} {currency} · {sodexSymbol}
+                  {marketType === 'spot' ? 'Spot' : 'Futures'} · {amount} {currency}
+                  {orderType === 'LIMIT' ? ` @ $${limitPrice}` : ''} · {sodexSymbol}
                 </p>
                 <a
                   href={`https://testnet.sodex.com/trade/${marketType}/${sodexSymbol}`}

@@ -47,17 +47,42 @@ export async function fetchHistoricalInflows(
   type: EtfType,
   days = 14,
 ): Promise<HistoricalInflow[]> {
-  // Try primary host first, fall back to alt host
+  // SoSoValue v2 endpoints accept both POST (body) and GET (params).
+  // Try POST first since it's what the other v2 endpoints use, then fall back to GET.
+  const attempts: Array<{ method: 'POST' | 'GET'; body?: unknown; params?: Record<string, string | number> }> = [
+    { method: 'POST', body: { type, days } },
+    { method: 'GET',  params: { type, days } },
+  ];
+
   for (const base of [ETF_BASE, ETF_BASE_ALT]) {
-    try {
-      const json: any = await sosoProxy({
-        method: 'GET',
-        url: `${base}/openapi/v2/etf/etfNetInflowHistory`,
-        params: { type, days },
-      });
-      if (json.code === 0) return json.data as HistoricalInflow[];
-    } catch {
-      // try next host
+    for (const attempt of attempts) {
+      try {
+        const json: any = await sosoProxy({
+          method: attempt.method,
+          url: `${base}/openapi/v2/etf/etfNetInflowHistory`,
+          ...(attempt.body   ? { body: attempt.body }     : {}),
+          ...(attempt.params ? { params: attempt.params } : {}),
+        });
+        if (json.code !== 0) continue;
+
+        // Normalise response — SoSoValue returns data as array or { list: [...] }
+        const raw = json.data;
+        const list: any[] = Array.isArray(raw)
+          ? raw
+          : (raw?.list ?? raw?.records ?? raw?.data ?? raw?.items ?? []);
+
+        if (!Array.isArray(list) || list.length === 0) continue;
+
+        // Normalise field names across API versions
+        const normalised: HistoricalInflow[] = list
+          .map((item: any) => ({
+            date:   item.date    ?? item.day      ?? item.datetime ?? item.ts ?? '',
+            inflow: Number(item.inflow ?? item.netInflow ?? item.netFlow ?? item.value ?? 0),
+          }))
+          .filter(x => x.date !== '');
+
+        if (normalised.length > 0) return normalised;
+      } catch { /* try next attempt/host */ }
     }
   }
   return []; // graceful empty — sentiment gauge shows "Insufficient data"

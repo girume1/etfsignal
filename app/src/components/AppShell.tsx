@@ -12,7 +12,12 @@ export function AppShell() {
     wallet, handleConnectWallet, handleDisconnectWallet,
     lastUpdated, dataError, refresh,
     signal, symbol, tradeModal, closeTradeModal, confirmTrade,
+    liveBtcPx, liveEthPx, latestBtcPx, latestEthPx, activeTab,
   } = useDashboard();
+
+  const currentPrice = activeTab === 'btc'
+    ? (liveBtcPx ?? latestBtcPx ?? null)
+    : (liveEthPx ?? latestEthPx ?? null);
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -61,6 +66,7 @@ export function AppShell() {
         <TradeModal
           signal={signal} side={tradeModal.side} symbol={symbol}
           walletAddress={wallet.address}
+          currentPrice={currentPrice ?? undefined}
           onConfirm={confirmTrade} onClose={closeTradeModal}
         />
       )}
