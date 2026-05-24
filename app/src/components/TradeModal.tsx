@@ -12,10 +12,13 @@ interface TradeModalProps {
 const PERCENTS = [0, 25, 50, 75, 100];
 
 export function TradeModal({ signal, side, symbol, onConfirm, onClose }: TradeModalProps) {
-  const baseAsset  = symbol.split('-')[0]; // BTC or ETH
-  const quoteAsset = symbol.split('-')[1]; // USDC
+  const baseAsset   = symbol.split('-')[0]; // BTC or ETH
+  const quoteAsset  = symbol.split('-')[1]; // USDC
+  // SoDEX URL uses underscores: BTC_USDC
+  const sodexSymbol = symbol.replace('-', '_');
 
   const [currency,     setCurrency]     = useState<string>(baseAsset);
+  const [marketType,   setMarketType]   = useState<'spot' | 'futures'>('spot');
   const [amount,       setAmount]       = useState('0.01');
   const [pct,          setPct]          = useState(0);
   const [dropOpen,     setDropOpen]     = useState(false);
@@ -69,7 +72,7 @@ export function TradeModal({ signal, side, symbol, onConfirm, onClose }: TradeMo
             </div>
             <div>
               <div className="font-semibold text-white">{isLong ? 'Long' : 'Short'} {symbol}</div>
-              <div className="text-xs text-slate-500">SoDEX Testnet · Market Order · {quoteAsset}</div>
+              <div className="text-xs text-slate-500">SoDEX Testnet · {marketType === 'spot' ? 'Spot' : 'Futures'} · {quoteAsset}</div>
             </div>
           </div>
           <button onClick={onClose} className="text-slate-500 hover:text-white text-xl leading-none">✕</button>
@@ -77,6 +80,50 @@ export function TradeModal({ signal, side, symbol, onConfirm, onClose }: TradeMo
 
         {!result ? (
           <>
+            {/* Spot / Futures toggle */}
+            <div
+              style={{ background: 'var(--brand-card)', border: '1px solid var(--brand-border)' }}
+              className="flex rounded-xl p-1 mb-4 gap-1"
+            >
+              {(['spot', 'futures'] as const).map(t => (
+                <button
+                  key={t}
+                  onClick={() => setMarketType(t)}
+                  className="flex-1 py-2 rounded-lg text-sm font-semibold capitalize transition-all"
+                  style={{
+                    background: marketType === t ? bgColor : 'transparent',
+                    color: marketType === t ? color : '#64748b',
+                    border: marketType === t ? `1px solid ${borderCol}` : '1px solid transparent',
+                  }}
+                >
+                  {t === 'spot' ? '📈 Spot' : '⚡ Futures'}
+                </button>
+              ))}
+            </div>
+
+            {/* Futures transfer warning */}
+            {marketType === 'futures' && (
+              <div
+                style={{ background: 'rgba(168,139,250,0.08)', border: '1px solid rgba(168,139,250,0.25)' }}
+                className="rounded-xl p-3 mb-3 flex items-start gap-2"
+              >
+                <span className="text-purple-400 text-sm mt-0.5">↕</span>
+                <div>
+                  <p className="text-xs text-purple-300 font-semibold mb-0.5">Transfer required for Futures</p>
+                  <p className="text-xs text-slate-400">
+                    Move {quoteAsset} from Spot → Futures on SoDEX before trading.{' '}
+                    <a
+                      href={`https://testnet.sodex.com/trade/futures/${sodexSymbol}`}
+                      target="_blank" rel="noopener noreferrer"
+                      className="text-purple-400 hover:text-purple-300 underline"
+                    >
+                      Transfer on SoDEX ↗
+                    </a>
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* Signal context */}
             <div
               style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--brand-border)' }}
@@ -240,13 +287,13 @@ export function TradeModal({ signal, side, symbol, onConfirm, onClose }: TradeMo
                   EIP-712 signature generated on SoDEX Testnet.
                 </p>
                 <a
-                  href={`https://testnet.sodex.com/trade/${symbol}`}
+                  href={`https://testnet.sodex.com/trade/${marketType}/${sodexSymbol}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   style={{ background: 'linear-gradient(135deg,#00C2FF,#A78BFA)' }}
                   className="inline-block px-5 py-2.5 rounded-xl text-white font-semibold text-sm hover:opacity-90 transition-opacity"
                 >
-                  Execute on SoDEX Testnet ↗
+                  Execute on SoDEX {marketType === 'spot' ? 'Spot' : 'Futures'} ↗
                 </a>
                 <p className="text-xs text-slate-600 mt-3">
                   Direct API integration coming soon.
