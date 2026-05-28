@@ -16,7 +16,7 @@ const TELEGRAM_API     = 'https://api.telegram.org';
 const SOSO_PRIMARY     = 'https://openapi.sosovalue.com';
 const SOSO_FALLBACK    = 'https://api.sosovalue.xyz';
 const SUBSCRIBERS_KEY  = 'telegram:subscribers';
-const DASHBOARD_URL    = 'https://etfsignalaim.vercel.app';
+const DASHBOARD_URL    = 'https://etfsignal.vercel.app';
 
 // ─── Telegram helpers ─────────────────────────────────────────────────────────
 

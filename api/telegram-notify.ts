@@ -14,7 +14,7 @@ declare const process: { env: Record<string, string | undefined> };
 export const config = { runtime: 'edge' };
 
 const SUBSCRIBERS_KEY = 'telegram:subscribers';
-const DASHBOARD_URL   = 'https://etfsignalaim.vercel.app';
+const DASHBOARD_URL   = 'https://etfsignal.vercel.app';
 
 interface SignalNotification {
   direction:  'LONG' | 'SHORT' | 'NEUTRAL';

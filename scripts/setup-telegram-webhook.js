@@ -8,7 +8,7 @@
 //   WEBHOOK_HOST=https://your-custom-domain.com TELEGRAM_BOT_TOKEN=your_token node scripts/setup-telegram-webhook.js
 
 const BOT_TOKEN   = process.env.TELEGRAM_BOT_TOKEN;
-const WEBHOOK_HOST = process.env.WEBHOOK_HOST ?? 'https://etfsignalaim.vercel.app';
+const WEBHOOK_HOST = process.env.WEBHOOK_HOST ?? 'https://etfsignal.vercel.app';
 const WEBHOOK_URL  = `${WEBHOOK_HOST}/api/telegram`;
 
 if (!BOT_TOKEN) {
