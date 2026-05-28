@@ -1,5 +1,5 @@
 import { useDashboard } from '../../contexts/DashboardContext';
-import { ArrowLeftRight, Zap, TrendingUp, TrendingDown, Sparkles } from 'lucide-react';
+import { ArrowLeftRight, Zap, TrendingUp, TrendingDown, Sparkles, Droplets } from 'lucide-react';
 
 export default function TradePage() {
   const {
@@ -40,7 +40,7 @@ export default function TradePage() {
           <h1 className="text-xl font-bold text-white">SoDEX Trade</h1>
         </div>
         <p className="text-sm text-slate-400">
-          Trade BTC &amp; ETH perpetuals on SoDEX testnet · chain 138565
+          Trade BTC &amp; ETH spot pairs on SoDEX testnet · chain 138565
         </p>
       </div>
 
@@ -78,7 +78,7 @@ export default function TradePage() {
         <div>
           <div className="text-xs text-slate-500 font-mono uppercase tracking-wider mb-1">Trading pair</div>
           <div className="text-xl font-bold font-mono text-white">{currentAsset.pair}</div>
-          <div className="text-xs text-slate-500 mt-1">SoDEX Testnet · Perpetual</div>
+          <div className="text-xs text-slate-500 mt-1">SoDEX Testnet · Spot</div>
         </div>
         {currentAsset.price && (
           <div className="text-right">
@@ -204,6 +204,26 @@ export default function TradePage() {
           Connect wallet above to enable trading on SoDEX testnet
         </p>
       )}
+
+      {/* Faucet banner */}
+      <a
+        href="https://testnet.sodex.com/faucet"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex items-center justify-between rounded-xl px-4 py-3 transition-all hover:opacity-90 group"
+        style={{ background: 'rgba(0,255,167,0.06)', border: '1px dashed rgba(0,255,167,0.2)' }}
+      >
+        <div className="flex items-center gap-2.5">
+          <Droplets size={15} style={{ color: '#00FFA7' }} className="shrink-0" />
+          <div>
+            <div className="text-xs font-semibold text-slate-200">Need testnet USDC?</div>
+            <div className="text-[11px] text-slate-500">Get free funds from the SoDEX faucet</div>
+          </div>
+        </div>
+        <span className="text-xs font-semibold px-3 py-1 rounded-lg" style={{ background: 'rgba(0,255,167,0.12)', color: '#00FFA7' }}>
+          Get funds →
+        </span>
+      </a>
 
       {/* Info strip */}
       <div
