@@ -423,26 +423,33 @@ async function handleGas(token: string, chatId: number) {
   });
 }
 
+// cmd maps to the key in EXCHANGE_URLS inside api/chart.ts
+// When SCREENSHOTONE_ACCESS_KEY is set → screenshots exchange site
+// Otherwise                           → QuickChart candlestick from OHLC data
 async function handleChart(
   token:    string,
   chatId:   number,
-  assetKey: string,   // btc | eth | btcp | ethp
-  interval: string,   // 1m | 1h | 4h
+  cmd:      string,   // ch | chb | che | tv_btc | tv_eth (maps to EXCHANGE_URLS)
+  assetKey: string,   // btc | eth | btcp | ethp (for QuickChart fallback)
+  interval: string,   // 1m | 1h
   baseUrl:  string,
 ) {
   const info = CHART_SYMBOLS[assetKey] ?? CHART_SYMBOLS.btc;
   await sendTyping(token, chatId);
 
   try {
-    const chartRes = await fetch(
-      `${baseUrl}/api/chart?symbol=${info.symbol}&interval=${interval}&limit=60`,
-    );
+    // Try screenshot mode first (if key configured), then OHLC fallback
+    const url = `${baseUrl}/api/chart?cmd=${cmd}&symbol=${info.symbol}&interval=${interval}&limit=60`;
+    const chartRes = await fetch(url);
     if (!chartRes.ok) throw new Error(`chart API ${chartRes.status}`);
 
     const buf = await chartRes.arrayBuffer();
     const pct = chartRes.headers.get('X-Pct') ?? '0';
     const dir = parseFloat(pct) >= 0 ? '📈' : '📉';
-    const caption = `${dir} *${info.label}* · ${interval} · Binance\n_${parseFloat(pct) >= 0 ? '+' : ''}${pct}% over window_`;
+    const isScreenshot = chartRes.headers.get('Content-Type')?.includes('jpeg');
+    const caption = isScreenshot
+      ? `${dir} *${info.label}* · ${interval}`
+      : `${dir} *${info.label}* · ${interval}\n_${parseFloat(pct) >= 0 ? '+' : ''}${pct}% over window_`;
 
     await sendPhotoBuffer(token, chatId, buf, caption);
   } catch (err: any) {
@@ -730,24 +737,20 @@ export default async function handler(req: Request) {
 
       // ── Charts ─────────────────────────────────────────────────────────
       case '/ch':
-        // BTC/USDT 1m (default)
-        await handleChart(botToken, chatId, 'btc', '1m', baseUrl);
+        await handleChart(botToken, chatId, 'ch',  'btc',  '1m', baseUrl);
         break;
 
       case '/chb':
-        // BTC perp 1m
-        await handleChart(botToken, chatId, 'btcp', '1m', baseUrl);
+        await handleChart(botToken, chatId, 'chb', 'btcp', '1m', baseUrl);
         break;
 
       case '/che':
-        // ETH perp 1m
-        await handleChart(botToken, chatId, 'ethp', '1m', baseUrl);
+        await handleChart(botToken, chatId, 'che', 'ethp', '1m', baseUrl);
         break;
 
       case '/tv': {
-        // /tv [btc|eth] — 1h TradingView-style chart
         const tvAsset = arg === 'eth' ? 'eth' : 'btc';
-        await handleChart(botToken, chatId, tvAsset, '1h', baseUrl);
+        await handleChart(botToken, chatId, `tv_${tvAsset}`, tvAsset, '1h', baseUrl);
         break;
       }
 
