@@ -1,3 +1,4 @@
+import { ArrowUp, ArrowDown, ArrowRight } from 'lucide-react';
 import type { HistoricalSignal } from '../types';
 
 interface SignalHistoryProps {
@@ -10,10 +11,10 @@ const DIR_COLORS: Record<HistoricalSignal['direction'], string> = {
   BEARISH: '#F87171',
   NEUTRAL: '#94A3B8',
 };
-const DIR_ICONS: Record<HistoricalSignal['direction'], string> = {
-  BULLISH: '↑',
-  BEARISH: '↓',
-  NEUTRAL: '→',
+const DIR_ICONS: Record<HistoricalSignal['direction'], React.ElementType> = {
+  BULLISH: ArrowUp,
+  BEARISH: ArrowDown,
+  NEUTRAL: ArrowRight,
 };
 
 function daysAgo(ts: number): string {
@@ -135,6 +136,7 @@ export function SignalHistory({ signals, loading }: SignalHistoryProps) {
           <div className="absolute left-1.5 top-1 bottom-1 w-px bg-white/10" />
           {signals.map(sig => {
             const color = DIR_COLORS[sig.direction];
+            const DirIcon = DIR_ICONS[sig.direction];
             const pnl = typeof sig.pnlPct === 'number' ? sig.pnlPct : mockPnl(sig);
             const hasPnl = !isNaN(pnl);
             const positive = pnl >= 0;
@@ -145,8 +147,9 @@ export function SignalHistory({ signals, loading }: SignalHistoryProps) {
                   style={{ background: color, boxShadow: `0 0 0 3px var(--brand-card), 0 0 8px ${color}66` }}
                 />
                 <div className="flex items-center gap-2 text-[11px] font-mono mb-0.5">
-                  <span style={{ color }} className="font-semibold uppercase tracking-widest">
-                    {DIR_ICONS[sig.direction]} {sig.direction}
+                  <span style={{ color }} className="font-semibold uppercase tracking-widest flex items-center gap-1">
+                    <DirIcon size={11} className="shrink-0" />
+                    {sig.direction}
                   </span>
                   <span className="text-slate-500">· {sig.asset}</span>
                   <span className="text-slate-600">· {sig.confidence}%</span>

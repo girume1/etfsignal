@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { ArrowUp, ArrowDown, RefreshCw } from 'lucide-react';
 import { useDashboard } from '../../contexts/DashboardContext';
 import { useDensity } from '../../contexts/DensityContext';
 import { QuickStats } from '../../components/QuickStats';
@@ -75,8 +76,8 @@ function FlowDirectionBadge({ net, streak, asset }: FlowDirectionBadgeProps) {
   const color   = positive ? '#34D399' : '#F87171';
   const bg      = positive ? 'rgba(52,211,153,0.08)' : 'rgba(248,113,113,0.08)';
   const border  = positive ? 'rgba(52,211,153,0.3)'  : 'rgba(248,113,113,0.3)';
-  const icon    = positive ? '↑' : '↓';
-  const label   = positive ? 'NET INFLOW' : 'NET OUTFLOW';
+  const FlowIcon = positive ? ArrowUp : ArrowDown;
+  const label    = positive ? 'NET INFLOW' : 'NET OUTFLOW';
 
   return (
     <div
@@ -86,9 +87,9 @@ function FlowDirectionBadge({ net, streak, asset }: FlowDirectionBadgeProps) {
       <div className="flex items-center gap-2.5">
         <span
           style={{ color, background: `${color}20`, border: `1px solid ${color}40` }}
-          className="w-8 h-8 rounded-full flex items-center justify-center text-base font-bold"
+          className="w-8 h-8 rounded-full flex items-center justify-center shrink-0"
         >
-          {icon}
+          <FlowIcon size={16} />
         </span>
         <div>
           <div className="text-[10px] font-mono text-slate-500 uppercase tracking-wider">{asset} 14-Day</div>
@@ -98,7 +99,7 @@ function FlowDirectionBadge({ net, streak, asset }: FlowDirectionBadgeProps) {
       {streak > 0 && (
         <div className="text-right">
           <div className="text-[10px] text-slate-600 font-mono">streak</div>
-          <div className="text-sm font-bold text-slate-300">{streak}d <span className="text-green-400">↑</span></div>
+          <div className="text-sm font-bold text-slate-300 flex items-center gap-1">{streak}d <ArrowUp size={12} className="text-green-400 shrink-0" /></div>
         </div>
       )}
     </div>
@@ -189,7 +190,7 @@ export default function FlowsPage() {
             style={{ border: '1px solid var(--brand-border)', color: '#64748B' }}
             className="px-2.5 py-1 rounded-lg text-[10px] font-mono hover:text-white hover:bg-white/5 disabled:opacity-40 transition-colors flex items-center gap-1"
           >
-            <span className={loading ? 'animate-spin inline-block' : ''}>↻</span>
+            <RefreshCw size={10} className={`shrink-0${loading ? ' animate-spin' : ''}`} />
             {loading ? 'Loading…' : 'Refresh'}
           </button>
         </div>

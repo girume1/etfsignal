@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { Hexagon, Sparkles, Zap, ArrowRight, Star, ArrowUp, Check } from 'lucide-react';
 import { Nav, Footer } from '../components/Nav';
 import { HeroVisualizer } from '../components/HeroVisualizer';
 
@@ -19,7 +20,7 @@ const fadeUp = {
 const FEATURES = [
   {
     num: '01',
-    icon: '⬡',
+    icon: Hexagon,
     title: 'Institutional Data',
     desc: 'Live BTC & ETH spot ETF flows from BlackRock, Fidelity, Grayscale, and 9 more funds — continuously refreshed via SoSoValue.',
     color: '#00FFA7',
@@ -27,7 +28,7 @@ const FEATURES = [
   },
   {
     num: '02',
-    icon: '✦',
+    icon: Sparkles,
     title: 'Claude AI Signals',
     desc: 'Synthesizes ETF flows + breaking news into directional signals with confidence scores, factor weights, TP/SL levels, and risk warnings.',
     color: '#00FFA7',
@@ -35,7 +36,7 @@ const FEATURES = [
   },
   {
     num: '03',
-    icon: '⚡',
+    icon: Zap,
     title: 'On-Chain Execution',
     desc: 'Sign and submit spot orders on SoDEX testnet via EIP712. Full risk acknowledgment, testnet-only — zero real capital at risk.',
     color: '#34D399',
@@ -166,7 +167,7 @@ export function LandingPage() {
                 }}
               >
                 Launch Dashboard
-                <span className="transition-transform group-hover:translate-x-0.5 text-lg">→</span>
+                <ArrowRight size={18} className="transition-transform group-hover:translate-x-0.5 shrink-0" />
               </Link>
               <Link
                 to="/how-it-works"
@@ -255,7 +256,7 @@ export function LandingPage() {
                     <span className="font-mono text-xs tracking-widest" style={{ color: f.color }}>
                       / {f.num}
                     </span>
-                    <span className="text-2xl" style={{ color: f.color }}>{f.icon}</span>
+                    <f.icon size={24} style={{ color: f.color }} />
                   </div>
                   <h3 className="font-display text-white text-2xl mb-3">{f.title}</h3>
                   <p className="text-slate-400 text-sm leading-relaxed">{f.desc}</p>
@@ -355,7 +356,8 @@ export function LandingPage() {
                 className="inline-flex items-center gap-2 text-sm font-semibold transition-colors"
                 style={{ color: 'var(--brand-accent)' }}
               >
-                See it live →
+                See it live
+                <ArrowRight size={14} className="shrink-0" />
               </Link>
             </motion.div>
 
@@ -372,8 +374,9 @@ export function LandingPage() {
                 border: '1px solid var(--brand-border)',
               }}
             >
-              <div className="text-[10px] font-mono uppercase tracking-widest text-slate-500 mb-4">
-                ◈ Signal Breakdown — Example
+              <div className="text-[10px] font-mono uppercase tracking-widest text-slate-500 mb-4 flex items-center gap-1">
+                <Sparkles size={10} className="shrink-0" />
+                Signal Breakdown — Example
               </div>
               {[
                 { factor: 'ETF Daily Inflow',      weight: 38, signal: 'positive' as const, color: '#34D399' },
@@ -416,10 +419,11 @@ export function LandingPage() {
               <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-between">
                 <div className="text-[10px] font-mono text-slate-600">Powered by Claude AI</div>
                 <div
-                  className="text-[11px] font-mono font-bold px-2 py-1 rounded-lg"
+                  className="text-[11px] font-mono font-bold px-2 py-1 rounded-lg flex items-center gap-1"
                   style={{ background: 'rgba(52,211,153,0.1)', color: '#34D399', border: '1px solid rgba(52,211,153,0.25)' }}
                 >
-                  ↑ BULLISH · 82%
+                  <ArrowUp size={11} className="shrink-0" />
+                  BULLISH · 82%
                 </div>
               </div>
             </motion.div>
@@ -438,7 +442,8 @@ export function LandingPage() {
               className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-mono mb-4"
               style={{ background: 'rgba(0,255,167,0.08)', border: '1px solid rgba(0,255,167,0.2)', color: '#00FFA7' }}
             >
-              ★ SoSoValue Buildathon · Wave 1 Votes
+              <Star size={12} className="shrink-0" />
+              SoSoValue Buildathon · Wave 1 Votes
             </div>
             <h2 className="font-display text-white text-3xl md:text-4xl mb-3">
               What the community said
@@ -500,16 +505,17 @@ export function LandingPage() {
                   </div>
                   <div className="flex gap-0.5">
                     {Array(5).fill(0).map((_, si) => (
-                      <span key={si} className="text-xs" style={{ color: si < v.stars ? '#00FFA7' : '#334155' }}>★</span>
+                      <Star key={si} size={12} style={{ color: si < v.stars ? '#00FFA7' : '#334155' }} />
                     ))}
                   </div>
                 </div>
                 <p className="text-sm text-slate-400 leading-relaxed flex-1">"{v.quote}"</p>
                 <div
-                  className="text-[10px] font-mono px-2 py-1 rounded self-start"
+                  className="text-[10px] font-mono px-2 py-1 rounded self-start flex items-center gap-1"
                   style={{ background: 'rgba(0,255,167,0.08)', color: '#00FFA7' }}
                 >
-                  ✓ Voted · Wave 1
+                  <Check size={10} className="shrink-0" />
+                  Voted · Wave 1
                 </div>
               </motion.div>
             ))}
@@ -542,7 +548,7 @@ export function LandingPage() {
             }}
           >
             Launch ETFSignal AI
-            <span className="text-2xl">→</span>
+            <ArrowRight size={22} className="shrink-0" />
           </Link>
           <p className="mt-6 text-xs text-slate-600 font-mono">
             Testnet only · No real funds required · SoDEX demo environment

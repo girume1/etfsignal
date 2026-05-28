@@ -3,7 +3,7 @@ import { useState } from 'react';
 import {
   LayoutDashboard, BarChart2, TrendingUp, Zap,
   Newspaper, ArrowLeftRight, Star, PieChart,
-  Settings, Bot,
+  Settings, Bot, Twitter, Send,
 } from 'lucide-react';
 import { useDashboard } from '../contexts/DashboardContext';
 import { AIAdvantageModal } from './AIAdvantageModal';
@@ -200,21 +200,24 @@ export function AppSidebar({ open, onClose }: AppSidebarProps) {
         >
           <span className="text-[9px] text-slate-600 font-mono">© 2025 ETFSignalAI</span>
           <div className="flex items-center gap-3">
-            {[
-              { href: 'https://twitter.com', label: 'Twitter', icon: '𝕏' },
-              { href: 'https://t.me/ETFSignalAIBot', label: 'Telegram', icon: '✈' },
-            ].map(s => (
-              <a
-                key={s.label}
-                href={s.href}
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label={s.label}
-                className="text-slate-600 hover:text-slate-300 transition-colors text-sm"
-              >
-                {s.icon}
-              </a>
-            ))}
+            <a
+              href="https://twitter.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Twitter"
+              className="text-slate-600 hover:text-slate-300 transition-colors"
+            >
+              <Twitter size={14} />
+            </a>
+            <a
+              href="https://t.me/ETFSignalAIBot"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Telegram"
+              className="text-slate-600 hover:text-slate-300 transition-colors"
+            >
+              <Send size={14} />
+            </a>
           </div>
         </div>
       </aside>

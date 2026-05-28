@@ -1,3 +1,4 @@
+import { Sparkles, Settings } from 'lucide-react';
 import { useDashboard } from '../../contexts/DashboardContext';
 import { useDensity } from '../../contexts/DensityContext';
 import { QuickStats } from '../../components/QuickStats';
@@ -98,10 +99,10 @@ export default function SignalsPage() {
             className="rounded-2xl p-8 flex flex-col items-center text-center gap-5"
           >
             <div
-              className="w-16 h-16 rounded-full flex items-center justify-center text-2xl"
+              className="w-16 h-16 rounded-full flex items-center justify-center"
               style={{ background: 'rgba(0,255,167,0.1)', border: '1px solid rgba(0,255,167,0.25)' }}
             >
-              ✦
+              <Sparkles size={28} style={{ color: '#00FFA7' }} />
             </div>
             <div>
               <h2 className="font-display text-white text-xl font-bold mb-1">
@@ -142,7 +143,7 @@ export default function SignalsPage() {
               }}
               className="px-8 py-3.5 rounded-xl text-white font-semibold text-sm flex items-center gap-2 hover:opacity-90 transition-all active:scale-[0.98]"
             >
-              <span className="text-base">✦</span>
+              <Sparkles size={16} className="shrink-0" />
               Analyze {activeLabel} ETF Flows Now
             </button>
           </div>
@@ -173,7 +174,8 @@ export default function SignalsPage() {
             className="rounded-xl p-4"
           >
             <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3 font-mono flex items-center gap-2">
-              <span>⚙</span> How AI Signals Work
+              <Settings size={13} className="shrink-0" />
+              How AI Signals Work
             </div>
             <div className="space-y-3">
               {HOW_STEPS.map((s, i) => (

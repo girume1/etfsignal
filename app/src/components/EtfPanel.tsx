@@ -1,3 +1,4 @@
+import { Zap, ChevronDown, Diamond, ExternalLink } from 'lucide-react';
 import type { EtfData, EtfFund, ActiveTab } from '../types';
 import type { HistoricalInflow } from '../services/sosovalue';
 import { formatUSD } from '../services/sosovalue';
@@ -52,10 +53,16 @@ export function getTopFunds<T extends { dailyNetInflow: { value: number | null }
     .slice(0, limit);
 }
 
+const ANOMALY_ICON: Record<AnomalyKind, React.ElementType> = {
+  topInflow:  Zap,
+  topOutflow: ChevronDown,
+  lowFee:     Diamond,
+};
+
 const ANOMALY_STYLES: Record<AnomalyKind, { label: string; color: string; bg: string }> = {
-  topInflow:  { label: '⚡ Top Inflow',  color: '#34D399', bg: 'rgba(52,211,153,0.12)'  },
-  topOutflow: { label: '▼ Top Outflow', color: '#F87171', bg: 'rgba(248,113,113,0.12)' },
-  lowFee:     { label: '◆ Low Fee',     color: '#00FFA7', bg: 'rgba(0,255,167,0.1)'   },
+  topInflow:  { label: 'Top Inflow',  color: '#34D399', bg: 'rgba(52,211,153,0.12)'  },
+  topOutflow: { label: 'Top Outflow', color: '#F87171', bg: 'rgba(248,113,113,0.12)' },
+  lowFee:     { label: 'Low Fee',     color: '#00FFA7', bg: 'rgba(0,255,167,0.1)'   },
 };
 
 // ─── Fund brand colors ────────────────────────────────────────────────────
@@ -149,12 +156,14 @@ function FundRow({ fund, anomalies }: { fund: EtfFund; anomalies: AnomalyKind[] 
           <div className="flex gap-1 mt-1 flex-wrap">
             {anomalies.map(a => {
               const s = ANOMALY_STYLES[a];
+              const AnomalyIcon = ANOMALY_ICON[a];
               return (
                 <span
                   key={a}
                   style={{ background: s.bg, color: s.color, border: `1px solid ${s.color}33` }}
-                  className="text-[10px] px-1.5 py-0.5 rounded font-mono leading-none"
+                  className="text-[10px] px-1.5 py-0.5 rounded font-mono leading-none flex items-center gap-1"
                 >
+                  <AnomalyIcon size={10} />
                   {s.label}
                 </span>
               );
@@ -280,7 +289,8 @@ export function EtfPanel({ btcData, ethData, btcHistory, ethHistory, activeTab, 
             >
               S
             </span>
-            Data by SoSoValue ↗
+            Data by SoSoValue
+            <ExternalLink size={10} className="shrink-0" />
           </a>
           {data?.dailyNetInflow.lastUpdateDate && (
             <span className="text-[10px] text-slate-700 font-mono">

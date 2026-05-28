@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
+import { ArrowUp } from 'lucide-react';
 
 /**
  * 3D perspective-tilted dashboard card for the landing hero.
@@ -251,7 +252,7 @@ export function HeroVisualizer() {
               >
                 <div className="text-[9px] font-mono uppercase tracking-widest text-slate-500 mb-2">Signal Output</div>
                 <div className="flex items-center gap-1.5 mb-2">
-                  <span className="text-2xl leading-none font-display" style={{ color: '#34D399' }}>↑</span>
+                  <ArrowUp size={18} style={{ color: '#34D399' }} className="shrink-0" />
                   <span className="text-lg font-display leading-none" style={{ color: '#34D399' }}>BULLISH</span>
                 </div>
                 <div className="flex items-center gap-2 text-[9px] font-mono text-slate-500 mb-2">

@@ -1,3 +1,4 @@
+import { Menu, BarChart2 } from 'lucide-react';
 import type { WalletState } from '../types';
 import { WalletMenu } from './WalletMenu';
 import { useDashboard } from '../contexts/DashboardContext';
@@ -14,7 +15,7 @@ interface HeaderProps {
 function PricePill({
   icon, label, price, change, color,
 }: {
-  icon: string; label: string; price: string; change?: string; color: string;
+  icon: React.ReactNode; label: string; price: string; change?: string; color: string;
 }) {
   const isPos = !change || change.startsWith('+');
   return (
@@ -22,7 +23,7 @@ function PricePill({
       className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-mono transition-all hover:bg-white/5"
       style={{ border: '1px solid rgba(255,255,255,0.06)' }}
     >
-      <span className="text-sm leading-none">{icon}</span>
+      <span className="leading-none shrink-0">{icon}</span>
       <span className="text-slate-400 font-semibold">{label}</span>
       <span className="text-white font-bold">{price}</span>
       {change && (
@@ -79,7 +80,7 @@ export function Header({
             className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/5 transition-colors"
             style={{ border: '1px solid rgba(255,255,255,0.08)' }}
           >
-            <span className="text-xl leading-none font-light">≡</span>
+            <Menu size={18} />
           </button>
         )}
         {/* Mobile logo */}
@@ -95,7 +96,7 @@ export function Header({
       <div className="flex items-center gap-2 flex-1 min-w-0">
         {btcPrice && (
           <PricePill
-            icon="🟡"
+            icon={<span className="w-2.5 h-2.5 rounded-full inline-block shrink-0" style={{ background: '#F59E0B' }} />}
             label="BTC"
             price={`$${btcPrice.toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
             color="#F59E0B"
@@ -103,7 +104,7 @@ export function Header({
         )}
         {ethPrice && (
           <PricePill
-            icon="🔵"
+            icon={<span className="w-2.5 h-2.5 rounded-full inline-block shrink-0" style={{ background: '#818CF8' }} />}
             label="ETH"
             price={`$${ethPrice.toLocaleString(undefined, { maximumFractionDigits: 2 })}`}
             color="#818CF8"
@@ -111,7 +112,7 @@ export function Header({
         )}
         {totalAum !== null && (
           <PricePill
-            icon="📊"
+            icon={<BarChart2 size={14} style={{ color: '#FF7637' }} className="shrink-0" />}
             label="TOTAL ETF AUM"
             price={formatUSD(totalAum).replace('+', '')}
             change={aumChangeStr}

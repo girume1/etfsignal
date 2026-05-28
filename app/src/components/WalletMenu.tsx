@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { Copy, ExternalLink, LogOut, ChevronUp, ChevronDown } from 'lucide-react';
 import type { WalletState } from '../types';
 import { truncateAddress } from '../services/sodex';
 
@@ -63,7 +64,7 @@ export function WalletMenu({ wallet, onConnect, onDisconnect }: WalletMenuProps)
         <span className="w-1.5 h-1.5 rounded-full bg-green-400 inline-block" />
         <span className="hidden sm:inline">{truncateAddress(wallet.address)}</span>
         <span className="sm:hidden">Wallet</span>
-        <span className="text-slate-400 text-[10px]">{open ? '▲' : '▼'}</span>
+        {open ? <ChevronUp size={12} className="text-slate-400 shrink-0" /> : <ChevronDown size={12} className="text-slate-400 shrink-0" />}
       </button>
 
       {/* Dropdown */}
@@ -97,9 +98,10 @@ export function WalletMenu({ wallet, onConnect, onDisconnect }: WalletMenuProps)
               {/* Network badge */}
               <span
                 style={{ background: 'rgba(52,211,153,0.12)', color: '#34D399', border: '1px solid rgba(52,211,153,0.3)' }}
-                className="text-[10px] px-2 py-0.5 rounded-full font-mono uppercase tracking-wider"
+                className="text-[10px] px-2 py-0.5 rounded-full font-mono uppercase tracking-wider flex items-center gap-1"
               >
-                ● SoDEX Testnet
+                <span className="w-1.5 h-1.5 rounded-full bg-green-400 inline-block shrink-0" />
+                SoDEX Testnet
               </span>
               <span
                 style={{ color: '#64748B' }}
@@ -113,7 +115,7 @@ export function WalletMenu({ wallet, onConnect, onDisconnect }: WalletMenuProps)
           {/* Actions */}
           <div className="py-2">
             <MenuAction
-              icon="⧉"
+              icon={<Copy size={14} />}
               label={copied ? 'Copied!' : 'Copy Address'}
               onClick={copyAddress}
               highlight={copied}
@@ -126,9 +128,9 @@ export function WalletMenu({ wallet, onConnect, onDisconnect }: WalletMenuProps)
             >
               <span
                 style={{ background: 'rgba(255,118,55,0.1)', color: 'var(--brand-accent)' }}
-                className="w-7 h-7 rounded-lg flex items-center justify-center text-sm font-mono shrink-0"
+                className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
               >
-                ↗
+                <ExternalLink size={14} />
               </span>
               <div className="flex-1 min-w-0">
                 <div className="text-sm text-slate-200">View on Explorer</div>
@@ -137,7 +139,7 @@ export function WalletMenu({ wallet, onConnect, onDisconnect }: WalletMenuProps)
             </a>
             <div style={{ borderTop: '1px solid var(--brand-border)' }} className="mt-1 pt-1">
               <MenuAction
-                icon="⬡"
+                icon={<LogOut size={14} />}
                 label="Disconnect"
                 onClick={() => { setOpen(false); onDisconnect(); }}
                 danger
@@ -153,7 +155,7 @@ export function WalletMenu({ wallet, onConnect, onDisconnect }: WalletMenuProps)
 function MenuAction({
   icon, label, onClick, danger = false, highlight = false,
 }: {
-  icon: string;
+  icon: React.ReactNode;
   label: string;
   onClick: () => void;
   danger?: boolean;
@@ -173,7 +175,7 @@ function MenuAction({
             : 'rgba(255,255,255,0.05)',
           color: danger ? '#F87171' : highlight ? '#34D399' : '#94A3B8',
         }}
-        className="w-7 h-7 rounded-lg flex items-center justify-center text-sm font-mono shrink-0"
+        className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
       >
         {icon}
       </span>

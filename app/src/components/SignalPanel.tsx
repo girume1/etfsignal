@@ -1,3 +1,8 @@
+import {
+  ArrowUp, ArrowDown, ArrowRight, ArrowUpDown,
+  Diamond, Zap, Target, Sparkles,
+  TrendingUp, TrendingDown, AlertTriangle, RefreshCw, Settings2,
+} from 'lucide-react';
 import type { MarketSignal, ActiveTab, SignalWeight } from '../types';
 
 interface SignalPanelProps {
@@ -16,7 +21,7 @@ const DIRECTION_STYLES = {
     border: 'rgba(52,211,153,0.3)',
     badge: '#34D399',
     badgeBg: 'rgba(52,211,153,0.15)',
-    icon: '↑',
+    icon: ArrowUp,
     glow: 'rgba(52,211,153,0.15)',
   },
   BEARISH: {
@@ -24,7 +29,7 @@ const DIRECTION_STYLES = {
     border: 'rgba(248,113,113,0.3)',
     badge: '#F87171',
     badgeBg: 'rgba(248,113,113,0.15)',
-    icon: '↓',
+    icon: ArrowDown,
     glow: 'rgba(248,113,113,0.15)',
   },
   NEUTRAL: {
@@ -32,16 +37,16 @@ const DIRECTION_STYLES = {
     border: 'rgba(148,163,184,0.3)',
     badge: '#94A3B8',
     badgeBg: 'rgba(148,163,184,0.15)',
-    icon: '→',
+    icon: ArrowRight,
     glow: 'rgba(148,163,184,0.1)',
   },
 };
 
 const PREVIEW_FEATURES = [
-  { icon: '⬆', label: 'BULLISH / BEARISH / NEUTRAL direction' },
-  { icon: '◆', label: '3 key institutional flow drivers' },
-  { icon: '⚡', label: 'Actionable trade idea + risk warning' },
-  { icon: '🎯', label: 'AI-generated TP & SL price levels' },
+  { icon: ArrowUpDown,  label: 'BULLISH / BEARISH / NEUTRAL direction' },
+  { icon: Diamond,      label: '3 key institutional flow drivers' },
+  { icon: Zap,          label: 'Actionable trade idea + risk warning' },
+  { icon: Target,       label: 'AI-generated TP & SL price levels' },
 ];
 
 export function SignalPanel({
@@ -60,7 +65,10 @@ export function SignalPanel({
           style={{ background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.3)' }}
           className="rounded-xl p-4"
         >
-          <div className="text-red-300 font-semibold text-sm mb-1">⚠ Analysis failed</div>
+          <div className="text-red-300 font-semibold text-sm mb-1 flex items-center gap-1.5">
+            <AlertTriangle size={14} className="shrink-0" />
+            Analysis failed
+          </div>
           <p className="text-slate-400 text-xs leading-relaxed">{error}</p>
           <button
             onClick={onAnalyze}
@@ -82,7 +90,7 @@ export function SignalPanel({
               className="w-12 h-12 rounded-full mx-auto mb-3 flex items-center justify-center"
               style={{ background: 'rgba(0,255,167,0.08)', border: '1px solid rgba(0,255,167,0.2)' }}
             >
-              <span className="text-xl" style={{ color: '#00FFA7' }}>✦</span>
+              <Sparkles size={20} style={{ color: '#00FFA7' }} />
             </div>
             <p className="text-slate-300 text-sm font-medium">No signal yet</p>
             <p className="text-slate-500 text-xs mt-1">
@@ -97,7 +105,7 @@ export function SignalPanel({
           >
             {PREVIEW_FEATURES.map((f, i) => (
               <div key={i} className="flex items-center gap-2.5 text-xs text-slate-500">
-                <span style={{ color: 'rgba(0,255,167,0.55)' }}>{f.icon}</span>
+                <f.icon size={14} style={{ color: 'rgba(0,255,167,0.55)' }} className="shrink-0" />
                 {f.label}
               </div>
             ))}
@@ -108,7 +116,8 @@ export function SignalPanel({
             style={{ background: 'var(--brand-blue)' }}
             className="w-full py-2.5 rounded-lg text-white text-sm font-semibold flex items-center justify-center gap-2 hover:opacity-90 transition-all active:scale-[0.98]"
           >
-            ✦ Analyze {label}
+            <Sparkles size={14} className="shrink-0" />
+            Analyze {label}
           </button>
         </div>
       )}
@@ -122,7 +131,9 @@ export function SignalPanel({
           <div className="relative w-12 h-12">
             <div className="absolute inset-0 rounded-full border-2" style={{ borderColor: 'rgba(0,255,167,0.18)' }} />
             <div className="absolute inset-0 rounded-full border-2 border-transparent animate-spin" style={{ borderTopColor: '#00FFA7' }} />
-            <div className="absolute inset-0 flex items-center justify-center text-base">✦</div>
+            <div className="absolute inset-0 flex items-center justify-center">
+              <Sparkles size={16} style={{ color: '#00FFA7' }} />
+            </div>
           </div>
           <div className="text-center">
             <p className="text-slate-300 text-sm font-medium">Synthesizing signal…</p>
@@ -147,7 +158,7 @@ export function SignalPanel({
               style={{ background: style.badgeBg, color: style.badge, border: `1px solid ${style.border}` }}
               className="text-sm font-bold px-3 py-1 rounded-full font-mono tracking-widest flex items-center gap-2"
             >
-              <span>{style.icon}</span>
+              <style.icon size={14} className="shrink-0" />
               {signal.direction}
             </span>
             <div className="flex items-center gap-2">
@@ -185,7 +196,7 @@ export function SignalPanel({
             <ul className="space-y-1.5">
               {signal.keyFactors.map((f, i) => (
                 <li key={i} className="flex items-start gap-2 text-sm text-slate-300">
-                  <span style={{ color: style.badge }} className="mt-0.5 text-xs shrink-0">◆</span>
+                  <Diamond size={12} style={{ color: style.badge }} className="mt-0.5 shrink-0" />
                   {f}
                 </li>
               ))}
@@ -198,8 +209,9 @@ export function SignalPanel({
               style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}
               className="rounded-lg p-3"
             >
-              <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-2.5 font-mono">
-                ◈ Signal Breakdown
+              <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-2.5 font-mono flex items-center gap-1">
+                <Settings2 size={10} className="shrink-0" />
+                Signal Breakdown
               </div>
               <div className="space-y-2">
                 {signal.weights.map((w: SignalWeight, i: number) => {
@@ -247,8 +259,9 @@ export function SignalPanel({
             style={{ background: 'rgba(0,255,167,0.07)', border: '1px solid rgba(0,255,167,0.2)' }}
             className="rounded-lg p-3"
           >
-            <div className="text-[10px] font-semibold mb-1 uppercase tracking-wider font-mono" style={{ color: '#00FFA7' }}>
-              ⚡ Trade Idea
+            <div className="text-[10px] font-semibold mb-1 uppercase tracking-wider font-mono flex items-center gap-1" style={{ color: '#00FFA7' }}>
+              <Zap size={10} className="shrink-0" />
+              Trade Idea
             </div>
             <p className="text-sm text-slate-200">{signal.tradeIdea}</p>
           </div>
@@ -260,8 +273,9 @@ export function SignalPanel({
               className="rounded-lg p-3 flex items-center justify-between"
             >
               <div>
-                <div className="text-[10px] font-semibold text-indigo-400 mb-1 uppercase tracking-wider font-mono">
-                  🎯 Entry Zone
+                <div className="text-[10px] font-semibold text-indigo-400 mb-1 uppercase tracking-wider font-mono flex items-center gap-1">
+                  <Target size={10} className="shrink-0" />
+                  Entry Zone
                 </div>
                 <div className="font-mono font-bold text-indigo-200 text-base">
                   ${signal.entryZone.low.toLocaleString(undefined, { maximumFractionDigits: 0 })}
@@ -287,7 +301,8 @@ export function SignalPanel({
                 className="rounded-lg p-3"
               >
                 <div className="text-[10px] font-semibold text-green-400 mb-1.5 uppercase tracking-wider font-mono flex items-center gap-1">
-                  <span>↑</span> Take Profit
+                  <TrendingUp size={12} className="shrink-0" />
+                  Take Profit
                 </div>
                 <div className="font-mono font-bold text-green-300 text-base leading-none mb-1">
                   ${signal.takeProfit.price.toLocaleString(undefined, { maximumFractionDigits: 0 })}
@@ -304,7 +319,8 @@ export function SignalPanel({
                 className="rounded-lg p-3"
               >
                 <div className="text-[10px] font-semibold text-red-400 mb-1.5 uppercase tracking-wider font-mono flex items-center gap-1">
-                  <span>↓</span> Stop Loss
+                  <TrendingDown size={12} className="shrink-0" />
+                  Stop Loss
                 </div>
                 <div className="font-mono font-bold text-red-300 text-base leading-none mb-1">
                   ${signal.stopLoss.price.toLocaleString(undefined, { maximumFractionDigits: 0 })}
@@ -322,8 +338,9 @@ export function SignalPanel({
             style={{ background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.2)' }}
             className="rounded-lg p-3"
           >
-            <div className="text-[10px] font-semibold text-yellow-500 mb-1 uppercase tracking-wider font-mono">
-              ⚠ Risk
+            <div className="text-[10px] font-semibold text-yellow-500 mb-1 uppercase tracking-wider font-mono flex items-center gap-1">
+              <AlertTriangle size={10} className="shrink-0" />
+              Risk
             </div>
             <p className="text-xs text-slate-400">{signal.riskWarning}</p>
           </div>
@@ -343,8 +360,12 @@ export function SignalPanel({
                   : 'none',
               }}
             >
-              <span>⚡</span>
-              Execute on SoDEX — {signal.direction === 'BEARISH' ? `↓ Short ${label}` : `↑ Long ${label}`}
+              <Zap size={14} className="shrink-0" />
+              Execute on SoDEX —{' '}
+              {signal.direction === 'BEARISH'
+                ? <><TrendingDown size={13} className="shrink-0" /> Short {label}</>
+                : <><TrendingUp size={13} className="shrink-0" /> Long {label}</>
+              }
             </button>
 
             {/* Secondary opposite side button */}
@@ -352,9 +373,12 @@ export function SignalPanel({
               onClick={() => onTrade(signal.direction === 'BEARISH' ? 'BUY' : 'SELL')}
               disabled={!walletConnected}
               style={{ border: '1px solid var(--brand-border)', color: '#64748B' }}
-              className="w-full py-2 rounded-lg text-xs font-mono hover:text-white hover:bg-white/5 transition-colors disabled:opacity-20 disabled:cursor-not-allowed"
+              className="w-full py-2 rounded-lg text-xs font-mono hover:text-white hover:bg-white/5 transition-colors disabled:opacity-20 disabled:cursor-not-allowed flex items-center justify-center gap-1"
             >
-              {signal.direction === 'BEARISH' ? `↑ Long ${label} (counter)` : `↓ Short ${label} (counter)`}
+              {signal.direction === 'BEARISH'
+                ? <><TrendingUp size={11} className="shrink-0" /> Long {label} (counter)</>
+                : <><TrendingDown size={11} className="shrink-0" /> Short {label} (counter)</>
+              }
             </button>
 
             {!walletConnected && (
@@ -376,9 +400,10 @@ export function SignalPanel({
         <button
           onClick={onAnalyze}
           style={{ border: '1px solid var(--brand-border)', color: '#64748B' }}
-          className="w-full py-2 rounded-lg text-xs font-mono hover:text-white hover:bg-white/5 transition-colors"
+          className="w-full py-2 rounded-lg text-xs font-mono hover:text-white hover:bg-white/5 transition-colors flex items-center justify-center gap-1.5"
         >
-          ↻ Re-analyze {label}
+          <RefreshCw size={11} className="shrink-0" />
+          Re-analyze {label}
         </button>
       )}
     </div>

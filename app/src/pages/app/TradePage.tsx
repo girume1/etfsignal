@@ -1,5 +1,5 @@
 import { useDashboard } from '../../contexts/DashboardContext';
-import { ArrowLeftRight, Zap, TrendingUp, TrendingDown } from 'lucide-react';
+import { ArrowLeftRight, Zap, TrendingUp, TrendingDown, Sparkles } from 'lucide-react';
 
 export default function TradePage() {
   const {
@@ -144,10 +144,11 @@ export default function TradePage() {
             </p>
             <button
               onClick={handleAnalyze}
-              className="text-xs font-semibold px-3 py-1.5 rounded-lg transition-all hover:opacity-90"
+              className="text-xs font-semibold px-3 py-1.5 rounded-lg transition-all hover:opacity-90 flex items-center gap-1.5"
               style={{ background: '#00FFA7', color: '#06080B' }}
             >
-              ✦ Analyze {currentAsset.label} now
+              <Sparkles size={12} className="shrink-0" />
+              Analyze {currentAsset.label} now
             </button>
           </div>
         </div>

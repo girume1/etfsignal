@@ -1,3 +1,4 @@
+import { RefreshCw, Sparkles } from 'lucide-react';
 import { useDashboard } from '../../contexts/DashboardContext';
 import { useDensity } from '../../contexts/DensityContext';
 import { QuickStats } from '../../components/QuickStats';
@@ -94,7 +95,7 @@ export default function OverviewPage() {
               style={{ border: '1px solid rgba(255,255,255,0.1)', color: '#94A3B8' }}
               className="px-3 py-1.5 rounded-lg text-xs font-mono hover:text-white hover:bg-white/5 disabled:opacity-40 transition-colors flex items-center gap-1.5"
             >
-              <span className={loading ? 'animate-spin inline-block' : ''}>↻</span>
+              <RefreshCw size={11} className={`shrink-0${loading ? ' animate-spin' : ''}`} />
               {loading ? 'Loading…' : 'Refresh'}
             </button>
             <button
@@ -107,9 +108,9 @@ export default function OverviewPage() {
               }}
             >
               {signalLoading ? (
-                <><span className="animate-spin">↻</span> Analyzing…</>
+                <><RefreshCw size={14} className="animate-spin shrink-0" /> Analyzing…</>
               ) : (
-                <><span>✦</span> Analyze Now</>
+                <><Sparkles size={14} className="shrink-0" /> Analyze Now</>
               )}
             </button>
           </div>
@@ -153,10 +154,11 @@ export default function OverviewPage() {
               </p>
               <button
                 onClick={handleAnalyze}
-                className="text-xs font-mono px-3 py-1.5 rounded-lg transition-all hover:opacity-90"
+                className="text-xs font-mono px-3 py-1.5 rounded-lg transition-all hover:opacity-90 flex items-center gap-1.5"
                 style={{ background: 'rgba(0,255,167,0.15)', color: '#00FFA7', border: '1px solid rgba(0,255,167,0.3)' }}
               >
-                ✦ Generate {activeLabel} Signal
+                <Sparkles size={12} className="shrink-0" />
+                Generate {activeLabel} Signal
               </button>
             </div>
           )}
@@ -184,9 +186,10 @@ export default function OverviewPage() {
             <button
               onClick={refresh} disabled={loading}
               style={{ color: 'var(--brand-accent)' }}
-              className="text-[10px] font-mono hover:underline disabled:opacity-40"
+              className="text-[10px] font-mono hover:underline disabled:opacity-40 flex items-center gap-1"
             >
-              ↻ refresh
+              <RefreshCw size={10} className="shrink-0" />
+              refresh
             </button>
           </div>
           <NewsFeed news={news} loading={loading} />

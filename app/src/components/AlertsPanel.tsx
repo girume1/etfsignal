@@ -1,3 +1,4 @@
+import { ChevronUp, ChevronDown, ArrowLeftRight, Diamond, Zap } from 'lucide-react';
 import type { Alert } from '../types';
 
 interface AlertsPanelProps {
@@ -5,12 +6,20 @@ interface AlertsPanelProps {
   loading: boolean;
 }
 
-const KIND_STYLES: Record<Alert['kind'], { icon: string; color: string; bg: string; label: string }> = {
-  inflow:    { icon: '▲', color: '#34D399', bg: 'rgba(52,211,153,0.12)',  label: 'INFLOW' },
-  outflow:   { icon: '▼', color: '#F87171', bg: 'rgba(248,113,113,0.12)', label: 'OUTFLOW' },
-  rotation:  { icon: '⇄', color: '#A78BFA', bg: 'rgba(167,139,250,0.12)', label: 'ROTATION' },
-  milestone: { icon: '◆', color: '#FCD34D', bg: 'rgba(252,211,77,0.12)',  label: 'MILESTONE' },
-  anomaly:   { icon: '⚡', color: '#FB923C', bg: 'rgba(251,146,60,0.14)',  label: 'ANOMALY' },
+const KIND_ICONS: Record<Alert['kind'], React.ElementType> = {
+  inflow:    ChevronUp,
+  outflow:   ChevronDown,
+  rotation:  ArrowLeftRight,
+  milestone: Diamond,
+  anomaly:   Zap,
+};
+
+const KIND_STYLES: Record<Alert['kind'], { color: string; bg: string; label: string }> = {
+  inflow:    { color: '#34D399', bg: 'rgba(52,211,153,0.12)',  label: 'INFLOW' },
+  outflow:   { color: '#F87171', bg: 'rgba(248,113,113,0.12)', label: 'OUTFLOW' },
+  rotation:  { color: '#A78BFA', bg: 'rgba(167,139,250,0.12)', label: 'ROTATION' },
+  milestone: { color: '#FCD34D', bg: 'rgba(252,211,77,0.12)',  label: 'MILESTONE' },
+  anomaly:   { color: '#FB923C', bg: 'rgba(251,146,60,0.14)',  label: 'ANOMALY' },
 };
 
 function timeAgo(ts: number): string {
@@ -53,6 +62,7 @@ export function AlertsPanel({ alerts, loading }: AlertsPanelProps) {
             ))
           : alerts.map(a => {
               const s = KIND_STYLES[a.kind];
+              const KindIcon = KIND_ICONS[a.kind];
               const glow = a.severity === 'high' ? `0 0 0 1px ${s.color}55, 0 0 12px ${s.color}30` : 'none';
               return (
                 <div key={a.id} className="p-3" style={{ boxShadow: glow }}>
@@ -61,7 +71,7 @@ export function AlertsPanel({ alerts, loading }: AlertsPanelProps) {
                       style={{ background: s.bg, color: s.color, border: `1px solid ${s.color}40` }}
                       className="text-xs w-6 h-6 rounded-md flex items-center justify-center font-mono shrink-0"
                     >
-                      {s.icon}
+                      <KindIcon size={12} />
                     </span>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-wider mb-0.5">

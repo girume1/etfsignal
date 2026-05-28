@@ -1,4 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
+import {
+  X, TrendingUp, Zap, Target, ArrowUp, ArrowDown,
+  ArrowUpDown, RefreshCw, ExternalLink, AlertTriangle,
+  ChevronUp, ChevronDown, CheckCircle2, XCircle,
+} from 'lucide-react';
 import type { MarketSignal, OrderSide, TradeOrder } from '../types';
 import { fetchBalances } from '../services/sodex';
 
@@ -144,9 +149,9 @@ export function TradeModal({
           <div className="flex items-center gap-3">
             <div
               style={{ background: bgColor, border: `1px solid ${borderCol}`, color }}
-              className="w-10 h-10 rounded-xl flex items-center justify-center text-lg font-bold"
+              className="w-10 h-10 rounded-xl flex items-center justify-center"
             >
-              {isLong ? '↑' : '↓'}
+              {isLong ? <ArrowUp size={18} /> : <ArrowDown size={18} />}
             </div>
             <div>
               <div className="font-semibold text-white">{isLong ? 'Long' : 'Short'} {symbol}</div>
@@ -155,7 +160,9 @@ export function TradeModal({
               </div>
             </div>
           </div>
-          <button onClick={onClose} className="text-slate-500 hover:text-white text-xl leading-none">✕</button>
+          <button onClick={onClose} className="text-slate-500 hover:text-white flex items-center justify-center">
+            <X size={18} />
+          </button>
         </div>
 
         {!result ? (
@@ -165,8 +172,12 @@ export function TradeModal({
               style={{ background: 'var(--brand-card)', border: '1px solid var(--brand-border)' }}
               className="flex rounded-xl p-1 mb-2 gap-1"
             >
-              <SegmentBtn active={marketType === 'spot'}    onClick={() => setMarketType('spot')}>📈 Spot</SegmentBtn>
-              <SegmentBtn active={marketType === 'futures'} onClick={() => setMarketType('futures')}>⚡ Futures</SegmentBtn>
+              <SegmentBtn active={marketType === 'spot'}    onClick={() => setMarketType('spot')}>
+                <span className="flex items-center justify-center gap-1.5"><TrendingUp size={13} /> Spot</span>
+              </SegmentBtn>
+              <SegmentBtn active={marketType === 'futures'} onClick={() => setMarketType('futures')}>
+                <span className="flex items-center justify-center gap-1.5"><Zap size={13} /> Futures</span>
+              </SegmentBtn>
             </div>
 
             {/* ── Row 2: Market / Limit ──────────────────────────────────── */}
@@ -174,12 +185,14 @@ export function TradeModal({
               style={{ background: 'var(--brand-card)', border: '1px solid var(--brand-border)' }}
               className="flex rounded-xl p-1 mb-4 gap-1"
             >
-              <SegmentBtn active={orderType === 'MARKET'} onClick={() => setOrderType('MARKET')}>⚡ Market</SegmentBtn>
+              <SegmentBtn active={orderType === 'MARKET'} onClick={() => setOrderType('MARKET')}>
+                <span className="flex items-center justify-center gap-1.5"><Zap size={13} /> Market</span>
+              </SegmentBtn>
               <SegmentBtn active={orderType === 'LIMIT'}  onClick={() => {
                 setOrderType('LIMIT');
                 if (!limitPrice && currentPrice) setLimitPrice(currentPrice.toFixed(2));
               }}>
-                🎯 Limit
+                <span className="flex items-center justify-center gap-1.5"><Target size={13} /> Limit</span>
               </SegmentBtn>
             </div>
 
@@ -189,7 +202,7 @@ export function TradeModal({
                 style={{ background: 'rgba(168,139,250,0.08)', border: '1px solid rgba(168,139,250,0.25)' }}
                 className="rounded-xl p-3 mb-3 flex items-start gap-2"
               >
-                <span className="text-purple-400 text-sm mt-0.5">↕</span>
+                <ArrowUpDown size={16} className="text-purple-400 mt-0.5 shrink-0" />
                 <div>
                   <p className="text-xs text-purple-300 font-semibold mb-0.5">Transfer required for Futures</p>
                   <p className="text-xs text-slate-400">
@@ -197,9 +210,10 @@ export function TradeModal({
                     <a
                       href={`https://testnet.sodex.com/trade/futures/${sodexSymbol}`}
                       target="_blank" rel="noopener noreferrer"
-                      className="text-purple-400 hover:text-purple-300 underline"
+                      className="text-purple-400 hover:text-purple-300 underline inline-flex items-center gap-1"
                     >
-                      Transfer on SoDEX ↗
+                      Transfer on SoDEX
+                      <ExternalLink size={10} className="shrink-0" />
                     </a>
                   </p>
                 </div>
@@ -277,10 +291,10 @@ export function TradeModal({
                   <button
                     onClick={loadBalances}
                     disabled={balLoading}
-                    className="text-slate-600 hover:text-slate-400 transition-colors disabled:opacity-40 text-xs"
+                    className="text-slate-600 hover:text-slate-400 transition-colors disabled:opacity-40 flex items-center"
                     title="Refresh balance"
                   >
-                    ↺
+                    <RefreshCw size={11} />
                   </button>
                 </div>
               </div>
@@ -296,16 +310,17 @@ export function TradeModal({
                     <a
                       href="https://testnet.sodex.com/faucet"
                       target="_blank" rel="noopener noreferrer"
-                      className="text-xs font-bold hover:opacity-80 transition-opacity"
+                      className="text-xs font-bold hover:opacity-80 transition-opacity inline-flex items-center gap-1"
                       style={{ color: '#00FFA7' }}
                     >
-                      Get USDC ↗
+                      Get USDC
+                      <ExternalLink size={10} className="shrink-0" />
                     </a>
                   </div>
                   <ol className="text-[10px] text-slate-500 space-y-0.5 list-none">
-                    <li>① Go to <a href="https://testnet.sodex.com" target="_blank" rel="noopener noreferrer" className="text-slate-400 underline">testnet.sodex.com</a> → connect wallet</li>
-                    <li>② Visit Faucet → claim testnet USDC</li>
-                    <li>③ Come back and click ↺ to refresh balance</li>
+                    <li>1. Go to <a href="https://testnet.sodex.com" target="_blank" rel="noopener noreferrer" className="text-slate-400 underline">testnet.sodex.com</a> and connect wallet</li>
+                    <li>2. Visit Faucet and claim testnet USDC</li>
+                    <li>3. Come back and click the refresh icon to update your balance</li>
                   </ol>
                 </div>
               )}
@@ -330,7 +345,7 @@ export function TradeModal({
                     className="flex items-center gap-1.5 px-3 py-3 rounded-xl text-white font-semibold text-sm whitespace-nowrap hover:border-blue-500 transition-colors"
                   >
                     {currency}
-                    <span className="text-slate-400 text-xs">{dropOpen ? '▲' : '▼'}</span>
+                    {dropOpen ? <ChevronUp size={12} className="text-slate-400 shrink-0" /> : <ChevronDown size={12} className="text-slate-400 shrink-0" />}
                   </button>
 
                   {dropOpen && (
@@ -406,7 +421,10 @@ export function TradeModal({
               style={{ background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.2)' }}
               className="rounded-xl p-3 mb-4"
             >
-              <div className="text-xs font-semibold text-yellow-400 mb-1">⚠ Risk Warning</div>
+              <div className="text-xs font-semibold text-yellow-400 mb-1 flex items-center gap-1.5">
+                <AlertTriangle size={12} className="shrink-0" />
+                Risk Warning
+              </div>
               <p className="text-xs text-slate-400 leading-relaxed">{signal.riskWarning}</p>
             </div>
 
@@ -453,7 +471,12 @@ export function TradeModal({
         ) : (
           /* ── Result screen ─────────────────────────────────────────── */
           <div className="text-center py-6">
-            <div className="text-4xl mb-4">{result.success ? '✅' : '❌'}</div>
+            <div className="mb-4 flex justify-center">
+            {result.success
+              ? <CheckCircle2 size={48} style={{ color: '#34D399' }} />
+              : <XCircle size={48} style={{ color: '#F87171' }} />
+            }
+          </div>
             <p className={`text-lg font-semibold mb-2 ${result.success ? 'text-green-400' : 'text-red-400'}`}>
               {result.success ? 'Order Placed!' : 'Order Failed'}
             </p>
@@ -471,9 +494,10 @@ export function TradeModal({
                   target="_blank"
                   rel="noopener noreferrer"
                   style={{ background: 'linear-gradient(135deg,#00FFA7,#A78BFA)', color: '#06080B' }}
-                  className="inline-block px-5 py-2.5 rounded-xl text-white font-semibold text-sm hover:opacity-90 transition-opacity"
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-white font-semibold text-sm hover:opacity-90 transition-opacity"
                 >
-                  View on SoDEX ↗
+                  View on SoDEX
+                  <ExternalLink size={14} className="shrink-0" />
                 </a>
               </>
             ) : (

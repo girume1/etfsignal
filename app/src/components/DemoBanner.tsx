@@ -1,3 +1,5 @@
+import { X } from 'lucide-react';
+
 interface DemoBannerProps {
   onDismiss?: () => void;
 }
@@ -27,10 +29,10 @@ export function DemoBanner({ onDismiss }: DemoBannerProps) {
       {onDismiss && (
         <button
           onClick={onDismiss}
-          className="text-slate-500 hover:text-white text-lg leading-none shrink-0"
+          className="text-slate-500 hover:text-white shrink-0 flex items-center justify-center"
           aria-label="Dismiss demo notice"
         >
-          ✕
+          <X size={16} />
         </button>
       )}
     </div>

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { ChevronUp, ChevronDown, ArrowLeftRight, Diamond, Zap, RefreshCw } from 'lucide-react';
 import { useDashboard } from '../../contexts/DashboardContext';
 import { useDensity } from '../../contexts/DensityContext';
 import { QuickStats } from '../../components/QuickStats';
@@ -9,12 +10,20 @@ import type { FilterKind, FilterSeverity } from '../../utils/filters';
 // Re-export for backward compatibility and direct testing
 export { filterAlerts };
 
-const KIND_META: Record<Alert['kind'], { icon: string; color: string; bg: string; label: string }> = {
-  inflow:    { icon: '▲', color: '#34D399', bg: 'rgba(52,211,153,0.12)',  label: 'INFLOW' },
-  outflow:   { icon: '▼', color: '#F87171', bg: 'rgba(248,113,113,0.12)', label: 'OUTFLOW' },
-  rotation:  { icon: '⇄', color: '#00FFA7', bg: 'rgba(0,255,167,0.08)', label: 'ROTATION' },
-  milestone: { icon: '◆', color: '#FCD34D', bg: 'rgba(252,211,77,0.12)',  label: 'MILESTONE' },
-  anomaly:   { icon: '⚡', color: '#FB923C', bg: 'rgba(251,146,60,0.14)',  label: 'ANOMALY' },
+const KIND_ICONS: Record<Alert['kind'], React.ElementType> = {
+  inflow:    ChevronUp,
+  outflow:   ChevronDown,
+  rotation:  ArrowLeftRight,
+  milestone: Diamond,
+  anomaly:   Zap,
+};
+
+const KIND_META: Record<Alert['kind'], { color: string; bg: string; label: string }> = {
+  inflow:    { color: '#34D399', bg: 'rgba(52,211,153,0.12)',  label: 'INFLOW' },
+  outflow:   { color: '#F87171', bg: 'rgba(248,113,113,0.12)', label: 'OUTFLOW' },
+  rotation:  { color: '#00FFA7', bg: 'rgba(0,255,167,0.08)', label: 'ROTATION' },
+  milestone: { color: '#FCD34D', bg: 'rgba(252,211,77,0.12)',  label: 'MILESTONE' },
+  anomaly:   { color: '#FB923C', bg: 'rgba(251,146,60,0.14)',  label: 'ANOMALY' },
 };
 
 function timeAgo(ts: number): string {
@@ -55,9 +64,10 @@ export default function AlertsPage() {
           <button
             onClick={refresh} disabled={loading}
             style={{ color: 'var(--brand-accent)', border: '1px solid rgba(0,255,167,0.25)' }}
-            className="px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-white/5 disabled:opacity-40"
+            className="px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-white/5 disabled:opacity-40 flex items-center gap-1.5"
           >
-            ↻ Refresh
+            <RefreshCw size={11} className="shrink-0" />
+            Refresh
           </button>
         </div>
 
@@ -119,6 +129,7 @@ export default function AlertsPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
             {filtered.map(a => {
               const s = KIND_META[a.kind];
+              const KindIcon = KIND_ICONS[a.kind];
               const glow = a.severity === 'high'
                 ? `0 0 0 1px ${s.color}55, 0 0 16px ${s.color}25`
                 : 'none';
@@ -134,9 +145,9 @@ export default function AlertsPage() {
                 >
                   <span
                     style={{ background: s.bg, color: s.color, border: `1px solid ${s.color}40` }}
-                    className="text-sm w-8 h-8 rounded-lg flex items-center justify-center font-mono shrink-0"
+                    className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
                   >
-                    {s.icon}
+                    <KindIcon size={14} />
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-wider mb-1 flex-wrap">

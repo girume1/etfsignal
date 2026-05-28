@@ -1,4 +1,5 @@
 import { ReactNode } from 'react';
+import { BarChart2, Bot, Zap, Newspaper } from 'lucide-react';
 
 interface WalletGateProps {
   connected: boolean;
@@ -40,20 +41,21 @@ export function WalletGate({ connected, onConnect, children }: WalletGateProps) 
         {/* Feature pills */}
         <div className="flex flex-wrap justify-center gap-2 mb-8">
           {[
-            '📊 Live ETF Flows',
-            '🤖 AI Signals',
-            '⚡ SoDEX Trading',
-            '📰 News Feed',
-          ].map(f => (
+            { Icon: BarChart2, label: 'Live ETF Flows' },
+            { Icon: Bot,       label: 'AI Signals' },
+            { Icon: Zap,       label: 'SoDEX Trading' },
+            { Icon: Newspaper, label: 'News Feed' },
+          ].map(({ Icon, label }) => (
             <span
-              key={f}
-              className="text-xs px-3 py-1.5 rounded-full font-medium text-slate-300"
+              key={label}
+              className="text-xs px-3 py-1.5 rounded-full font-medium text-slate-300 flex items-center gap-1.5"
               style={{
                 background: 'rgba(255,255,255,0.05)',
                 border: '1px solid rgba(255,255,255,0.1)',
               }}
             >
-              {f}
+              <Icon size={12} className="shrink-0" />
+              {label}
             </span>
           ))}
         </div>

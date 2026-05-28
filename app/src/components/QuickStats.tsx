@@ -18,7 +18,7 @@ export function QuickStats() {
       value: displayBtcPx
         ? `$${displayBtcPx.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
         : '—',
-      sub: liveConnected ? '● live' : btcData ? 'from API' : '',
+      sub: liveConnected ? 'live' : btcData ? 'from API' : '',
       color: liveConnected ? '#34D399' : '#00FFA7',
     },
     {
@@ -26,7 +26,7 @@ export function QuickStats() {
       value: displayEthPx
         ? `$${displayEthPx.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
         : '—',
-      sub: liveConnected ? '● live' : ethData ? 'from API' : '',
+      sub: liveConnected ? 'live' : ethData ? 'from API' : '',
       color: liveConnected ? '#34D399' : '#00FFA7',
     },
     {
@@ -64,7 +64,10 @@ export function QuickStats() {
             <div className="flex items-baseline gap-2 flex-wrap">
               <span className="font-display text-xl text-white count-in">{s.value}</span>
               {s.sub && (
-                <span className="text-[10px] font-mono truncate" style={{ color: s.color }}>
+                <span className="text-[10px] font-mono truncate flex items-center gap-1" style={{ color: s.color }}>
+                  {s.sub === 'live' && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-green-400 inline-block animate-pulse shrink-0" />
+                  )}
                   {s.sub}
                 </span>
               )}

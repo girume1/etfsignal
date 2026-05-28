@@ -1,3 +1,4 @@
+import { ChevronUp, ChevronDown, Minus } from 'lucide-react';
 import type { NewsItem } from '../types';
 import { NEWS_CATEGORY_MAP } from '../types';
 import { getNewsTitle } from '../services/sosovalue';
@@ -31,10 +32,16 @@ function getSentiment(title: string): Sentiment {
   return 'neutral';
 }
 
+const SENTIMENT_ICONS: Record<Sentiment, React.ElementType> = {
+  positive: ChevronUp,
+  neutral:  Minus,
+  negative: ChevronDown,
+};
+
 const SENTIMENT_STYLES: Record<Sentiment, { label: string; color: string; bg: string }> = {
-  positive: { label: '▲ Positive', color: '#34D399', bg: 'rgba(52,211,153,0.1)'  },
-  neutral:  { label: '● Neutral',  color: '#94A3B8', bg: 'rgba(148,163,184,0.1)' },
-  negative: { label: '▼ Negative', color: '#F87171', bg: 'rgba(248,113,113,0.1)' },
+  positive: { label: 'Positive', color: '#34D399', bg: 'rgba(52,211,153,0.1)'  },
+  neutral:  { label: 'Neutral',  color: '#94A3B8', bg: 'rgba(148,163,184,0.1)' },
+  negative: { label: 'Negative', color: '#F87171', bg: 'rgba(248,113,113,0.1)' },
 };
 
 const CATEGORY_COLORS: Record<number, string> = {
@@ -90,6 +97,7 @@ export function NewsFeed({ news, loading }: NewsFeedProps) {
               const categoryLabel = NEWS_CATEGORY_MAP[item.category] || 'Other';
               const sentiment = getSentiment(title);
               const sentStyle = SENTIMENT_STYLES[sentiment];
+              const SentIcon = SENTIMENT_ICONS[sentiment];
               return (
                 <a
                   key={item.id}
@@ -108,8 +116,9 @@ export function NewsFeed({ news, loading }: NewsFeedProps) {
                     {/* Sentiment badge */}
                     <span
                       style={{ color: sentStyle.color, background: sentStyle.bg }}
-                      className="text-[10px] px-1.5 py-0.5 rounded font-mono font-semibold"
+                      className="text-[10px] px-1.5 py-0.5 rounded font-mono font-semibold flex items-center gap-0.5"
                     >
+                      <SentIcon size={10} />
                       {sentStyle.label}
                     </span>
                     <span className="text-xs text-slate-600">{timeAgo(item.releaseTime)}</span>
