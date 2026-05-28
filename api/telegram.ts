@@ -161,12 +161,14 @@ function confBar(pct: number): string {
 }
 
 // ─── Signal generation (Claude AI + live SoSoValue data) ──────────────────────
+// Routes through /api/analyze (Node.js proxy) — same path the web dashboard uses,
+// avoids Edge-runtime network restrictions when calling api.anthropic.com directly.
 
-async function generateSignal(anthropicKey: string, asset: 'BTC' | 'ETH'): Promise<string> {
+async function generateSignal(asset: 'BTC' | 'ETH', baseUrl: string): Promise<string> {
   const etfType = asset === 'BTC' ? 'us-btc-spot' : 'us-eth-spot';
   const binSym  = asset === 'BTC' ? 'BTCUSDT'     : 'ETHUSDT';
 
-  // Fetch data in parallel
+  // Fetch ETF data + live price in parallel
   const [snap, ticker] = await Promise.all([
     fetchEtfSnapshot(etfType),
     fetchBinanceTicker(binSym),
@@ -201,15 +203,12 @@ Respond with ONLY a JSON object (no markdown, no extra text):
   "topDriver": "<single strongest factor driving this signal>"
 }`;
 
-  const aiRes = await fetch('https://api.anthropic.com/v1/messages', {
+  // Call the /api/analyze proxy (Node.js, not Edge) — same endpoint the dashboard uses
+  const aiRes = await fetch(`${baseUrl}/api/analyze`, {
     method:  'POST',
-    headers: {
-      'Content-Type':    'application/json',
-      'x-api-key':       anthropicKey,
-      'anthropic-version': '2023-06-01',
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      model:      'claude-3-5-haiku-20241022',
+      model:      'claude-sonnet-4-6',
       max_tokens: 512,
       messages:   [{ role: 'user', content: prompt }],
     }),
@@ -396,10 +395,10 @@ async function handleUnsubscribe(token: string, chatId: number) {
 }
 
 async function handleSignal(
-  token:        string,
-  chatId:       number,
-  anthropicKey: string,
-  asset:        'BTC' | 'ETH',
+  token:   string,
+  chatId:  number,
+  asset:   'BTC' | 'ETH',
+  baseUrl: string,
 ) {
   await sendTyping(token, chatId);
   await sendMessage(
@@ -409,7 +408,7 @@ async function handleSignal(
   );
 
   try {
-    const signalText = await generateSignal(anthropicKey, asset);
+    const signalText = await generateSignal(asset, baseUrl);
     await sendMessage(token, chatId, signalText);
   } catch (err: any) {
     await sendMessage(
@@ -428,14 +427,16 @@ export default async function handler(req: Request) {
   }
 
   const botToken    = process.env.TELEGRAM_BOT_TOKEN;
-  const anthropicKey = process.env.ANTHROPIC_API_KEY;
-
   if (!botToken) {
     return new Response(
       JSON.stringify({ error: 'TELEGRAM_BOT_TOKEN not configured' }),
       { status: 500, headers: { 'Content-Type': 'application/json' } },
     );
   }
+
+  // Derive base URL from the incoming request so this works in any environment
+  // (production, preview, local). Used to call /api/analyze — same proxy the dashboard uses.
+  const baseUrl = new URL(req.url).origin;
 
   let update: any;
   try { update = await req.json(); }
@@ -473,19 +474,11 @@ export default async function handler(req: Request) {
 
       case '/signal':
       case '/btc':
-        if (!anthropicKey) {
-          await sendMessage(botToken, chatId, '❌ *AI engine not configured.* Please check the dashboard instead.');
-        } else {
-          await handleSignal(botToken, chatId, anthropicKey, 'BTC');
-        }
+        await handleSignal(botToken, chatId, 'BTC', baseUrl);
         break;
 
       case '/eth':
-        if (!anthropicKey) {
-          await sendMessage(botToken, chatId, '❌ *AI engine not configured.* Please check the dashboard instead.');
-        } else {
-          await handleSignal(botToken, chatId, anthropicKey, 'ETH');
-        }
+        await handleSignal(botToken, chatId, 'ETH', baseUrl);
         break;
 
       default:
