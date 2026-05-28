@@ -134,23 +134,55 @@ interface GasData {
   baseFee:  string;
 }
 
+// Public Ethereum RPC endpoints — no API key required, free, multiple fallbacks
+const ETH_RPC_NODES = [
+  'https://eth.llamarpc.com',
+  'https://cloudflare-eth.com',
+  'https://ethereum.publicnode.com',
+];
+
 async function fetchGasPrice(): Promise<GasData | null> {
-  const apiKey = process.env.ETHERSCAN_API_KEY ?? '';
-  const url = `https://api.etherscan.io/api?module=gastracker&action=gasoracle${apiKey ? `&apikey=${apiKey}` : ''}`;
-  try {
-    const res  = await fetch(url);
-    if (!res.ok) return null;
-    const json: any = await res.json();
-    if (json.status !== '1' || !json.result) return null;
-    return {
-      safe:     json.result.SafeGasPrice,
-      proposed: json.result.ProposeGasPrice,
-      fast:     json.result.FastGasPrice,
-      baseFee:  parseFloat(json.result.suggestBaseFee).toFixed(4),
-    };
-  } catch {
-    return null;
+  for (const rpc of ETH_RPC_NODES) {
+    try {
+      // eth_feeHistory: last 4 blocks, reward percentiles 25/50/75
+      const res = await fetch(rpc, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0', id: 1,
+          method:  'eth_feeHistory',
+          params:  ['0x4', 'latest', [25, 50, 75]],
+        }),
+      });
+      if (!res.ok) continue;
+
+      const json: any = await res.json();
+      const result = json?.result;
+      if (!result?.baseFeePerGas || !result?.reward) continue;
+
+      // Second-to-last baseFee is the current confirmed block (last is "next" prediction)
+      const bases  = result.baseFeePerGas as string[];
+      const baseFee = parseInt(bases[bases.length - 2], 16) / 1e9;
+
+      // Average priority fees across blocks for each percentile
+      const rewards = result.reward as string[][];
+      const avgPriority = (idx: number) =>
+        rewards.reduce((sum: number, r: string[]) => sum + parseInt(r[idx], 16), 0)
+        / rewards.length / 1e9;
+
+      const safe     = baseFee + avgPriority(0);  // 25th percentile
+      const proposed = baseFee + avgPriority(1);  // 50th percentile
+      const fast     = baseFee + avgPriority(2);  // 75th percentile
+
+      return {
+        safe:     safe.toFixed(3),
+        proposed: proposed.toFixed(3),
+        fast:     fast.toFixed(3),
+        baseFee:  baseFee.toFixed(4),
+      };
+    } catch { /* try next RPC */ }
   }
+  return null;
 }
 
 function formatGasMessage(gas: GasData): string {

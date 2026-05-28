@@ -30,8 +30,9 @@ export default async function handler(req: any, res: any) {
   }
 
   // Each kline: [openTime, open, high, low, close, volume, ...]
+  // QuickChart uses Chart.js 2 + chartjs-chart-financial — time key must be `t`, not `x`
   const candles = klines.map((k: any) => ({
-    x: k[0],
+    t: k[0],                // open time (ms) — Chart.js 2 uses `t` for time axis
     o: parseFloat(k[1]),
     h: parseFloat(k[2]),
     l: parseFloat(k[3]),
