@@ -28,13 +28,11 @@ async function fetchChartImg(cmd: string, apiKey: string): Promise<Buffer> {
   const cfg = CHART_IMG_CONFIG[cmd];
   if (!cfg) throw new Error(`Unknown chart command: ${cmd}`);
 
+  // Free tier allows max 3 parameters: key + symbol + interval
   const params = new URLSearchParams({
     key:      apiKey,
     symbol:   cfg.symbol,
     interval: cfg.interval,
-    theme:    'dark',
-    width:    '800',
-    height:   '500',
   });
 
   const res = await fetch(`https://api.chart-img.com/v1/tradingview/advanced-chart?${params}`);
