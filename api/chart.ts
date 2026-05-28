@@ -12,11 +12,11 @@
 // Update these when you have the exact chart page URLs from each exchange.
 
 const EXCHANGE_URLS: Record<string, string> = {
-  ch:     'https://grvt.io',                              // BTC/USDT 1m  — update with exact chart page
-  chb:    'https://grvt.io',                              // BTC perp 1m  — update with exact chart page
-  che:    'https://app.nado.xyz',                         // ETH perp 1m  — update with exact chart page
-  tv_btc: 'https://www.okx.com/trade-spot/btc-usdt',     // BTC 1h
-  tv_eth: 'https://www.okx.com/trade-spot/eth-usdt',     // ETH 1h (or Bitget)
+  ch:     'https://grvt.io/exchange/perpetual/BTC-USDT',   // /ch  — BTC perp (GRVT)
+  chb:    'https://grvt.io/exchange/perpetual/BTC-USDT',   // /chb — BTC perp (GRVT)
+  che:    'https://app.nado.xyz/perpetuals?market=ETH',    // /che — ETH perp (Nado)
+  tv_btc: 'https://app.nado.xyz/perpetuals?market=BTC',   // /tv btc — BTC (Nado)
+  tv_eth: 'https://app.nado.xyz/perpetuals?market=ETH',   // /tv eth — ETH (Nado)
 };
 
 // ─── Screenshot via screenshotone.com ─────────────────────────────────────────
@@ -30,8 +30,8 @@ async function takeScreenshot(pageUrl: string, apiKey: string): Promise<Buffer> 
     viewport_width:        '1280',
     viewport_height:       '720',
     device_scale_factor:   '1',
-    delay:                 '5',          // seconds to wait for chart to render
-    timeout:               '40',
+    delay:                 '7',          // seconds to wait for chart + candles to render
+    timeout:               '55',
     block_ads:             'true',
     block_cookie_banners:  'true',
     block_trackers:        'true',
