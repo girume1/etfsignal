@@ -3,7 +3,7 @@ import { useState } from 'react';
 import {
   LayoutDashboard, BarChart2, TrendingUp, Zap,
   Newspaper, ArrowLeftRight, Star, PieChart,
-  Settings, Bot, Twitter, Send,
+  Settings, Bot, ExternalLink, Send,
 } from 'lucide-react';
 import { useDashboard } from '../contexts/DashboardContext';
 import { AIAdvantageModal } from './AIAdvantageModal';
@@ -201,13 +201,13 @@ export function AppSidebar({ open, onClose }: AppSidebarProps) {
           <span className="text-[9px] text-slate-600 font-mono">© 2025 ETFSignalAI</span>
           <div className="flex items-center gap-3">
             <a
-              href="https://twitter.com"
+              href="https://x.com"
               target="_blank"
               rel="noopener noreferrer"
-              aria-label="Twitter"
+              aria-label="X (Twitter)"
               className="text-slate-600 hover:text-slate-300 transition-colors"
             >
-              <Twitter size={14} />
+              <ExternalLink size={14} />
             </a>
             <a
               href="https://t.me/ETFSignalAIBot"
