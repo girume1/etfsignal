@@ -27,7 +27,7 @@ async function main() {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       url:                  WEBHOOK_URL,
-      allowed_updates:      ['message'],
+      allowed_updates:      ['message', 'callback_query'],
       drop_pending_updates: true,
     }),
   });
@@ -54,10 +54,15 @@ async function main() {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       commands: [
-        { command: 'signal',      description: 'Generate a live BTC ETF trading signal' },
+        { command: 'signal',      description: 'Live BTC ETF signal (Claude AI)' },
         { command: 'btc',         description: 'BTC-specific AI signal' },
         { command: 'eth',         description: 'ETH-specific AI signal' },
         { command: 'status',      description: 'Live BTC & ETH ETF market snapshot' },
+        { command: 'ch',          description: 'BTC/USDT 1m candlestick chart' },
+        { command: 'chb',         description: 'BTC perp 1m chart' },
+        { command: 'che',         description: 'ETH perp 1m chart' },
+        { command: 'tv',          description: '/tv btc or /tv eth — 1h chart' },
+        { command: 'gas',         description: 'Ethereum gas prices' },
         { command: 'subscribe',   description: 'Subscribe to automatic signal alerts' },
         { command: 'unsubscribe', description: 'Stop receiving automatic alerts' },
         { command: 'help',        description: 'Show all commands' },

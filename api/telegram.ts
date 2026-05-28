@@ -7,6 +7,7 @@
 //   SOSOVALUE_API_KEY         — SoSoValue ETF data key (for /status & /signal)
 //   UPSTASH_REDIS_REST_URL    — Upstash Redis endpoint (for subscriber persistence)
 //   UPSTASH_REDIS_REST_TOKEN  — Upstash Redis bearer token
+//   ETHERSCAN_API_KEY         — (optional) Etherscan key for higher gas API rate limits
 
 declare const process: { env: Record<string, string | undefined> };
 
@@ -17,6 +18,14 @@ const SOSO_PRIMARY     = 'https://openapi.sosovalue.com';
 const SOSO_FALLBACK    = 'https://api.sosovalue.xyz';
 const SUBSCRIBERS_KEY  = 'telegram:subscribers';
 const DASHBOARD_URL    = 'https://etfsignal.vercel.app';
+
+// Binance symbol mapping
+const CHART_SYMBOLS: Record<string, { symbol: string; label: string }> = {
+  btc:  { symbol: 'BTCUSDT',  label: 'BTC/USDT' },
+  eth:  { symbol: 'ETHUSDT',  label: 'ETH/USDT' },
+  btcp: { symbol: 'BTCUSDT',  label: 'BTC PERP' },
+  ethp: { symbol: 'ETHUSDT',  label: 'ETH PERP' },
+};
 
 // ─── Telegram helpers ─────────────────────────────────────────────────────────
 
@@ -45,6 +54,121 @@ async function sendTyping(token: string, chatId: number | string) {
     body: JSON.stringify({ chat_id: chatId, action: 'typing' }),
   });
 }
+
+// ─── Telegram: send photo from URL ───────────────────────────────────────────
+
+async function sendPhotoFromUrl(
+  token:   string,
+  chatId:  number | string,
+  photoUrl: string,
+  caption?: string,
+) {
+  await fetch(`${TELEGRAM_API}/bot${token}/sendPhoto`, {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      chat_id:   chatId,
+      photo:     photoUrl,
+      caption:   caption ?? '',
+      parse_mode: 'Markdown',
+    }),
+  });
+}
+
+// Send binary image data (ArrayBuffer) as a Telegram photo using multipart/form-data
+async function sendPhotoBuffer(
+  token:    string,
+  chatId:   number | string,
+  buf:      ArrayBuffer,
+  caption?: string,
+  replyMarkup?: unknown,
+) {
+  const form = new FormData();
+  form.append('chat_id', String(chatId));
+  form.append('photo', new Blob([buf], { type: 'image/png' }), 'chart.png');
+  if (caption)     form.append('caption',      caption);
+  if (caption)     form.append('parse_mode',   'Markdown');
+  if (replyMarkup) form.append('reply_markup', JSON.stringify(replyMarkup));
+
+  await fetch(`${TELEGRAM_API}/bot${token}/sendPhoto`, {
+    method: 'POST',
+    body:   form,
+  });
+}
+
+// Edit an existing text message (used by callback_query Refresh)
+async function editMessage(
+  token:     string,
+  chatId:    number | string,
+  messageId: number,
+  text:      string,
+  replyMarkup?: unknown,
+) {
+  await fetch(`${TELEGRAM_API}/bot${token}/editMessageText`, {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      chat_id:      chatId,
+      message_id:   messageId,
+      text,
+      parse_mode:   'Markdown',
+      reply_markup: replyMarkup,
+    }),
+  });
+}
+
+async function answerCallback(token: string, callbackQueryId: string, text?: string) {
+  await fetch(`${TELEGRAM_API}/bot${token}/answerCallbackQuery`, {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ callback_query_id: callbackQueryId, text }),
+  });
+}
+
+// ─── Gas price fetcher ────────────────────────────────────────────────────────
+
+interface GasData {
+  safe:     string;
+  proposed: string;
+  fast:     string;
+  baseFee:  string;
+}
+
+async function fetchGasPrice(): Promise<GasData | null> {
+  const apiKey = process.env.ETHERSCAN_API_KEY ?? '';
+  const url = `https://api.etherscan.io/api?module=gastracker&action=gasoracle${apiKey ? `&apikey=${apiKey}` : ''}`;
+  try {
+    const res  = await fetch(url);
+    if (!res.ok) return null;
+    const json: any = await res.json();
+    if (json.status !== '1' || !json.result) return null;
+    return {
+      safe:     json.result.SafeGasPrice,
+      proposed: json.result.ProposeGasPrice,
+      fast:     json.result.FastGasPrice,
+      baseFee:  parseFloat(json.result.suggestBaseFee).toFixed(4),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function formatGasMessage(gas: GasData): string {
+  return [
+    `⛽ *Ethereum Gas Prices*`,
+    ``,
+    `🛡 Safe:     *${gas.safe} Gwei*`,
+    `🚗 Proposed: *${gas.proposed} Gwei*`,
+    `🚀 Fast:     *${gas.fast} Gwei*`,
+    `📊 Base Fee: *${gas.baseFee} Gwei*`,
+    ``,
+    `_${new Date().toUTCString()}_`,
+  ].join('\n');
+}
+
+const GAS_REFRESH_KEYBOARD = {
+  inline_keyboard: [[{ text: '🔄 Refresh', callback_data: 'gas_refresh' }]],
+};
 
 // ─── Upstash Redis (HTTP-only — no npm package required) ─────────────────────
 // Uses the Upstash REST command format: POST body is ["CMD", "key", "arg", ...]
@@ -248,26 +372,76 @@ Respond with ONLY a JSON object (no markdown, no extra text):
 
 // ─── Command handlers ─────────────────────────────────────────────────────────
 
+async function handleGas(token: string, chatId: number) {
+  await sendTyping(token, chatId);
+  const gas = await fetchGasPrice();
+  if (!gas) {
+    await sendMessage(token, chatId, '❌ *Gas price unavailable.* Etherscan API may be rate limited — try again shortly.');
+    return;
+  }
+  await fetch(`${TELEGRAM_API}/bot${token}/sendMessage`, {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      chat_id:      chatId,
+      text:         formatGasMessage(gas),
+      parse_mode:   'Markdown',
+      reply_markup: GAS_REFRESH_KEYBOARD,
+    }),
+  });
+}
+
+async function handleChart(
+  token:    string,
+  chatId:   number,
+  assetKey: string,   // btc | eth | btcp | ethp
+  interval: string,   // 1m | 1h | 4h
+  baseUrl:  string,
+) {
+  const info = CHART_SYMBOLS[assetKey] ?? CHART_SYMBOLS.btc;
+  await sendTyping(token, chatId);
+
+  try {
+    const chartRes = await fetch(
+      `${baseUrl}/api/chart?symbol=${info.symbol}&interval=${interval}&limit=60`,
+    );
+    if (!chartRes.ok) throw new Error(`chart API ${chartRes.status}`);
+
+    const buf = await chartRes.arrayBuffer();
+    const pct = chartRes.headers.get('X-Pct') ?? '0';
+    const dir = parseFloat(pct) >= 0 ? '📈' : '📉';
+    const caption = `${dir} *${info.label}* · ${interval} · Binance\n_${parseFloat(pct) >= 0 ? '+' : ''}${pct}% over window_`;
+
+    await sendPhotoBuffer(token, chatId, buf, caption);
+  } catch (err: any) {
+    await sendMessage(token, chatId, `❌ Chart failed: \`${err.message}\`\n\nTry again in a moment.`);
+  }
+}
+
 async function handleStart(token: string, chatId: number, firstName: string) {
   await sendMessage(token, chatId, [
     `👋 *Welcome to ETFSignal AI, ${firstName}!*`,
     ``,
     `I analyze Bitcoin & Ethereum ETF flows in real-time using SoSoValue institutional data and Claude AI to generate actionable trading signals.`,
     ``,
-    `*Commands:*`,
-    `• /signal — Live BTC trading signal`,
-    `• /btc — BTC-specific signal`,
-    `• /eth — ETH-specific signal`,
-    `• /status — Live ETF market overview`,
-    `• /subscribe — Subscribe to automatic alerts`,
-    `• /unsubscribe — Stop alerts`,
-    `• /help — Show all commands`,
+    `*AI Signals:*`,
+    `• /signal or /btc — Live BTC ETF signal`,
+    `• /eth — Live ETH ETF signal`,
+    `• /status — ETF market snapshot`,
     ``,
-    `📊 *Data:* SoSoValue ETF flows (real-time)`,
-    `🤖 *AI:* Claude 3.5 Haiku`,
+    `*Charts:*`,
+    `• /ch — BTC/USDT 1m chart`,
+    `• /chb — BTC perp 1m chart`,
+    `• /che — ETH perp 1m chart`,
+    `• /tv btc|eth — 1h TradingView-style chart`,
+    ``,
+    `*Market Data:*`,
+    `• /gas — Ethereum gas prices`,
+    `• /subscribe — Auto signal alerts`,
+    ``,
+    `📊 *Data:* SoSoValue + Binance + Etherscan`,
+    `🤖 *AI:* Claude AI`,
     `⛓ *Exchange:* SoDEX testnet · chain 138565`,
-    ``,
-    `_Type /signal to get your first signal now!_`,
   ].join('\n'));
 }
 
@@ -275,12 +449,21 @@ async function handleHelp(token: string, chatId: number) {
   await sendMessage(token, chatId, [
     `🤖 *ETFSignal AI — Commands*`,
     ``,
-    `*/signal* or */btc* — Claude-powered BTC signal using live ETF flows`,
-    `*/eth* — ETH-specific signal`,
+    `*AI Signals:*`,
+    `*/signal* or */btc* — Live BTC signal (Claude AI + ETF flows)`,
+    `*/eth* — Live ETH signal`,
     `*/status* — Live BTC & ETH ETF market snapshot`,
-    `*/subscribe* — Auto-receive alerts from the dashboard`,
-    `*/unsubscribe* — Stop receiving alerts`,
-    `*/help* — Show this menu`,
+    ``,
+    `*Charts:*`,
+    `*/ch* — BTC/USDT 1m candlestick`,
+    `*/chb* — BTC perp 1m chart`,
+    `*/che* — ETH perp 1m chart`,
+    `*/tv* btc|eth — 1h chart (default BTC)`,
+    ``,
+    `*Market Data:*`,
+    `*/gas* — Ethereum gas prices (with Refresh)`,
+    `*/subscribe* — Get auto-alerts from the dashboard`,
+    `*/unsubscribe* — Stop alerts`,
     ``,
     `[🌐 Web Dashboard](${DASHBOARD_URL})`,
   ].join('\n'));
@@ -442,13 +625,40 @@ export default async function handler(req: Request) {
   try { update = await req.json(); }
   catch { return new Response('Bad request', { status: 400 }); }
 
+  // ── Handle inline keyboard callbacks (e.g. gas Refresh button) ─────────────
+  const cbQuery = update?.callback_query;
+  if (cbQuery) {
+    const cbChatId = cbQuery.message?.chat?.id;
+    const cbMsgId  = cbQuery.message?.message_id;
+    const cbData   = cbQuery.data ?? '';
+
+    try {
+      if (cbData === 'gas_refresh') {
+        await answerCallback(botToken, cbQuery.id, 'Refreshing gas prices...');
+        const gas = await fetchGasPrice();
+        if (gas && cbChatId && cbMsgId) {
+          await editMessage(botToken, cbChatId, cbMsgId, formatGasMessage(gas), GAS_REFRESH_KEYBOARD);
+        } else {
+          await answerCallback(botToken, cbQuery.id, '❌ Gas API unavailable');
+        }
+      }
+    } catch (err: any) {
+      console.error('[telegram] callback error:', err);
+    }
+    return new Response('OK', { status: 200 });
+  }
+
   const message = update?.message;
   if (!message) return new Response('OK', { status: 200 }); // ignore non-message updates
 
   const chatId:    number = message.chat?.id;
   const text:      string = message.text ?? '';
   const firstName: string = message.from?.first_name ?? 'Trader';
-  const command:   string = text.split(' ')[0].split('@')[0].toLowerCase();
+
+  // Parse command and optional argument (e.g. "/tv btc" → command="/tv", arg="btc")
+  const parts:   string[] = text.trim().split(/\s+/);
+  const command: string   = (parts[0] ?? '').split('@')[0].toLowerCase();
+  const arg:     string   = (parts[1] ?? '').toLowerCase();
 
   try {
     switch (command) {
@@ -480,6 +690,34 @@ export default async function handler(req: Request) {
       case '/eth':
         await handleSignal(botToken, chatId, 'ETH', baseUrl);
         break;
+
+      // ── Gas prices ─────────────────────────────────────────────────────
+      case '/gas':
+        await handleGas(botToken, chatId);
+        break;
+
+      // ── Charts ─────────────────────────────────────────────────────────
+      case '/ch':
+        // BTC/USDT 1m (default)
+        await handleChart(botToken, chatId, 'btc', '1m', baseUrl);
+        break;
+
+      case '/chb':
+        // BTC perp 1m
+        await handleChart(botToken, chatId, 'btcp', '1m', baseUrl);
+        break;
+
+      case '/che':
+        // ETH perp 1m
+        await handleChart(botToken, chatId, 'ethp', '1m', baseUrl);
+        break;
+
+      case '/tv': {
+        // /tv [btc|eth] — 1h TradingView-style chart
+        const tvAsset = arg === 'eth' ? 'eth' : 'btc';
+        await handleChart(botToken, chatId, tvAsset, '1h', baseUrl);
+        break;
+      }
 
       default:
         if (text.startsWith('/')) {
