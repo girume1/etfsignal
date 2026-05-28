@@ -11,12 +11,14 @@
 // ─── Exchange chart URLs ──────────────────────────────────────────────────────
 // Update these when you have the exact chart page URLs from each exchange.
 
+// Note: Nado.xyz and GRVT block data-center IPs (screenshotone server IPs).
+// OKX and Bitget are globally accessible without IP restrictions.
 const EXCHANGE_URLS: Record<string, string> = {
-  ch:     'https://grvt.io/exchange/perpetual/BTC-USDT',   // /ch  — BTC perp (GRVT)
-  chb:    'https://grvt.io/exchange/perpetual/BTC-USDT',   // /chb — BTC perp (GRVT)
-  che:    'https://app.nado.xyz/perpetuals?market=ETH',    // /che — ETH perp (Nado)
-  tv_btc: 'https://app.nado.xyz/perpetuals?market=BTC',   // /tv btc — BTC (Nado)
-  tv_eth: 'https://app.nado.xyz/perpetuals?market=ETH',   // /tv eth — ETH (Nado)
+  ch:     'https://www.okx.com/trade-swap/btc-usdt-swap',   // /ch  — BTC perp (OKX)
+  chb:    'https://www.okx.com/trade-swap/btc-usdt-swap',   // /chb — BTC perp (OKX)
+  che:    'https://www.okx.com/trade-swap/eth-usdt-swap',   // /che — ETH perp (OKX)
+  tv_btc: 'https://www.bitget.com/futures/BTCUSDT',         // /tv btc — BTC (Bitget)
+  tv_eth: 'https://www.bitget.com/futures/ETHUSDT',         // /tv eth — ETH (Bitget)
 };
 
 // ─── Screenshot via screenshotone.com ─────────────────────────────────────────
