@@ -1,4 +1,3 @@
-import path from 'node:path'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
@@ -10,9 +9,6 @@ export default defineConfig({
   resolve: {
     alias: {
       process: 'process/browser',
-      ...(process.env.NODE_ENV === 'production'
-        ? { './mockData': path.resolve(__dirname, 'src/services/mockData.stub.ts') }
-        : {}),
     },
   },
   server: {
