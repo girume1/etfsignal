@@ -37,35 +37,39 @@ export default async function handler(req: any, res: any) {
       const data = body.data;
       if (!data) continue;
 
-      // ── Format 1: array at data.balances / data.assets / data.list ──────
-      const list: any[] = data.balances ?? data.assets ?? data.list ?? [];
-      if (Array.isArray(list) && list.length > 0) {
-        const balances: Record<string, string> = {};
-        for (const b of list) {
-          const raw = (b.asset ?? b.currency ?? b.coin ?? b.symbol ?? '') as string;
+      const balances: Record<string, string> = {};
+
+      // ── Format 1: GET /balances → data.balances[{ coin, total, locked }] ─
+      // SpotAccountBalances schema: coin (string), total (DecimalString), locked (DecimalString)
+      if (Array.isArray(data.balances) && data.balances.length > 0) {
+        for (const b of data.balances) {
+          const raw = (b.coin ?? b.asset ?? b.currency ?? '') as string;
           const asset = raw.startsWith('v') ? raw.slice(1) : raw;
           if (!asset) continue;
-          balances[asset] = String(b.available ?? b.free ?? b.avail ?? b.balance ?? '0');
-        }
-        if (Object.keys(balances).length > 0) {
-          console.log('[sodex-balance] parsed (list)', address, balances);
-          return res.json({ ok: true, balances });
+          const total  = parseFloat(b.total  ?? b.available ?? '0');
+          const locked = parseFloat(b.locked ?? '0');
+          const avail  = Math.max(0, total - locked);
+          balances[asset] = avail.toString();
         }
       }
 
-      // ── Format 2: flat key-value object directly in data ─────────────────
-      if (typeof data === 'object' && !Array.isArray(data)) {
-        const balances: Record<string, string> = {};
-        for (const [k, v] of Object.entries(data)) {
-          if (typeof v === 'string' || typeof v === 'number') {
-            const asset = k.startsWith('v') ? k.slice(1) : k;
-            balances[asset] = String(v);
-          }
+      // ── Format 2: GET /state → data.B[{ a, t, l }] ───────────────────────
+      // WsSpotState schema: B = WsSpotBalance[], a = asset, t = total, l = locked
+      if (Object.keys(balances).length === 0 && Array.isArray(data.B) && data.B.length > 0) {
+        for (const b of data.B) {
+          const raw = (b.a ?? '') as string;
+          const asset = raw.startsWith('v') ? raw.slice(1) : raw;
+          if (!asset) continue;
+          const total  = parseFloat(b.t ?? '0');
+          const locked = parseFloat(b.l ?? '0');
+          const avail  = Math.max(0, total - locked);
+          balances[asset] = avail.toString();
         }
-        if (Object.keys(balances).length > 0) {
-          console.log('[sodex-balance] parsed (flat)', address, balances);
-          return res.json({ ok: true, balances });
-        }
+      }
+
+      if (Object.keys(balances).length > 0) {
+        console.log('[sodex-balance] parsed', address, balances);
+        return res.json({ ok: true, balances });
       }
     } catch (err: any) {
       attempts.push({ path, error: err.message });
