@@ -146,7 +146,10 @@ export function SignalHistory({ signals, loading }: SignalHistoryProps) {
               <ReferenceLine y={0} stroke="rgba(255,255,255,0.1)" strokeDasharray="3 3" />
               <Tooltip
                 contentStyle={{ background: '#0F172A', border: '1px solid #1E293B', borderRadius: 8, fontSize: 11 }}
-                formatter={(v: number) => [`${v >= 0 ? '+' : ''}${v.toFixed(2)}%`, 'Cumulative P&L']}
+                formatter={(v) => {
+                  const n = typeof v === 'number' ? v : 0;
+                  return [`${n >= 0 ? '+' : ''}${n.toFixed(2)}%`, 'Cumulative P&L'];
+                }}
                 labelFormatter={() => ''}
               />
               <Line
