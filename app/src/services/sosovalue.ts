@@ -121,6 +121,20 @@ export async function fetchAlerts(): Promise<[]> {
 // Signal history is persisted in localStorage by DashboardContext (task 7).
 
 export async function fetchSignalHistory(): Promise<HistoricalSignal[]> {
+  // Try Redis-backed API first (persistent, cross-device)
+  try {
+    const res = await fetch('/api/signal-archive');
+    if (res.ok) {
+      const data = await res.json() as HistoricalSignal[];
+      if (Array.isArray(data) && data.length > 0) {
+        // Keep localStorage in sync as a local cache
+        localStorage.setItem('etfsignal:history', JSON.stringify(data.slice(0, 20)));
+        return data;
+      }
+    }
+  } catch { /* fall through to localStorage */ }
+
+  // Fallback: localStorage (works without Upstash, or offline)
   try {
     const raw = localStorage.getItem('etfsignal:history');
     return raw ? (JSON.parse(raw) as HistoricalSignal[]) : [];

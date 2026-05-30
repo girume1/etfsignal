@@ -225,14 +225,21 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
 
   // ── Signal persistence ────────────────────────────────────────────────────
   const persistSignal = useCallback((sig: MarketSignal, asset: 'BTC' | 'ETH') => {
+    const livePrice = asset === 'BTC'
+      ? (liveBtcPx ?? latestBtcPx ?? undefined)
+      : (liveEthPx ?? latestEthPx ?? undefined);
+
     const entry: HistoricalSignal = {
-      id: `sig-${Date.now()}`,
+      id:         `sig-${Date.now()}`,
       asset,
-      direction: sig.direction,
+      direction:  sig.direction,
       confidence: sig.confidence,
-      headline: sig.headline,
-      timestamp: Date.now(),
+      headline:   sig.headline,
+      timestamp:  Date.now(),
+      entryPrice: livePrice,
     };
+
+    // 1. localStorage (always, instant)
     const existing: HistoricalSignal[] = JSON.parse(
       localStorage.getItem('etfsignal:history') ?? '[]'
     );
@@ -240,7 +247,58 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
       'etfsignal:history',
       JSON.stringify([entry, ...existing].slice(0, 20))
     );
-  }, []);
+
+    // 2. Redis via API (fire-and-forget, survives browser wipe)
+    fetch('/api/signal-archive', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(entry),
+    }).catch(() => {});
+  }, [liveBtcPx, latestBtcPx, liveEthPx, latestEthPx]);
+
+  // ── Signal performance evaluation ────────────────────────────────────────
+  // Runs whenever history or live prices update.
+  // Signals older than 24h with a stored entryPrice get a real pnlPct.
+  useEffect(() => {
+    if (!history.length) return;
+    const btcPx = liveBtcPx ?? latestBtcPx;
+    const ethPx = liveEthPx ?? latestEthPx;
+    if (!btcPx && !ethPx) return;
+
+    const TWENTY_FOUR_H = 24 * 60 * 60 * 1000;
+    const now = Date.now();
+    let changed = false;
+
+    const evaluated = history.map(sig => {
+      // Skip: already evaluated, no entry price, or less than 24h old
+      if (sig.pnlReal || !sig.entryPrice || (now - sig.timestamp) < TWENTY_FOUR_H) return sig;
+
+      const currentPx = sig.asset === 'BTC' ? btcPx : ethPx;
+      if (!currentPx) return sig;
+
+      const delta = (currentPx - sig.entryPrice) / sig.entryPrice * 100;
+      const pnlPct = sig.direction === 'BULLISH' ?  delta
+                   : sig.direction === 'BEARISH' ? -delta
+                   : 0;
+
+      changed = true;
+      const updated = { ...sig, pnlPct: parseFloat(pnlPct.toFixed(2)), pnlReal: true };
+
+      // Persist evaluation to Redis in background
+      fetch('/api/signal-archive', {
+        method:  'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ id: sig.id, pnlPct: updated.pnlPct, pnlReal: true }),
+      }).catch(() => {});
+
+      return updated;
+    });
+
+    if (changed) {
+      setHistory(evaluated);
+      localStorage.setItem('etfsignal:history', JSON.stringify(evaluated));
+    }
+  }, [history, liveBtcPx, latestBtcPx, liveEthPx, latestEthPx]);
 
   // ── AI signal ────────────────────────────────────────────────────────────
   const handleAnalyze = useCallback(async () => {

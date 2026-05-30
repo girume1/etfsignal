@@ -142,7 +142,9 @@ export interface HistoricalSignal {
   confidence: number;
   headline: string;
   timestamp: number;
-  pnlPct?: number; // optional mock back-test
+  entryPrice?: number; // live price at signal generation time
+  pnlPct?: number;     // real evaluated outcome (after 24h) or mock
+  pnlReal?: boolean;   // true = evaluated from real price, false/absent = mock
 }
 
 export interface SentimentScore {
