@@ -5,10 +5,10 @@ const TESTNET_GW  = 'https://testnet-gw.sodex.dev/api/v1/spot';
 const CHAIN_ID     = 138565;         // SoDEX testnet (ValueChain)
 const CHAIN_ID_HEX = '0x21D45';     // hex for wallet_switchEthereumChain
 
-// SoDEX testnet wraps all assets with a 'v' prefix
-const SYMBOL_MAP: Record<string, string> = {
-  'BTC-USDC': 'vBTC_vUSDC',
-  'ETH-USDC': 'vETH_vUSDC',
+// SoDEX testnet symbol IDs (from GET /markets/symbols)
+const SYMBOL_ID_MAP: Record<string, number> = {
+  'BTC-USDC': 1,   // vBTC_vUSDC
+  'ETH-USDC': 2,   // vETH_vUSDC
 };
 
 // ─── EIP-712 Domain ───────────────────────────────────────────────────────────
@@ -141,32 +141,31 @@ export async function placeSpotOrder(
     const address  = await signer.getAddress();
     const nonce    = Date.now();
 
-    // 2. Resolve testnet symbol (vBTC_vUSDC / vETH_vUSDC)
-    const sodexSym = SYMBOL_MAP[order.symbol];
-    if (!sodexSym) throw new Error(`Unknown symbol: ${order.symbol}`);
+    // 2. Resolve testnet symbolID (numeric, per SoDEX spot schema)
+    const symbolID = SYMBOL_ID_MAP[order.symbol];
+    if (!symbolID) throw new Error(`Unknown symbol: ${order.symbol}`);
 
     // 3. Fetch real account ID for this wallet
     const aid = await fetchAccountId(address);
 
-    // 4. Build the batch-order request body (PascalCase field names per SoDEX API)
+    // 4. Build the batch-order request body (camelCase per SoDEX spot API schema)
+    // Spot orders: symbolID + clOrdID + side + type + timeInForce + quantity/funds
+    // No Modifier / PositionSide / ReduceOnly — those are futures-only fields
     const orderItem: Record<string, unknown> = {
-      Symbol:       sodexSym,
-      ClOrdID:      `etfsignal-${nonce}`,
-      Modifier:     1,
-      Side:         order.side === 'BUY' ? 1 : 2,
-      Type:         order.type === 'MARKET' ? 2 : 1,
-      TimeInForce:  3,                        // IOC — required for market orders
-      Quantity:     String(order.quantity),   // DecimalString
-      ReduceOnly:   false,
-      PositionSide: 1,
+      symbolID,
+      clOrdID:     `etfsignal-${nonce}`,
+      side:        order.side === 'BUY' ? 1 : 2,   // 1=BUY, 2=SELL
+      type:        order.type === 'MARKET' ? 2 : 1, // 1=LIMIT, 2=MARKET
+      timeInForce: order.type === 'MARKET' ? 3 : 1, // IOC for market, GTC for limit
+      quantity:    String(order.quantity),           // DecimalString
     };
     if (order.type === 'LIMIT' && order.price) {
-      orderItem.Price = String(order.price);  // DecimalString
+      orderItem.price = String(order.price);         // DecimalString, limit orders only
     }
 
     const requestBody = {
-      AccountID: aid,
-      Orders:    [orderItem],
+      accountID: aid,
+      orders:    [orderItem],
     };
 
     // 5. EIP-712 sign the request body
