@@ -17,6 +17,7 @@ const SUBSCRIBERS_KEY = 'telegram:subscribers';
 const DASHBOARD_URL   = 'https://etfsignal.vercel.app';
 
 interface SignalNotification {
+  type?:      'signal' | 'trade';  // defaults to 'signal'
   direction:  'LONG' | 'SHORT' | 'NEUTRAL';
   confidence: number;
   entryPrice: number;
@@ -26,6 +27,16 @@ interface SignalNotification {
   thesis:     string;
   topDriver?: string;
   asset?:     string;
+  // trade-specific fields
+  orderId?:   string;
+  pair?:      string;
+  side?:      'LONG' | 'SHORT';
+  size?:      string;
+  currency?:  string;
+  price?:     string;
+  orderType?: string;
+  signal?:    string;
+  timestamp?: number;
 }
 
 // ─── Upstash Redis helper ────────────────────────────────────────────────────
@@ -103,6 +114,35 @@ function formatSignalMessage(sig: SignalNotification): string {
     .join('\n');
 }
 
+// ─── Trade message formatting ────────────────────────────────────────────────
+
+function formatTradeMessage(body: SignalNotification): string {
+  const isLong  = body.side === 'LONG';
+  const emoji   = isLong ? '🟢' : '🔴';
+  const asset   = (body.asset ?? 'BTC').toUpperCase();
+  const orderId = body.orderId ?? '—';
+  const time    = body.timestamp
+    ? new Date(body.timestamp).toUTCString().replace('GMT', 'UTC')
+    : new Date().toUTCString().replace('GMT', 'UTC');
+
+  return [
+    `✅ *SoDEX Trade Executed*`,
+    ``,
+    `${emoji} *${isLong ? 'LONG' : 'SHORT'} ${asset}* · ${body.orderType ?? 'MARKET'}`,
+    `Pair: \`${body.pair ?? `${asset}-USDC`}\``,
+    `Size: \`${body.size ?? '—'} ${body.currency ?? asset}${body.price ? ` @ $${body.price}` : ''}\``,
+    ``,
+    `🔖 Order ID: \`${orderId}\``,
+    `Status: Submitted ✓`,
+    body.signal ? `\n💡 Signal: _${body.signal}_` : '',
+    ``,
+    `_${time}_`,
+    `[View Dashboard →](${DASHBOARD_URL})`,
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+
 // ─── Handler ─────────────────────────────────────────────────────────────────
 
 export default async function handler(req: Request) {
@@ -131,7 +171,9 @@ export default async function handler(req: Request) {
     return json({ error: 'Invalid JSON body' }, 400);
   }
 
-  if (!body.direction || body.confidence == null || !body.entryPrice) {
+  // Validate: trade notifications need orderId; signal notifications need direction+confidence
+  const isTrade = body.type === 'trade';
+  if (!isTrade && (!body.direction || body.confidence == null || !body.entryPrice)) {
     return json({ error: 'Missing required signal fields' }, 400);
   }
 
@@ -141,7 +183,7 @@ export default async function handler(req: Request) {
     return json({ sent: 0, message: 'No subscribers' }, 200);
   }
 
-  const message = formatSignalMessage(body);
+  const message = isTrade ? formatTradeMessage(body) : formatSignalMessage(body);
   const results: { chatId: string; ok: boolean }[] = [];
 
   // Send to all subscribers concurrently

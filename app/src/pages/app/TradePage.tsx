@@ -1,5 +1,15 @@
 import { useDashboard } from '../../contexts/DashboardContext';
-import { ArrowLeftRight, Zap, TrendingUp, TrendingDown, Sparkles, Droplets } from 'lucide-react';
+import { ArrowLeftRight, Zap, TrendingUp, TrendingDown, Sparkles, Droplets, ClockIcon } from 'lucide-react';
+
+function timeAgo(ms: number): string {
+  const diff = Date.now() - ms;
+  const m = Math.floor(diff / 60000);
+  if (m < 1)  return 'just now';
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+}
 
 export default function TradePage() {
   const {
@@ -7,6 +17,7 @@ export default function TradePage() {
     signal, signalLoading,
     openTradeModal, handleAnalyze,
     liveBtcPx, liveEthPx, latestBtcPx, latestEthPx,
+    tradeHistory,
   } = useDashboard();
 
   const assets = [
@@ -241,6 +252,48 @@ export default function TradePage() {
           </div>
         ))}
       </div>
+
+      {/* Trade history */}
+      {tradeHistory.length > 0 && (
+        <div style={{ background: 'var(--brand-card)', border: '1px solid var(--brand-border)' }} className="rounded-xl overflow-hidden">
+          <div className="flex items-center gap-2 px-4 py-3 border-b border-white/5">
+            <ClockIcon size={13} className="text-slate-500" />
+            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Execution History</span>
+            <span className="ml-auto text-[10px] font-mono text-slate-600">{tradeHistory.length} trade{tradeHistory.length !== 1 ? 's' : ''}</span>
+          </div>
+          <div className="divide-y divide-white/[0.04]">
+            {tradeHistory.slice(0, 10).map(t => {
+              const isLong = t.side === 'BUY';
+              const sideColor = isLong ? '#34D399' : '#F87171';
+              return (
+                <div key={t.id} className="flex items-center gap-3 px-4 py-3">
+                  {/* Side pill */}
+                  <span
+                    className="text-[10px] font-bold px-2 py-0.5 rounded-md shrink-0 font-mono"
+                    style={{ background: isLong ? 'rgba(52,211,153,0.12)' : 'rgba(248,113,113,0.12)', color: sideColor }}
+                  >
+                    {isLong ? 'LONG' : 'SHORT'}
+                  </span>
+
+                  {/* Pair + size */}
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-semibold text-slate-200 font-mono">{t.pair}</div>
+                    <div className="text-[10px] text-slate-500 font-mono truncate">
+                      {t.size} {t.currency}{t.price ? ` @ $${t.price}` : ''} · {t.type}
+                    </div>
+                  </div>
+
+                  {/* Status + time */}
+                  <div className="text-right shrink-0">
+                    <div className="text-[10px] font-semibold text-emerald-400">Submitted</div>
+                    <div className="text-[10px] text-slate-600 font-mono">{timeAgo(t.timestamp)}</div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

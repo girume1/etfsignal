@@ -2,7 +2,7 @@
 // Calls our own /api/telegram-notify edge function (which holds the bot token securely).
 // This is fire-and-forget — never blocks the UI.
 
-import type { MarketSignal } from '../types';
+import type { MarketSignal, TradeRecord } from '../types';
 
 /**
  * Notify all configured Telegram subscribers about a newly generated signal.
@@ -42,5 +42,33 @@ export async function notifyTelegramSubscribers(
     });
   } catch {
     // Telegram notification failure must never surface to the user
+  }
+}
+
+/**
+ * Notify Telegram subscribers when a trade is executed on SoDEX.
+ * Fire-and-forget — never blocks the UI.
+ */
+export async function notifyTelegramTrade(record: TradeRecord): Promise<void> {
+  try {
+    await fetch('/api/telegram-notify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type:      'trade',
+        orderId:   record.orderId,
+        pair:      record.pair,
+        side:      record.side === 'BUY' ? 'LONG' : 'SHORT',
+        size:      record.size,
+        currency:  record.currency,
+        price:     record.price,
+        orderType: record.type,
+        asset:     record.asset,
+        signal:    record.signal,
+        timestamp: record.timestamp,
+      }),
+    });
+  } catch {
+    // Never surface to the user
   }
 }

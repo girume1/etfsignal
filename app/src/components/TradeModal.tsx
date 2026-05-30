@@ -13,7 +13,7 @@ interface TradeModalProps {
   symbol: string;
   walletAddress?: string | null;
   currentPrice?: number;
-  onConfirm: (order: TradeOrder) => Promise<void>;
+  onConfirm: (order: TradeOrder) => Promise<{ orderId: string }>;
   onClose: () => void;
 }
 
@@ -38,7 +38,7 @@ export function TradeModal({
   const [dropOpen,     setDropOpen]     = useState(false);
   const [acknowledged, setAcknowledged] = useState(false);
   const [submitting,   setSubmitting]   = useState(false);
-  const [result,       setResult]       = useState<{ success: boolean; message: string } | null>(null);
+  const [result,       setResult]       = useState<{ success: boolean; message: string; orderId?: string } | null>(null);
 
   // ── Balance state ────────────────────────────────────────────────────────
   const [balances,   setBalances]   = useState<Record<string, string>>({});
@@ -93,14 +93,14 @@ export function TradeModal({
     if (orderType === 'LIMIT' && !limitPrice) return;
     setSubmitting(true);
     try {
-      await onConfirm({
+      const { orderId } = await onConfirm({
         symbol,
         side,
         type: orderType,
         quantity: amount,
         ...(orderType === 'LIMIT' ? { price: limitPrice } : {}),
       });
-      setResult({ success: true, message: '' });
+      setResult({ success: true, message: '', orderId });
     } catch (err: any) {
       setResult({ success: false, message: err.message || 'Order failed' });
     } finally {
@@ -482,19 +482,35 @@ export function TradeModal({
             </p>
             {result.success ? (
               <>
-                <p className="text-sm text-slate-400 mb-1">
+                <p className="text-sm text-slate-400 mb-4">
                   Your {isLong ? 'long' : 'short'} {orderType === 'LIMIT' ? 'limit' : 'market'} order was submitted to SoDEX Testnet.
                 </p>
-                <p className="text-xs text-slate-600 mb-4">
-                  {marketType === 'spot' ? 'Spot' : 'Futures'} · {amount} {currency}
-                  {orderType === 'LIMIT' ? ` @ $${limitPrice}` : ''} · {sodexSymbol}
-                </p>
+
+                {/* Order proof card */}
+                <div
+                  style={{ background: 'rgba(0,255,167,0.06)', border: '1px solid rgba(0,255,167,0.2)' }}
+                  className="rounded-xl p-4 mb-4 text-left space-y-2"
+                >
+                  {[
+                    { label: 'Order ID',  value: result.orderId ?? '—', mono: true },
+                    { label: 'Status',    value: 'Submitted ✓' },
+                    { label: 'Pair',      value: symbol, mono: true },
+                    { label: 'Side',      value: isLong ? 'LONG' : 'SHORT' },
+                    { label: 'Size',      value: `${amount} ${currency}${orderType === 'LIMIT' ? ` @ $${limitPrice}` : ''}`, mono: true },
+                  ].map(({ label, value, mono }) => (
+                    <div key={label} className="flex items-center justify-between gap-4">
+                      <span className="text-xs text-slate-500 shrink-0">{label}</span>
+                      <span className={`text-xs text-slate-200 text-right truncate ${mono ? 'font-mono' : 'font-medium'}`}>{value}</span>
+                    </div>
+                  ))}
+                </div>
+
                 <a
                   href={`https://testnet.sodex.com/trade/${marketType}/${sodexSymbol}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   style={{ background: 'linear-gradient(135deg,#00FFA7,#A78BFA)', color: '#06080B' }}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-white font-semibold text-sm hover:opacity-90 transition-opacity"
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm hover:opacity-90 transition-opacity"
                 >
                   View on SoDEX
                   <ExternalLink size={14} className="shrink-0" />

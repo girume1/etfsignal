@@ -14,11 +14,12 @@ import type { HistoricalInflow, PricePoint } from '../types';
 import { computeSentiment } from '../services/sentiment';
 import { analyzeMarket } from '../services/ai';
 import { placeSpotOrder } from '../services/sodex';
-import { notifyTelegramSubscribers } from '../services/telegram';
+import { notifyTelegramSubscribers, notifyTelegramTrade } from '../services/telegram';
+import { saveTrade, getTradeHistory } from '../services/tradeHistory';
 import { useLivePrices } from '../hooks/useLivePrices';
 import { useConnectionStatus } from './ConnectionStatusContext';
 import type {
-  EtfData, NewsItem, MarketSignal, Alert, HistoricalSignal,
+  EtfData, NewsItem, MarketSignal, Alert, HistoricalSignal, TradeRecord,
   ActiveTab, WalletState, TradeOrder, OrderSide, SentimentScore,
 } from '../types';
 
@@ -66,8 +67,10 @@ interface DashboardContextValue {
   tradeModal: { side: OrderSide } | null;
   openTradeModal: (side: OrderSide) => void;
   closeTradeModal: () => void;
-  confirmTrade: (order: TradeOrder) => Promise<void>;
+  confirmTrade: (order: TradeOrder) => Promise<{ orderId: string }>;
   symbol: string;
+  tradeHistory: TradeRecord[];
+  refreshTradeHistory: () => void;
 }
 
 const DashboardContext = createContext<DashboardContextValue | null>(null);
@@ -98,9 +101,10 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
   const [signalLoading, setSignalLoading] = useState(false);
   const [signalError,   setSignalError]   = useState<string | null>(null);
 
-  const [wallet,     setWallet]     = useState<WalletState>({ connected: false, address: null, network: null });
-  const [signer,     setSigner]     = useState<JsonRpcSigner | null>(null);
-  const [tradeModal, setTradeModal] = useState<{ side: OrderSide } | null>(null);
+  const [wallet,       setWallet]       = useState<WalletState>({ connected: false, address: null, network: null });
+  const [signer,       setSigner]       = useState<JsonRpcSigner | null>(null);
+  const [tradeModal,   setTradeModal]   = useState<{ side: OrderSide } | null>(null);
+  const [tradeHistory, setTradeHistory] = useState<TradeRecord[]>(() => getTradeHistory());
 
   // ── Dynamic wallet ───────────────────────────────────────────────────────
   const { primaryWallet, handleLogOut, setShowAuthFlow } = useDynamicContext();
@@ -267,11 +271,37 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
   const openTradeModal  = useCallback((side: OrderSide) => setTradeModal({ side }), []);
   const closeTradeModal = useCallback(() => setTradeModal(null), []);
 
-  const confirmTrade = useCallback(async (order: TradeOrder) => {
+  const refreshTradeHistory = useCallback(() => {
+    setTradeHistory(getTradeHistory());
+  }, []);
+
+  const confirmTrade = useCallback(async (order: TradeOrder): Promise<{ orderId: string }> => {
     if (!signer) throw new Error('Wallet not connected');
     const r = await placeSpotOrder(signer, 1, order);
     if (!r.success) throw new Error(r.error);
-  }, [signer]);
+
+    const orderId = `etfsignal-${Date.now()}`;
+    const record: TradeRecord = {
+      id:        orderId,
+      orderId,
+      pair:      order.symbol,
+      side:      order.side,
+      type:      order.type,
+      size:      order.quantity,
+      currency:  order.symbol.split('-')[0],
+      price:     order.price,
+      timestamp: Date.now(),
+      status:    'submitted',
+      asset:     order.symbol.startsWith('BTC') ? 'BTC' : 'ETH',
+      signal:    signal?.headline,
+    };
+
+    saveTrade(record);
+    setTradeHistory(getTradeHistory());
+    notifyTelegramTrade(record).catch(() => {});
+
+    return { orderId };
+  }, [signer, signal]);
 
   // SoDEX testnet uses USDC as the quote currency (get from https://testnet.sodex.com/faucet)
   const symbol = activeTab === 'btc' ? 'BTC-USDC' : 'ETH-USDC';
@@ -289,6 +319,7 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     handleConnectWallet, handleDisconnectWallet,
     tradeModal, openTradeModal, closeTradeModal, confirmTrade,
     symbol,
+    tradeHistory, refreshTradeHistory,
   };
 
   return (

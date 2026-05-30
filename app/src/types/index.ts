@@ -100,6 +100,21 @@ export interface TradeConfirmation {
   acknowledged: boolean;
 }
 
+export interface TradeRecord {
+  id:        string;      // etfsignal-{timestamp}
+  orderId:   string;      // same as id (or exchange-assigned if available)
+  pair:      string;      // BTC-USDC
+  side:      OrderSide;   // BUY | SELL
+  type:      OrderType;   // MARKET | LIMIT
+  size:      string;      // "0.01"
+  currency:  string;      // BTC | USDC
+  price?:    string;      // limit price (LIMIT orders only)
+  timestamp: number;      // ms epoch
+  status:    'submitted' | 'filled' | 'failed';
+  asset:     'BTC' | 'ETH';
+  signal?:   string;      // signal headline for context
+}
+
 export interface WalletState {
   connected: boolean;
   address: string | null;
