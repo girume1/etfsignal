@@ -218,7 +218,7 @@ export default function TradePage() {
 
       {/* Faucet banner */}
       <a
-        href="https://testnet.sodex.com/faucet"
+        href="https://testnet.sodex.com"
         target="_blank"
         rel="noopener noreferrer"
         className="flex items-center justify-between rounded-xl px-4 py-3 transition-all hover:opacity-90 group"
@@ -228,7 +228,7 @@ export default function TradePage() {
           <Droplets size={15} style={{ color: '#00FFA7' }} className="shrink-0" />
           <div>
             <div className="text-xs font-semibold text-slate-200">Need testnet USDC?</div>
-            <div className="text-[11px] text-slate-500">Get free funds from the SoDEX faucet</div>
+            <div className="text-[11px] text-slate-500">Visit testnet.sodex.com → Faucet</div>
           </div>
         </div>
         <span className="text-xs font-semibold px-3 py-1 rounded-lg" style={{ background: 'rgba(0,255,167,0.12)', color: '#00FFA7' }}>

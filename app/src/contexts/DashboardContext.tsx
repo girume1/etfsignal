@@ -361,7 +361,7 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     return { orderId };
   }, [signer, signal]);
 
-  // SoDEX testnet uses USDC as the quote currency (get from https://testnet.sodex.com/faucet)
+  // SoDEX testnet uses USDC as the quote currency (get from https://testnet.sodex.com → Faucet)
   const symbol = activeTab === 'btc' ? 'BTC-USDC' : 'ETH-USDC';
 
   const value: DashboardContextValue = {
