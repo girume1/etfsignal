@@ -51,21 +51,35 @@ function CustomTooltip({ active, payload }: CustomTooltipProps) {
  * Powered by Recharts — interactive tooltips, smooth animations.
  */
 export function MarketShareDonut({ funds, asset }: MarketShareDonutProps) {
+  // Safe numeric helper — guards against null, undefined, NaN, Infinity
+  const safe = (v: number | null | undefined): number =>
+    typeof v === 'number' && isFinite(v) ? v : 0;
+
   const sorted = funds
-    .filter(f => (f.netAssets.value ?? 0) > 0)
-    .sort((a, b) => (b.netAssets.value! - a.netAssets.value!));
+    .filter(f => safe(f.netAssets.value) > 0 || safe(f.netAssetsPercentage.value) > 0)
+    .sort((a, b) => safe(b.netAssets.value) - safe(a.netAssets.value));
 
   const top    = sorted.slice(0, 6);
   const rest   = sorted.slice(6);
-  const restTotal = rest.reduce((s, f) => s + (f.netAssets.value || 0), 0);
-  const total  = sorted.reduce((s, f) => s + (f.netAssets.value || 0), 0) || 1;
+
+  // Total from netAssets values (fallback to 1 to avoid division by zero)
+  const total  = Math.max(sorted.reduce((s, f) => s + safe(f.netAssets.value), 0), 1);
+  const restTotal = rest.reduce((s, f) => s + safe(f.netAssets.value), 0);
+
+  // Compute % — prefer netAssetsPercentage from API if available, else derive from netAssets
+  const getPct = (f: EtfFund): number => {
+    const apiPct = safe(f.netAssetsPercentage.value);
+    if (apiPct > 0) return apiPct * 100; // API returns fraction (0–1)
+    const v = safe(f.netAssets.value);
+    return (v / total) * 100;
+  };
 
   const slices: SliceItem[] = [
     ...top.map((f, i) => ({
       label: f.ticker,
-      value: f.netAssets.value || 0,
+      value: safe(f.netAssets.value),
       color: PALETTE[i],
-      pct:   ((f.netAssets.value || 0) / total) * 100,
+      pct:   getPct(f),
     })),
     ...(rest.length > 0 ? [{
       label: `+${rest.length} others`,

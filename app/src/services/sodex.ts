@@ -111,18 +111,30 @@ export async function signOrder(
   const payloadHash = ethers.keccak256(ethers.toUtf8Bytes(payloadJson));
 
   const message = { payloadHash, nonce };
-  const rawSig = await (signer as any).signTypedData(
-    domain,
-    { ExchangeAction: types.ExchangeAction },
-    message,
-  );
+  let rawSig: string;
+  try {
+    rawSig = await (signer as any).signTypedData(
+      domain,
+      { ExchangeAction: types.ExchangeAction },
+      message,
+    );
+  } catch (err: any) {
+    // Viem validates chainId on signTypedData — wallet must be on SoDEX testnet
+    const msg: string = err?.message ?? String(err);
+    if (msg.includes('chainId') || msg.includes('chain')) {
+      throw new Error(
+        `Wrong network. Switch your wallet to SoDEX Testnet (chain 138565).\n\n` +
+        `Visit testnet.sodex.com and connect your wallet — it will add the network automatically.`
+      );
+    }
+    throw err;
+  }
 
   // Normalize v: MetaMask/wallets return v=27/28 (legacy), SoDEX expects v=0/1
-  // ethers.Signature.from() parses the raw sig and exposes normalized fields
   const parsed = ethers.Signature.from(rawSig);
-  const r = parsed.r.slice(2);                                  // 32 bytes, no 0x
-  const s = parsed.s.slice(2);                                  // 32 bytes, no 0x
-  const v = (parsed.v - 27).toString(16).padStart(2, '0');     // 0x1b→0x00, 0x1c→0x01
+  const r = parsed.r.slice(2);                              // 32 bytes, no 0x
+  const s = parsed.s.slice(2);                              // 32 bytes, no 0x
+  const v = (parsed.v - 27).toString(16).padStart(2, '0'); // 0x1b→0x00, 0x1c→0x01
 
   // SoDEX format: 0x01 (type prefix) + r + s + normalized_v = 66 bytes total
   return '0x01' + r + s + v;
@@ -182,11 +194,13 @@ export async function placeSpotOrder(
     const typedSig = await signOrder(signer, signingEnvelope, nonce);
 
     // 6. Submit to SoDEX batch orders endpoint
-    // No X-API-Key header → SoDEX authenticates via master wallet recovered from EIP-712 sig
+    // X-API-Key = wallet address (lowercase) identifies the signer account.
+    // X-API-Sign = EIP-712 signature proves ownership.
     const response = await fetch(`${TESTNET_GW}/trade/orders/batch`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'X-API-Key':   address.toLowerCase(),
         'X-API-Sign':  typedSig,
         'X-API-Nonce': String(nonce),
       },
