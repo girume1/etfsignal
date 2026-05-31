@@ -43,13 +43,16 @@ export default async function handler(req: any, res: any) {
       ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
     });
 
+    const data = await upstream.json().catch(() => ({ error: upstream.statusText }));
+
     if (!upstream.ok) {
-      return res.status(500).json({
-        error: `Upstream error: ${upstream.status} ${upstream.statusText}`,
+      // Pass through the real status + body so client can see the actual SoSoValue error
+      return res.status(upstream.status).json({
+        error: `SoSoValue ${upstream.status}`,
+        upstream: data,
       });
     }
 
-    const data = await upstream.json();
     return res.status(upstream.status).json(data);
   } catch (err: any) {
     return res.status(500).json({ error: err?.message ?? 'Fetch failed' });
