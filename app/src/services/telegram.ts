@@ -63,9 +63,10 @@ export async function notifyTelegramTrade(record: TradeRecord): Promise<void> {
         currency:  record.currency,
         price:     record.price,
         orderType: record.type,
-        asset:     record.asset,
-        signal:    record.signal,
-        timestamp: record.timestamp,
+        asset:         record.asset,
+        signal:        record.signal,
+        timestamp:     record.timestamp,
+        walletAddress: record.walletAddress,
       }),
     });
   } catch {

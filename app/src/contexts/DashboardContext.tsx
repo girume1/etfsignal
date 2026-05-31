@@ -348,10 +348,11 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
       size:      order.quantity,
       currency:  order.symbol.split('-')[0],
       price:     order.price,
-      timestamp: Date.now(),
-      status:    'submitted',
-      asset:     order.symbol.startsWith('BTC') ? 'BTC' : 'ETH',
-      signal:    signal?.headline,
+      timestamp:     Date.now(),
+      status:        'submitted',
+      asset:         order.symbol.startsWith('BTC') ? 'BTC' : 'ETH',
+      signal:        signal?.headline,
+      walletAddress: wallet.address ?? undefined,
     };
 
     saveTrade(record);

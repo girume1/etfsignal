@@ -477,6 +477,7 @@ async function handleStart(token: string, chatId: number, firstName: string) {
     `*Market Data:*`,
     `• /gas — Ethereum gas prices`,
     `• /subscribe — Auto signal alerts`,
+    `• /link — Link your wallet for trade alerts`,
     ``,
     `📊 *Data:* SoSoValue + Binance + Etherscan`,
     `🤖 *AI:* Claude AI`,
@@ -503,6 +504,8 @@ async function handleHelp(token: string, chatId: number) {
     `*/gas* — Ethereum gas prices (with Refresh)`,
     `*/subscribe* — Get auto-alerts from the dashboard`,
     `*/unsubscribe* — Stop alerts`,
+    `*/link* ETF\\-XXXXXX — Link wallet for personal trade alerts`,
+    `*/unlink* — Disconnect your wallet`,
     ``,
     `[🌐 Web Dashboard](${DASHBOARD_URL})`,
   ].join('\n'));
@@ -603,6 +606,80 @@ async function handleSubscribe(token: string, chatId: number) {
     kv ? `` : `\n⚠️ _Persistence not configured — contact admin to enable auto-alerts._`,
     `_Use /unsubscribe to stop alerts_`,
   ].filter(Boolean).join('\n'));
+}
+
+async function handleLink(token: string, chatId: number, rawCode: string) {
+  const code = rawCode.toUpperCase();
+  if (!code.startsWith('ETF-') || code.length !== 10) {
+    await sendMessage(token, chatId, [
+      `⚠️ *Invalid code format.*`,
+      ``,
+      `Usage: \`/link ETF-XXXXXX\``,
+      ``,
+      `Get your personal code from the dashboard:`,
+      `[${DASHBOARD_URL}/app](${DASHBOARD_URL}/app) → Trade → Link Telegram`,
+    ].join('\n'));
+    return;
+  }
+
+  const raw = await upstash('GET', `etfsignal:link:code:${code}`);
+  if (!raw) {
+    await sendMessage(token, chatId, [
+      `❌ *Code not found or expired.*`,
+      ``,
+      `Codes expire after 10 minutes. Please generate a new one from the dashboard.`,
+      `[Get a new code →](${DASHBOARD_URL}/app)`,
+    ].join('\n'));
+    return;
+  }
+
+  let data: { walletAddress: string; expiresAt: number };
+  try { data = JSON.parse(raw); } catch {
+    await sendMessage(token, chatId, '❌ *Invalid code.* Please generate a new one.');
+    return;
+  }
+
+  if (Date.now() > data.expiresAt) {
+    await upstash('DEL', `etfsignal:link:code:${code}`);
+    await sendMessage(token, chatId, '❌ *Code expired.* Please generate a new one from the dashboard.');
+    return;
+  }
+
+  const { walletAddress } = data;
+  const short = `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`;
+
+  await Promise.all([
+    upstash('SET', `etfsignal:link:wallet:${walletAddress.toLowerCase()}`, String(chatId)),
+    upstash('SET', `etfsignal:link:chat:${chatId}`, walletAddress.toLowerCase()),
+    upstash('DEL', `etfsignal:link:code:${code}`),
+  ]);
+
+  await sendMessage(token, chatId, [
+    `✅ *Wallet Linked!*`,
+    ``,
+    `Your wallet \`${short}\` is now connected to this Telegram account.`,
+    ``,
+    `You will now receive *personal alerts* when:`,
+    `• A trade executes on SoDEX from your wallet`,
+    `• Your order ID and status are confirmed`,
+    ``,
+    `_Use /unlink to disconnect your wallet_`,
+    `[Open Dashboard →](${DASHBOARD_URL}/app)`,
+  ].join('\n'));
+}
+
+async function handleUnlink(token: string, chatId: number) {
+  const walletAddress = await upstash('GET', `etfsignal:link:chat:${chatId}`);
+  if (!walletAddress) {
+    await sendMessage(token, chatId, '⚠️ *No wallet linked to this account.*\n\nUse /link to connect your wallet.');
+    return;
+  }
+  await Promise.all([
+    upstash('DEL', `etfsignal:link:wallet:${walletAddress}`),
+    upstash('DEL', `etfsignal:link:chat:${chatId}`),
+  ]);
+  const short = `${(walletAddress as string).slice(0, 6)}...${(walletAddress as string).slice(-4)}`;
+  await sendMessage(token, chatId, `🔗 *Wallet \`${short}\` unlinked.*\n\nYou will no longer receive personal trade alerts.\n\nUse /link to reconnect anytime.`);
 }
 
 async function handleUnsubscribe(token: string, chatId: number) {
@@ -719,6 +796,14 @@ export default async function handler(req: Request) {
 
       case '/unsubscribe':
         await handleUnsubscribe(botToken, chatId);
+        break;
+
+      case '/link':
+        await handleLink(botToken, chatId, arg || parts[1] || '');
+        break;
+
+      case '/unlink':
+        await handleUnlink(botToken, chatId);
         break;
 
       case '/signal':

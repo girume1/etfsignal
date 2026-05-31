@@ -111,8 +111,9 @@ export interface TradeRecord {
   price?:    string;      // limit price (LIMIT orders only)
   timestamp: number;      // ms epoch
   status:    'submitted' | 'filled' | 'failed';
-  asset:     'BTC' | 'ETH';
-  signal?:   string;      // signal headline for context
+  asset:          'BTC' | 'ETH';
+  signal?:        string;   // signal headline for context
+  walletAddress?: string;   // linked wallet — used for personal Telegram alert
 }
 
 export interface WalletState {

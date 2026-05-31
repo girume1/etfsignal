@@ -1,5 +1,6 @@
+import { useState, useCallback } from 'react';
 import { useDashboard } from '../../contexts/DashboardContext';
-import { ArrowLeftRight, Zap, TrendingUp, TrendingDown, Sparkles, Droplets, ClockIcon } from 'lucide-react';
+import { ArrowLeftRight, Zap, TrendingUp, TrendingDown, Sparkles, Droplets, ClockIcon, Send, Copy, Check } from 'lucide-react';
 
 function timeAgo(ms: number): string {
   const diff = Date.now() - ms;
@@ -9,6 +10,106 @@ function timeAgo(ms: number): string {
   const h = Math.floor(m / 60);
   if (h < 24) return `${h}h ago`;
   return `${Math.floor(h / 24)}d ago`;
+}
+
+function TelegramLinkCard({ walletAddress }: { walletAddress: string }) {
+  const [code,     setCode]     = useState<string | null>(null);
+  const [loading,  setLoading]  = useState(false);
+  const [copied,   setCopied]   = useState(false);
+  const [linked,   setLinked]   = useState<boolean | null>(null);
+
+  // Check link status on first render
+  useState(() => {
+    fetch(`/api/telegram-link?wallet=${encodeURIComponent(walletAddress)}`)
+      .then(r => r.json())
+      .then((d: any) => setLinked(d.linked ?? false))
+      .catch(() => setLinked(false));
+  });
+
+  const generateCode = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/telegram-link', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ walletAddress }),
+      });
+      const data: any = await res.json();
+      if (data.code) setCode(data.code);
+    } catch { /* silent */ }
+    finally { setLoading(false); }
+  }, [walletAddress]);
+
+  const copyCode = useCallback(() => {
+    if (!code) return;
+    navigator.clipboard.writeText(`/link ${code}`).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }, [code]);
+
+  const unlink = useCallback(async () => {
+    await fetch(`/api/telegram-link?wallet=${encodeURIComponent(walletAddress)}`, { method: 'DELETE' });
+    setLinked(false);
+    setCode(null);
+  }, [walletAddress]);
+
+  if (linked) {
+    return (
+      <div style={{ background: 'rgba(0,255,167,0.06)', border: '1px solid rgba(0,255,167,0.2)' }} className="rounded-xl p-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Send size={13} style={{ color: '#00FFA7' }} />
+            <span className="text-xs font-semibold text-slate-200">Telegram Linked</span>
+            <span className="text-[10px] px-1.5 py-0.5 rounded font-mono" style={{ background: 'rgba(0,255,167,0.15)', color: '#00FFA7' }}>✓ Active</span>
+          </div>
+          <button onClick={unlink} className="text-[10px] text-slate-600 hover:text-red-400 transition-colors font-mono">unlink</button>
+        </div>
+        <p className="text-[11px] text-slate-500 mt-1.5">You'll receive personal alerts when your trades execute.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ background: 'var(--brand-card)', border: '1px solid var(--brand-border)' }} className="rounded-xl p-4">
+      <div className="flex items-center gap-2 mb-2">
+        <Send size={13} className="text-slate-400" />
+        <span className="text-xs font-semibold text-slate-300">Link Telegram</span>
+      </div>
+      <p className="text-[11px] text-slate-500 mb-3 leading-relaxed">
+        Connect your wallet to @ETFSignalAIBot to receive personal trade alerts when your orders execute.
+      </p>
+
+      {!code ? (
+        <button
+          onClick={generateCode}
+          disabled={loading}
+          className="w-full py-2 rounded-lg text-xs font-semibold transition-all disabled:opacity-50"
+          style={{ background: 'rgba(0,255,167,0.12)', color: '#00FFA7', border: '1px solid rgba(0,255,167,0.25)' }}
+        >
+          {loading ? 'Generating...' : 'Generate Link Code'}
+        </button>
+      ) : (
+        <div className="space-y-2">
+          <div
+            className="flex items-center justify-between rounded-lg px-3 py-2"
+            style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(0,255,167,0.3)' }}
+          >
+            <span className="font-mono text-sm font-bold" style={{ color: '#00FFA7' }}>/link {code}</span>
+            <button onClick={copyCode} className="text-slate-500 hover:text-white transition-colors ml-2">
+              {copied ? <Check size={14} className="text-green-400" /> : <Copy size={14} />}
+            </button>
+          </div>
+          <p className="text-[10px] text-slate-600 font-mono text-center">
+            Send this command to <a href="https://t.me/ETFSignalAIBot" target="_blank" rel="noopener noreferrer" className="text-slate-400 hover:text-white underline">@ETFSignalAIBot</a> · expires in 10 min
+          </p>
+          <button onClick={generateCode} className="w-full text-[10px] text-slate-600 hover:text-slate-400 transition-colors">
+            Generate new code
+          </button>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function TradePage() {
@@ -252,6 +353,11 @@ export default function TradePage() {
           </div>
         ))}
       </div>
+
+      {/* Telegram link */}
+      {wallet.connected && wallet.address && (
+        <TelegramLinkCard walletAddress={wallet.address} />
+      )}
 
       {/* Trade history */}
       {tradeHistory.length > 0 && (

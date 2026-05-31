@@ -28,15 +28,16 @@ interface SignalNotification {
   topDriver?: string;
   asset?:     string;
   // trade-specific fields
-  orderId?:   string;
-  pair?:      string;
-  side?:      'LONG' | 'SHORT';
-  size?:      string;
-  currency?:  string;
-  price?:     string;
-  orderType?: string;
-  signal?:    string;
-  timestamp?: number;
+  orderId?:       string;
+  pair?:          string;
+  side?:          'LONG' | 'SHORT';
+  size?:          string;
+  currency?:      string;
+  price?:         string;
+  orderType?:     string;
+  signal?:        string;
+  timestamp?:     number;
+  walletAddress?: string;
 }
 
 // ─── Upstash Redis helper ────────────────────────────────────────────────────
@@ -184,6 +185,31 @@ export default async function handler(req: Request) {
   }
 
   const message = isTrade ? formatTradeMessage(body) : formatSignalMessage(body);
+
+  // ── Personal alert: send directly to the linked wallet owner ─────────────
+  if (isTrade && body.walletAddress) {
+    const linkedChatId = await upstash('GET', `etfsignal:link:wallet:${body.walletAddress.toLowerCase()}`);
+    if (linkedChatId) {
+      const personalMsg = [
+        `🔔 *Your SoDEX Trade Executed*`,
+        ``,
+        formatTradeMessage(body).split('\n').slice(1).join('\n'), // reuse body without header
+      ].join('\n');
+      try {
+        await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id:                  String(linkedChatId),
+            text:                     personalMsg,
+            parse_mode:               'Markdown',
+            disable_web_page_preview: true,
+          }),
+        });
+      } catch { /* never block on personal alert */ }
+    }
+  }
+
   const results: { chatId: string; ok: boolean }[] = [];
 
   // Send to all subscribers concurrently
