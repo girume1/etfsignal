@@ -3,7 +3,7 @@ import { Copy, ExternalLink, LogOut, ChevronUp, ChevronDown } from 'lucide-react
 import type { WalletState } from '../types';
 import { truncateAddress } from '../services/sodex';
 
-const EXPLORER = 'https://testnet-explorer.sodex.dev/address/';
+const EXPLORER = 'https://testnet.sodex.com/portfolio?address=';
 
 interface WalletMenuProps {
   wallet: WalletState;
@@ -134,7 +134,7 @@ export function WalletMenu({ wallet, onConnect, onDisconnect }: WalletMenuProps)
               </span>
               <div className="flex-1 min-w-0">
                 <div className="text-sm text-slate-200">View on Explorer</div>
-                <div className="text-[10px] text-slate-500 truncate">testnet-explorer.sodex.dev</div>
+                <div className="text-[10px] text-slate-500 truncate">testnet.sodex.com</div>
               </div>
             </a>
             <div style={{ borderTop: '1px solid var(--brand-border)' }} className="mt-1 pt-1">
