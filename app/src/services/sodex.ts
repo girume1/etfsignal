@@ -102,15 +102,27 @@ export async function fetchBalances(address: string): Promise<Record<string, str
 
 // ─── EIP-712 signing ──────────────────────────────────────────────────────────
 
+/** Recursively sort all object keys alphabetically before JSON serialization.
+ *  Go's json.Marshal sorts map keys alphabetically — this matches that behavior. */
+function stableJSON(value: unknown): string {
+  if (Array.isArray(value)) return '[' + value.map(stableJSON).join(',') + ']';
+  if (value !== null && typeof value === 'object') {
+    const sorted = Object.keys(value as object).sort();
+    return '{' + sorted.map(k => JSON.stringify(k) + ':' + stableJSON((value as any)[k])).join(',') + '}';
+  }
+  return JSON.stringify(value);
+}
+
 export async function signOrder(
   signer: ethers.Signer,
   payload: object,
   nonce: number,
 ): Promise<string> {
-  const payloadJson = JSON.stringify(payload);
+  const payloadJson = stableJSON(payload);   // sorted keys to match Go's json.Marshal
   const payloadHash = ethers.keccak256(ethers.toUtf8Bytes(payloadJson));
 
-  const message = { payloadHash, nonce };
+  // nonce must be BigInt for uint64 EIP-712 encoding in ethers v6
+  const message = { payloadHash, nonce: BigInt(nonce) };
   let rawSig: string;
   try {
     rawSig = await (signer as any).signTypedData(
@@ -194,13 +206,11 @@ export async function placeSpotOrder(
     const typedSig = await signOrder(signer, signingEnvelope, nonce);
 
     // 6. Submit to SoDEX batch orders endpoint
-    // X-API-Key = wallet address (lowercase) identifies the signer account.
-    // X-API-Sign = EIP-712 signature proves ownership.
+    // Master wallet mode: omit X-API-Key entirely — gateway recovers signer from EIP-712 sig
     const response = await fetch(`${TESTNET_GW}/trade/orders/batch`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-API-Key':   address.toLowerCase(),
         'X-API-Sign':  typedSig,
         'X-API-Nonce': String(nonce),
       },
