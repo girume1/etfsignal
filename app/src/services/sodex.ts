@@ -172,11 +172,11 @@ export async function placeSpotOrder(
     const typedSig = await signOrder(signer, requestBody, nonce);
 
     // 6. Submit to SoDEX batch orders endpoint
+    // No X-API-Key header → SoDEX authenticates via master wallet recovered from EIP-712 sig
     const response = await fetch(`${TESTNET_GW}/trade/orders/batch`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-API-Key':   address,
         'X-API-Sign':  typedSig,
         'X-API-Nonce': String(nonce),
       },
