@@ -102,12 +102,37 @@ export async function fetchBalances(address: string): Promise<Record<string, str
 
 // ─── EIP-712 signing ──────────────────────────────────────────────────────────
 
+/**
+ * Serialize `value` to compact JSON with keys in the exact order they appear
+ * in the Go struct definitions (Go's json.Marshal preserves struct field order).
+ *
+ * The server re-marshals the request body via json.Marshal and compares the
+ * resulting hash against payloadHash — so key order must match exactly.
+ *
+ * Spot BatchNewOrderRequest field order (from sodex-go-sdk-public/spot/types):
+ *   BatchNewOrderRequest: accountID, orders
+ *   BatchNewOrderItem:    symbolID, clOrdID, side, type, timeInForce, price*, quantity*
+ *   (* omitempty — omit when unset)
+ *
+ * The signing envelope adds: type, params
+ */
+function goJSON(value: unknown): string {
+  if (value === null || value === undefined) return JSON.stringify(value);
+  if (Array.isArray(value)) return '[' + value.map(goJSON).join(',') + ']';
+  if (typeof value === 'object') {
+    // Preserve insertion order — caller must build objects with fields in Go struct order
+    const entries = Object.entries(value as Record<string, unknown>);
+    return '{' + entries.map(([k, v]) => JSON.stringify(k) + ':' + goJSON(v)).join(',') + '}';
+  }
+  return JSON.stringify(value);
+}
+
 export async function signOrder(
   signer: ethers.Signer,
   payload: object,
   nonce: number,
 ): Promise<string> {
-  const payloadJson = JSON.stringify(payload);
+  const payloadJson = goJSON(payload);
   const payloadHash = ethers.keccak256(ethers.toUtf8Bytes(payloadJson));
 
   // Debug — open browser console to verify recovered signer matches your wallet
@@ -186,29 +211,29 @@ export async function placeSpotOrder(
     // 3. Fetch real account ID for this wallet
     const aid = await fetchAccountId(address);
 
-    // 4. Build the batch-order request body (camelCase per SoDEX spot API schema)
-    // Spot orders: symbolID + clOrdID + side + type + timeInForce + quantity/funds
-    // No Modifier / PositionSide / ReduceOnly — those are futures-only fields
+    // 4. Build the batch-order request body with fields in exact Go struct order.
+    // BatchNewOrderItem: symbolID, clOrdID, side, type, timeInForce, price (omitempty), quantity
+    // BatchNewOrderRequest: accountID, orders
     const orderItem: Record<string, unknown> = {
       symbolID,
       clOrdID:     `etfsignal-${nonce}`,
       side:        order.side === 'BUY' ? 1 : 2,   // 1=BUY, 2=SELL
       type:        order.type === 'MARKET' ? 2 : 1, // 1=LIMIT, 2=MARKET
       timeInForce: order.type === 'MARKET' ? 3 : 1, // IOC for market, GTC for limit
-      quantity:    String(order.quantity),           // DecimalString
     };
+    // price is omitempty — only include for LIMIT orders
     if (order.type === 'LIMIT' && order.price) {
-      orderItem.price = String(order.price);         // DecimalString, limit orders only
+      orderItem.price = String(order.price);
     }
+    orderItem.quantity = String(order.quantity); // quantity comes after price
 
     const requestBody = {
       accountID: aid,
       orders:    [orderItem],
     };
 
-    // 5. EIP-712 sign the signing envelope (NOT the raw request body)
-    // Per SoDEX docs: payloadHash = keccak256({ "type": "newOrder", "params": <requestBody> })
-    // The HTTP body is just requestBody — the wrapper is only used for signing
+    // 5. EIP-712 sign the signing envelope.
+    // Envelope field order: type, params (matches Go struct)
     const signingEnvelope = { type: 'newOrder', params: requestBody };
     const typedSig = await signOrder(signer, signingEnvelope, nonce);
 
