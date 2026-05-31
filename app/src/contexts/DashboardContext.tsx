@@ -191,6 +191,10 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
       if (!etfOk) {
         const firstErr = [btcR, ethR].find(r => r.status === 'rejected') as PromiseRejectedResult | undefined;
         setDataError(firstErr?.reason instanceof Error ? firstErr.reason.message : 'Failed to load market data.');
+      } else if (btcR.status === 'rejected') {
+        setDataError('BTC ETF data temporarily unavailable — showing ETH data only.');
+      } else if (ethR.status === 'rejected') {
+        setDataError('ETH ETF data temporarily unavailable — showing BTC data only.');
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to load market data.';

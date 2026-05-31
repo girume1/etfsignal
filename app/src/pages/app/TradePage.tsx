@@ -18,13 +18,13 @@ function TelegramLinkCard({ walletAddress }: { walletAddress: string }) {
   const [copied,   setCopied]   = useState(false);
   const [linked,   setLinked]   = useState<boolean | null>(null);
 
-  // Check link status on first render
-  useState(() => {
+  // Check link status on first render (useEffect, not useState)
+  useEffect(() => {
     fetch(`/api/telegram-link?wallet=${encodeURIComponent(walletAddress)}`)
       .then(r => r.json())
       .then((d: any) => setLinked(d.linked ?? false))
       .catch(() => setLinked(false));
-  });
+  }, [walletAddress]);
 
   const generateCode = useCallback(async () => {
     setLoading(true);

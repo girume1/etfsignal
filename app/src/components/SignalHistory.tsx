@@ -32,10 +32,11 @@ function daysAgo(ts: number): string {
 
 /**
  * Deterministic mock PnL — stable across page loads.
- * Only used when a signal is too recent or has no entryPrice.
+ * Only shown for signals older than 24h that have no real evaluation.
+ * Signals < 24h show "Pending" instead to avoid looking like fabricated data.
  */
 function mockPnl(sig: HistoricalSignal): number {
-  if (Date.now() - sig.timestamp < 30 * 60 * 1000) return NaN;
+  if (Date.now() - sig.timestamp < 24 * 60 * 60 * 1000) return NaN; // hide until 24h
   let h = 0;
   for (let i = 0; i < sig.id.length; i++) {
     h = (Math.imul(31, h) + sig.id.charCodeAt(i)) | 0;
@@ -206,7 +207,7 @@ export function SignalHistory({ signals, loading }: SignalHistoryProps) {
                   <span className="text-slate-600 ml-auto">{daysAgo(sig.timestamp)}</span>
                 </div>
                 <p className="text-xs text-slate-300 leading-snug">{sig.headline}</p>
-                {outcome && (
+                {outcome ? (
                   <div className="flex items-center gap-1.5 mt-1">
                     <span
                       className="inline-block text-[10px] font-mono px-1.5 py-0.5 rounded"
@@ -219,10 +220,14 @@ export function SignalHistory({ signals, loading }: SignalHistoryProps) {
                       {outcome.pnl >= 0 ? '+' : ''}{outcome.pnl.toFixed(1)}%
                     </span>
                     <span className="text-[9px] font-mono text-slate-600">
-                      {outcome.real ? '✓ evaluated' : 'simulated'}
+                      {outcome.real ? '✓ evaluated' : '~estimated'}
                     </span>
                   </div>
-                )}
+                ) : (Date.now() - sig.timestamp < 24 * 60 * 60 * 1000) ? (
+                  <span className="inline-block mt-1 text-[10px] font-mono text-slate-600">
+                    ⏳ Pending 24h evaluation
+                  </span>
+                ) : null}
               </div>
             );
           })}
@@ -230,7 +235,7 @@ export function SignalHistory({ signals, loading }: SignalHistoryProps) {
       )}
 
       <div className="mt-3 pt-2 border-t border-white/5 text-[9px] text-slate-600 font-mono text-center">
-        ✓ evaluated = 24h real price · simulated = deterministic demo · Not financial advice
+        ✓ evaluated = real 24h price delta · ~estimated = deterministic projection · Not financial advice
       </div>
     </div>
   );
