@@ -111,14 +111,21 @@ export async function signOrder(
   const payloadHash = ethers.keccak256(ethers.toUtf8Bytes(payloadJson));
 
   const message = { payloadHash, nonce };
-  const sig = await (signer as any).signTypedData(
+  const rawSig = await (signer as any).signTypedData(
     domain,
     { ExchangeAction: types.ExchangeAction },
     message,
   );
 
-  // Prepend 0x01 to indicate typed (EIP-712) signature
-  return '0x01' + sig.slice(2);
+  // Normalize v: MetaMask/wallets return v=27/28 (legacy), SoDEX expects v=0/1
+  // ethers.Signature.from() parses the raw sig and exposes normalized fields
+  const parsed = ethers.Signature.from(rawSig);
+  const r = parsed.r.slice(2);                                  // 32 bytes, no 0x
+  const s = parsed.s.slice(2);                                  // 32 bytes, no 0x
+  const v = (parsed.v - 27).toString(16).padStart(2, '0');     // 0x1b→0x00, 0x1c→0x01
+
+  // SoDEX format: 0x01 (type prefix) + r + s + normalized_v = 66 bytes total
+  return '0x01' + r + s + v;
 }
 
 // ─── Place Order ──────────────────────────────────────────────────────────────
