@@ -1,0 +1,7 @@
+{
+  "name": "etfsignal-root",
+  "private": true,
+  "dependencies": {
+    "ethers": "^6.16.0"
+  }
+}
