@@ -206,11 +206,16 @@ export async function placeSpotOrder(
       return { success: true, orderId };
     }
 
-    const errMsg =
+    let errMsg: string =
       result.msg     ||
       result.message ||
       result.error   ||
       `SoDEX error (HTTP ${response.status})`;
+
+    // Guide the user if the account hasn't completed "Enable Trading" onboarding
+    if (errMsg.toLowerCase().includes('api key')) {
+      errMsg = `${errMsg}\n\nFix: go to testnet.sodex.com → connect wallet → click "Enable Trading" to activate your account for API trading.`;
+    }
     return { success: false, error: errMsg };
 
   } catch (err: any) {

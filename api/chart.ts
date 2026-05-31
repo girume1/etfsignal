@@ -137,7 +137,8 @@ async function renderQuickChart(symbol: string, interval: string, candles: Candl
 export default async function handler(req: any, res: any) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
-  const chartImgKey = process.env.CHARTIMG_API_KEY ?? '';
+  // Accept both CHARTIMG_API_KEY and CHARTING_API_KEY (common typo)
+  const chartImgKey = process.env.CHARTIMG_API_KEY ?? process.env.CHARTING_API_KEY ?? '';
   const cmd         = req.query.cmd      as string | undefined;
   const symbol      = String(req.query.symbol   ?? 'BTCUSDT').toUpperCase();
   const interval    = String(req.query.interval ?? '1m');

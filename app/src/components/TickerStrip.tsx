@@ -65,7 +65,7 @@ export function TickerStrip({
   if (btcData) {
     items.push({
       label: 'BTC ETF AUM',
-      value: formatUSD(btcData.totalNetAssets.value).replace('+', ''),
+      value: formatUSD(Number.isFinite(btcData.totalNetAssets.value) ? btcData.totalNetAssets.value : null).replace('+', ''),
       color: '#60A5FA',
     });
     items.push({
@@ -85,7 +85,7 @@ export function TickerStrip({
   if (ethData) {
     items.push({
       label: 'ETH ETF AUM',
-      value: formatUSD(ethData.totalNetAssets.value).replace('+', ''),
+      value: formatUSD(Number.isFinite(ethData.totalNetAssets.value) ? ethData.totalNetAssets.value : null).replace('+', ''),
       color: '#60A5FA',
     });
     items.push({

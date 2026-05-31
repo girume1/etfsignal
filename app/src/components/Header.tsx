@@ -51,9 +51,11 @@ export function Header({
   const btcPrice = liveBtcPx ?? latestBtcPx;
   const ethPrice = liveEthPx ?? latestEthPx;
 
-  // Total ETF AUM = BTC AUM + ETH AUM
-  const btcAum  = btcData?.totalNetAssets?.value as number | null ?? null;
-  const ethAum  = ethData?.totalNetAssets?.value as number | null ?? null;
+  // Total ETF AUM = BTC AUM + ETH AUM (guard against null / NaN / non-finite)
+  const safeNum = (v: number | null | undefined): number | null =>
+    typeof v === 'number' && isFinite(v) ? v : null;
+  const btcAum   = safeNum(btcData?.totalNetAssets?.value);
+  const ethAum   = safeNum(ethData?.totalNetAssets?.value);
   const totalAum = btcAum !== null && ethAum !== null ? btcAum + ethAum : btcAum ?? ethAum;
 
   // AUM 24h change %
