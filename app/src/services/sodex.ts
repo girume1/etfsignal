@@ -175,8 +175,11 @@ export async function placeSpotOrder(
       orders:    [orderItem],
     };
 
-    // 5. EIP-712 sign the request body
-    const typedSig = await signOrder(signer, requestBody, nonce);
+    // 5. EIP-712 sign the signing envelope (NOT the raw request body)
+    // Per SoDEX docs: payloadHash = keccak256({ "type": "newOrder", "params": <requestBody> })
+    // The HTTP body is just requestBody — the wrapper is only used for signing
+    const signingEnvelope = { type: 'newOrder', params: requestBody };
+    const typedSig = await signOrder(signer, signingEnvelope, nonce);
 
     // 6. Submit to SoDEX batch orders endpoint
     // No X-API-Key header → SoDEX authenticates via master wallet recovered from EIP-712 sig
