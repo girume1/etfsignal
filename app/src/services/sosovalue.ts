@@ -32,13 +32,23 @@ async function sosoProxy<T>(opts: ProxyOpts): Promise<T> {
 // ─── ETF Metrics ──────────────────────────────────────────────────────────────
 
 export async function fetchEtfMetrics(type: EtfType): Promise<EtfData> {
-  const json: any = await sosoProxy({
-    method: 'POST',
-    url: `${ETF_BASE}/openapi/v2/etf/currentEtfDataMetrics`,
-    body: { type },
-  });
-  if (json.code !== 0) throw new Error(json.msg || 'ETF API error');
-  return json.data as EtfData;
+  // Try primary v2 endpoint, then fallback to alt host
+  const attempts = [
+    { method: 'POST' as const, url: `${ETF_BASE}/openapi/v2/etf/currentEtfDataMetrics`, body: { type } },
+    { method: 'POST' as const, url: `${ETF_BASE_ALT}/openapi/v2/etf/currentEtfDataMetrics`, body: { type } },
+  ];
+
+  let lastErr: Error = new Error('ETF API unreachable');
+  for (const attempt of attempts) {
+    try {
+      const json: any = await sosoProxy(attempt);
+      if (json.code !== 0) throw new Error(json.msg || 'ETF API error');
+      return json.data as EtfData;
+    } catch (err: any) {
+      lastErr = err;
+    }
+  }
+  throw lastErr;
 }
 
 // ─── Historical Inflows ───────────────────────────────────────────────────────
