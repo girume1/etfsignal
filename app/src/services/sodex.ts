@@ -102,24 +102,17 @@ export async function fetchBalances(address: string): Promise<Record<string, str
 
 // ─── EIP-712 signing ──────────────────────────────────────────────────────────
 
-/** Recursively sort all object keys alphabetically before JSON serialization.
- *  Go's json.Marshal sorts map keys alphabetically — this matches that behavior. */
-function stableJSON(value: unknown): string {
-  if (Array.isArray(value)) return '[' + value.map(stableJSON).join(',') + ']';
-  if (value !== null && typeof value === 'object') {
-    const sorted = Object.keys(value as object).sort();
-    return '{' + sorted.map(k => JSON.stringify(k) + ':' + stableJSON((value as any)[k])).join(',') + '}';
-  }
-  return JSON.stringify(value);
-}
-
 export async function signOrder(
   signer: ethers.Signer,
   payload: object,
   nonce: number,
 ): Promise<string> {
-  const payloadJson = stableJSON(payload);   // sorted keys to match Go's json.Marshal
+  const payloadJson = JSON.stringify(payload);
   const payloadHash = ethers.keccak256(ethers.toUtf8Bytes(payloadJson));
+
+  // Debug — open browser console to verify recovered signer matches your wallet
+  console.log('[sodex] signing payload JSON:', payloadJson);
+  console.log('[sodex] payloadHash:', payloadHash);
 
   // nonce must be BigInt for uint64 EIP-712 encoding in ethers v6
   const message = { payloadHash, nonce: BigInt(nonce) };
@@ -147,6 +140,20 @@ export async function signOrder(
   const r = parsed.r.slice(2);                              // 32 bytes, no 0x
   const s = parsed.s.slice(2);                              // 32 bytes, no 0x
   const v = (parsed.v - 27).toString(16).padStart(2, '0'); // 0x1b→0x00, 0x1c→0x01
+
+  // Debug — verify recovered signer matches the connected wallet address
+  try {
+    const recovered = ethers.recoverAddress(
+      ethers.TypedDataEncoder.hash(domain, { ExchangeAction: types.ExchangeAction }, { payloadHash, nonce: BigInt(nonce) }),
+      rawSig,
+    );
+    const walletAddr = await signer.getAddress();
+    console.log('[sodex] recovered signer:', recovered);
+    console.log('[sodex] wallet address:  ', walletAddr);
+    console.log('[sodex] match:', recovered.toLowerCase() === walletAddr.toLowerCase());
+  } catch (e) {
+    console.warn('[sodex] recovery check failed:', e);
+  }
 
   // SoDEX format: 0x01 (type prefix) + r + s + normalized_v = 66 bytes total
   return '0x01' + r + s + v;
