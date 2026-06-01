@@ -5,11 +5,35 @@ const TESTNET_GW  = 'https://testnet-gw.sodex.dev/api/v1/spot';
 const CHAIN_ID     = 138565;         // SoDEX testnet (ValueChain)
 const CHAIN_ID_HEX = '0x21D45';     // hex for wallet_switchEthereumChain
 
-// SoDEX testnet symbol IDs (from GET /markets/symbols)
-const SYMBOL_ID_MAP: Record<string, number> = {
-  'BTC-USDC': 1,   // vBTC_vUSDC
-  'ETH-USDC': 2,   // vETH_vUSDC
-};
+// Symbol ID cache — populated at runtime from GET /markets/symbols
+// Do NOT hardcode these; they may differ between testnet deployments.
+const symbolIdCache: Record<string, number> = {};
+
+async function resolveSymbolId(symbol: string): Promise<number> {
+  if (symbolIdCache[symbol]) return symbolIdCache[symbol];
+
+  // Convert app symbol format (BTC-USDC) to SoDEX format (vBTC_vUSDC)
+  const parts = symbol.split('-');
+  const sodexSymbol = `v${parts[0]}_v${parts[1]}`;
+
+  const res = await fetch(`${TESTNET_GW}/markets/symbols`);
+  const json: any = await res.json();
+  if (json.code !== 0 || !Array.isArray(json.data)) {
+    throw new Error('Could not fetch SoDEX symbol list');
+  }
+
+  for (const s of json.data) {
+    // Cache all symbols while we're here
+    const appFmt = s.symbol?.replace('v', '').replace('_v', '-') ?? '';
+    if (s.symbolID && appFmt) symbolIdCache[appFmt] = s.symbolID;
+    if (s.symbol === sodexSymbol && s.symbolID) {
+      symbolIdCache[symbol] = s.symbolID;
+      return s.symbolID;
+    }
+  }
+
+  throw new Error(`Symbol ${symbol} (${sodexSymbol}) not found on SoDEX testnet`);
+}
 
 // ─── EIP-712 Domain ───────────────────────────────────────────────────────────
 
@@ -132,7 +156,8 @@ export async function signOrder(
   payload: object,
   nonce: number,
 ): Promise<string> {
-  const payloadJson = goJSON(payload);
+  // Use standard JSON.stringify — SoDEX reference script uses JSON.stringify directly
+  const payloadJson = JSON.stringify(payload);
   const payloadHash = ethers.keccak256(ethers.toUtf8Bytes(payloadJson));
 
   // Debug — open browser console to verify recovered signer matches your wallet
@@ -160,28 +185,23 @@ export async function signOrder(
     throw err;
   }
 
-  // Normalize v: MetaMask/wallets return v=27/28 (legacy), SoDEX expects v=0/1
+  // Normalize signature to SoDEX wire format (matches reference script)
+  // 0x01 prefix + r + s + v (where v is yParity: 0 or 1)
   const parsed = ethers.Signature.from(rawSig);
-  const r = parsed.r.slice(2);                              // 32 bytes, no 0x
-  const s = parsed.s.slice(2);                              // 32 bytes, no 0x
-  const v = (parsed.v - 27).toString(16).padStart(2, '0'); // 0x1b→0x00, 0x1c→0x01
+  const v = typeof parsed.yParity === 'number'
+    ? parsed.yParity
+    : parsed.v >= 27 ? parsed.v - 27 : parsed.v;
 
-  // Debug — verify recovered signer matches the connected wallet address
-  try {
-    const recovered = ethers.recoverAddress(
-      ethers.TypedDataEncoder.hash(domain, { ExchangeAction: types.ExchangeAction }, { payloadHash, nonce: BigInt(nonce) }),
-      rawSig,
-    );
-    const walletAddr = await signer.getAddress();
-    console.log('[sodex] recovered signer:', recovered);
-    console.log('[sodex] wallet address:  ', walletAddr);
-    console.log('[sodex] match:', recovered.toLowerCase() === walletAddr.toLowerCase());
-  } catch (e) {
-    console.warn('[sodex] recovery check failed:', e);
-  }
+  const typedSig = ethers.hexlify(
+    ethers.concat([
+      new Uint8Array([1]),
+      ethers.getBytes(parsed.r),
+      ethers.getBytes(parsed.s),
+      new Uint8Array([v]),
+    ])
+  );
 
-  // SoDEX format: 0x01 (type prefix) + r + s + normalized_v = 66 bytes total
-  return '0x01' + r + s + v;
+  return typedSig;
 }
 
 // ─── Place Order ──────────────────────────────────────────────────────────────
@@ -204,9 +224,8 @@ export async function placeSpotOrder(
     const address = await signer.getAddress();
     const nonce   = Date.now();
 
-    // 2. Resolve symbolID
-    const symbolID = SYMBOL_ID_MAP[order.symbol];
-    if (!symbolID) throw new Error(`Unknown symbol: ${order.symbol}`);
+    // 2. Resolve symbolID dynamically from GET /markets/symbols
+    const symbolID = await resolveSymbolId(order.symbol);
 
     // 3. Fetch account ID
     const aid = await fetchAccountId(address);
@@ -224,22 +243,23 @@ export async function placeSpotOrder(
 
     const requestBody = { accountID: aid, orders: [orderItem] };
 
-    // 5. Sign — try both payload formats since testnet behavior is unclear:
-    //    Attempt A: sign raw request body (no wrapper)
-    //    Attempt B: sign { type:'newOrder', params: requestBody } wrapper
-    // SoDEX support confirmed master wallet signing works, error is "invalid request"
-    // so we try raw body first (simpler, no wrapper ambiguity)
-    const typedSig = await signOrder(signer, requestBody, nonce);
+    // 5. Sign the envelope: { type: 'batchNewOrder', params: requestBody }
+    // Per SoDEX support: use wrapper with type "batchNewOrder" (not "newOrder").
+    // The HTTP body is just requestBody — the wrapper is ONLY used for signing.
+    const signingEnvelope = { type: 'batchNewOrder', params: requestBody };
+    const typedSig = await signOrder(signer, signingEnvelope, nonce);
 
     console.log('[sodex] placing order', { accountID: aid, symbol: order.symbol, side: order.side, quantity: order.quantity });
 
-    // 6. Submit
+    // 6. Submit — X-API-Chain header is required (confirmed from SoDEX reference script)
     const response = await fetch(`${TESTNET_GW}/trade/orders/batch`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-API-Sign':  typedSig,
-        'X-API-Nonce': String(nonce),
+        'Accept':        'application/json',
+        'X-API-Sign':   typedSig,
+        'X-API-Nonce':  String(nonce),
+        'X-API-Chain':  String(CHAIN_ID),   // required — missing this caused "API key not found"
       },
       body: JSON.stringify(requestBody),
     });

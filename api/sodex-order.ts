@@ -10,10 +10,26 @@
 const TESTNET_GW = 'https://testnet-gw.sodex.dev/api/v1/spot';
 const CHAIN_ID   = 138565;
 
-const SYMBOL_ID_MAP: Record<string, number> = {
-  'BTC-USDC': 1,
-  'ETH-USDC': 2,
-};
+// Symbol ID cache — fetched at runtime, not hardcoded
+const symbolIdCache: Record<string, number> = {};
+
+async function resolveSymbolId(symbol: string): Promise<number> {
+  if (symbolIdCache[symbol]) return symbolIdCache[symbol];
+  const parts = symbol.split('-');
+  const sodexSymbol = `v${parts[0]}_v${parts[1]}`;
+  const res = await fetch(`${TESTNET_GW}/markets/symbols`);
+  const json: any = await res.json();
+  if (json.code !== 0 || !Array.isArray(json.data)) {
+    throw new Error('Could not fetch SoDEX symbol list');
+  }
+  for (const s of json.data) {
+    if (s.symbol === sodexSymbol && s.symbolID) {
+      symbolIdCache[symbol] = s.symbolID;
+      return s.symbolID;
+    }
+  }
+  throw new Error(`Symbol ${symbol} (${sodexSymbol}) not found on SoDEX testnet`);
+}
 
 /** Compact JSON preserving insertion order (matches Go's json.Marshal struct field order). */
 function goJSON(value: unknown): string {
@@ -31,11 +47,13 @@ export default async function handler(req: any, res: any) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const apiKeyName    = process.env.SODEX_API_KEY_NAME;
-  const apiKeyPrivate = process.env.SODEX_API_KEY_PRIVATE;
+  // SoDEX testnet: master wallet mode — no named API key required.
+  // Set SODEX_PRIVATE_KEY to the master wallet private key (or use SODEX_API_KEY_PRIVATE for backward compat).
+  const privateKey = process.env.SODEX_PRIVATE_KEY ?? process.env.SODEX_API_KEY_PRIVATE;
+  const apiKeyName = process.env.SODEX_API_KEY_NAME; // optional — only used if a named API key is registered
 
-  if (!apiKeyName || !apiKeyPrivate) {
-    return res.status(500).json({ error: 'SODEX_API_KEY_NAME or SODEX_API_KEY_PRIVATE not configured' });
+  if (!privateKey) {
+    return res.status(500).json({ error: 'SODEX_PRIVATE_KEY not configured' });
   }
 
   const { accountID, symbol, side, type: orderType, quantity, price } = req.body ?? {};
@@ -44,15 +62,13 @@ export default async function handler(req: any, res: any) {
     return res.status(400).json({ error: 'Missing required order fields' });
   }
 
-  const symbolID = SYMBOL_ID_MAP[symbol];
-  if (!symbolID) {
-    return res.status(400).json({ error: `Unknown symbol: ${symbol}` });
-  }
-
   try {
     // Dynamically import ethers from the app's node_modules
     // Vercel bundles the api/ folder together with the app dependencies
     const { ethers } = await import('ethers');
+
+    // Resolve symbolID at runtime — do NOT hardcode (support team reply #2)
+    const symbolID = await resolveSymbolId(symbol);
 
     const nonce = Date.now();
 
@@ -77,7 +93,7 @@ export default async function handler(req: any, res: any) {
     };
 
     // Signing envelope: type, params
-    const signingEnvelope = { type: 'newOrder', params: requestBody };
+    const signingEnvelope = { type: 'batchNewOrder', params: requestBody };
     const payloadJson = goJSON(signingEnvelope);
     const payloadHash = ethers.keccak256(ethers.toUtf8Bytes(payloadJson));
 
@@ -95,8 +111,8 @@ export default async function handler(req: any, res: any) {
       ],
     };
 
-    // Sign with the registered API key private key
-    const wallet  = new ethers.Wallet(apiKeyPrivate);
+    // Sign with master wallet private key (or named API key private key if configured)
+    const wallet  = new ethers.Wallet(privateKey.startsWith('0x') ? privateKey : `0x${privateKey}`);
     const message = { payloadHash, nonce: BigInt(nonce) };
     const rawSig  = await wallet.signTypedData(domain, types, message);
 
@@ -107,20 +123,25 @@ export default async function handler(req: any, res: any) {
     const v = (parsed.v - 27).toString(16).padStart(2, '0');
     const typedSig = '0x01' + r + s + v;
 
-    console.log('[sodex-order] submitting', { accountID, symbol, side, orderType, quantity });
+    console.log('[sodex-order] submitting', { accountID, symbol, symbolID, side, orderType, quantity });
     console.log('[sodex-order] payload JSON:', payloadJson);
     console.log('[sodex-order] payloadHash:', payloadHash);
-    console.log('[sodex-order] api key name:', apiKeyName);
+    console.log('[sodex-order] signer:', wallet.address);
 
-    // Submit to SoDEX with registered API key name in X-API-Key header
+    // Submit — master wallet mode: no X-API-Key header.
+    // X-API-Chain is included (matches SoDEX reference script).
+    const submitHeaders: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'Accept':       'application/json',
+      'X-API-Sign':   typedSig,
+      'X-API-Nonce':  String(nonce),
+      'X-API-Chain':  String(CHAIN_ID),
+    };
+    if (apiKeyName) submitHeaders['X-API-Key'] = apiKeyName; // only if named API key is registered
+
     const response = await fetch(`${TESTNET_GW}/trade/orders/batch`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-API-Key':   apiKeyName,
-        'X-API-Sign':  typedSig,
-        'X-API-Nonce': String(nonce),
-      },
+      headers: submitHeaders,
       body: JSON.stringify(requestBody),
     });
 
