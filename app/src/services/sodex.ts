@@ -194,51 +194,46 @@ export interface PlaceOrderResult {
 
 export async function placeSpotOrder(
   signer: ethers.Signer,
-  _unusedAccountId: number,   // kept for call-site compatibility; fetched dynamically below
+  _unusedAccountId: number,
   order: TradeOrder,
 ): Promise<PlaceOrderResult> {
   try {
     // 1. Switch to SoDEX testnet chain
     await ensureSoDEXNetwork();
 
-    const address  = await signer.getAddress();
-    const nonce    = Date.now();
+    const address = await signer.getAddress();
+    const nonce   = Date.now();
 
-    // 2. Resolve testnet symbolID (numeric, per SoDEX spot schema)
+    // 2. Resolve symbolID
     const symbolID = SYMBOL_ID_MAP[order.symbol];
     if (!symbolID) throw new Error(`Unknown symbol: ${order.symbol}`);
 
-    // 3. Fetch real account ID for this wallet
+    // 3. Fetch account ID
     const aid = await fetchAccountId(address);
 
-    // 4. Build the batch-order request body with fields in exact Go struct order.
-    // BatchNewOrderItem: symbolID, clOrdID, side, type, timeInForce, price (omitempty), quantity
-    // BatchNewOrderRequest: accountID, orders
+    // 4. Build request body in exact Go struct field order
     const orderItem: Record<string, unknown> = {
       symbolID,
       clOrdID:     `etfsignal-${nonce}`,
-      side:        order.side === 'BUY' ? 1 : 2,   // 1=BUY, 2=SELL
-      type:        order.type === 'MARKET' ? 2 : 1, // 1=LIMIT, 2=MARKET
-      timeInForce: order.type === 'MARKET' ? 3 : 1, // IOC for market, GTC for limit
+      side:        order.side === 'BUY' ? 1 : 2,
+      type:        order.type === 'MARKET' ? 2 : 1,
+      timeInForce: order.type === 'MARKET' ? 3 : 1,
     };
-    // price is omitempty — only include for LIMIT orders
-    if (order.type === 'LIMIT' && order.price) {
-      orderItem.price = String(order.price);
-    }
-    orderItem.quantity = String(order.quantity); // quantity comes after price
+    if (order.type === 'LIMIT' && order.price) orderItem.price = String(order.price);
+    orderItem.quantity = String(order.quantity);
 
-    const requestBody = {
-      accountID: aid,
-      orders:    [orderItem],
-    };
+    const requestBody = { accountID: aid, orders: [orderItem] };
 
-    // 5. EIP-712 sign the signing envelope.
-    // Envelope field order: type, params (matches Go struct)
-    const signingEnvelope = { type: 'newOrder', params: requestBody };
-    const typedSig = await signOrder(signer, signingEnvelope, nonce);
+    // 5. Sign — try both payload formats since testnet behavior is unclear:
+    //    Attempt A: sign raw request body (no wrapper)
+    //    Attempt B: sign { type:'newOrder', params: requestBody } wrapper
+    // SoDEX support confirmed master wallet signing works, error is "invalid request"
+    // so we try raw body first (simpler, no wrapper ambiguity)
+    const typedSig = await signOrder(signer, requestBody, nonce);
 
-    // 6. Submit to SoDEX batch orders endpoint
-    // Master wallet mode: omit X-API-Key entirely — gateway recovers signer from EIP-712 sig
+    console.log('[sodex] placing order', { accountID: aid, symbol: order.symbol, side: order.side, quantity: order.quantity });
+
+    // 6. Submit
     const response = await fetch(`${TESTNET_GW}/trade/orders/batch`, {
       method: 'POST',
       headers: {
@@ -251,27 +246,16 @@ export async function placeSpotOrder(
 
     const raw = await response.text();
     let result: any = {};
-    try { result = JSON.parse(raw); } catch { /* non-JSON response */ }
+    try { result = JSON.parse(raw); } catch { /* non-JSON */ }
+
+    console.log('[sodex] response', response.status, raw);
 
     if (response.ok && result.code === 0) {
-      const orderId =
-        result.data?.orders?.[0]?.ordId   ??
-        result.data?.orders?.[0]?.clOrdID ??
-        result.data?.orderId              ??
-        `sodex-${nonce}`;
+      const orderId = result.data?.orders?.[0]?.ordId ?? result.data?.orders?.[0]?.clOrdID ?? `sodex-${nonce}`;
       return { success: true, orderId };
     }
 
-    let errMsg: string =
-      result.msg     ||
-      result.message ||
-      result.error   ||
-      `SoDEX error (HTTP ${response.status})`;
-
-    // Guide the user if the account hasn't completed "Enable Trading" onboarding
-    if (errMsg.toLowerCase().includes('api key')) {
-      errMsg = `${errMsg}\n\nFix: go to testnet.sodex.com → connect wallet → click "Enable Trading" to activate your account for API trading.`;
-    }
+    const errMsg = result.msg || result.message || result.error || `SoDEX error (HTTP ${response.status})`;
     return { success: false, error: errMsg };
 
   } catch (err: any) {
