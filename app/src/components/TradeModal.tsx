@@ -179,12 +179,19 @@ export function TradeModal({
               style={{ background: 'var(--brand-card)', border: '1px solid var(--brand-border)' }}
               className="flex rounded-xl p-1 mb-2 gap-1"
             >
-              <SegmentBtn active={marketType === 'spot'}    onClick={() => setMarketType('spot')}>
+              <SegmentBtn active={marketType === 'spot'} onClick={() => setMarketType('spot')}>
                 <span className="flex items-center justify-center gap-1.5"><TrendingUp size={13} /> Spot</span>
               </SegmentBtn>
-              <SegmentBtn active={marketType === 'futures'} onClick={() => setMarketType('futures')}>
-                <span className="flex items-center justify-center gap-1.5"><Zap size={13} /> Futures</span>
-              </SegmentBtn>
+              {/* Futures locked until Wave 3 */}
+              <div
+                className="flex-1 py-2 rounded-lg text-sm font-semibold flex items-center justify-center gap-1.5 cursor-not-allowed select-none"
+                style={{ color: '#334155', border: '1px solid transparent' }}
+                title="Coming in Wave 3"
+              >
+                <Zap size={13} />
+                Futures
+                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded" style={{ background: 'rgba(148,163,184,0.08)', color: '#475569' }}>Wave 3</span>
+              </div>
             </div>
 
             {/* ── Row 2: Market / Limit ──────────────────────────────────── */}
@@ -198,34 +205,12 @@ export function TradeModal({
               <SegmentBtn active={orderType === 'LIMIT'}  onClick={() => {
                 setOrderType('LIMIT');
                 if (!limitPrice && currentPrice) setLimitPrice(currentPrice.toFixed(2));
+                setCurrency(baseAsset); // limit orders always quantity (base asset)
               }}>
                 <span className="flex items-center justify-center gap-1.5"><Target size={13} /> Limit</span>
               </SegmentBtn>
             </div>
 
-            {/* ── Futures transfer warning ──────────────────────────────── */}
-            {marketType === 'futures' && (
-              <div
-                style={{ background: 'rgba(168,139,250,0.08)', border: '1px solid rgba(168,139,250,0.25)' }}
-                className="rounded-xl p-3 mb-3 flex items-start gap-2"
-              >
-                <ArrowUpDown size={16} className="text-purple-400 mt-0.5 shrink-0" />
-                <div>
-                  <p className="text-xs text-purple-300 font-semibold mb-0.5">Transfer required for Futures</p>
-                  <p className="text-xs text-slate-400">
-                    Move {quoteAsset} from Spot → Futures on SoDEX before trading.{' '}
-                    <a
-                      href={`https://testnet.sodex.com/trade/futures/${sodexSymbol}`}
-                      target="_blank" rel="noopener noreferrer"
-                      className="text-purple-400 hover:text-purple-300 underline inline-flex items-center gap-1"
-                    >
-                      Transfer on SoDEX
-                      <ExternalLink size={10} className="shrink-0" />
-                    </a>
-                  </p>
-                </div>
-              </div>
-            )}
 
             {/* ── Signal context ────────────────────────────────────────── */}
             <div

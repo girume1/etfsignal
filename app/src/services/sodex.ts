@@ -274,14 +274,17 @@ export async function placeSpotOrder(
     };
     if (order.type === 'LIMIT' && order.price) orderItem.price = String(order.price);
 
-    // funds = spend X USDC to buy base asset — only valid for BUY orders
-    // quantity = sell/buy X base asset — valid for both sides
-    const baseAsset = order.symbol.split('-')[0]; // BTC or ETH
-    const usesFunds = order.side === 'BUY' && order.currency && order.currency !== baseAsset;
+    // funds = spend X USDC to buy base asset — MARKET BUY only (no price known in advance)
+    // quantity = exact base asset amount — required for LIMIT orders and all SELL orders
+    const baseAsset = order.symbol.split('-')[0];
+    const usesFunds =
+      order.type === 'MARKET' &&          // funds never valid for limit orders
+      order.side === 'BUY' &&
+      order.currency && order.currency !== baseAsset;
     if (usesFunds) {
-      orderItem.funds = String(order.quantity);    // BUY: spend 10 USDC
+      orderItem.funds = String(order.quantity);    // market BUY: spend X USDC
     } else {
-      orderItem.quantity = String(order.quantity); // SELL: sell 0.001 BTC  |  BUY: buy 0.001 BTC
+      orderItem.quantity = String(order.quantity); // limit BUY/SELL or market SELL: X base asset
     }
 
     const requestBody = { accountID: aid, orders: [orderItem] };
