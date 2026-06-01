@@ -65,7 +65,11 @@ function TelegramLinkCard({ walletAddress }: { walletAddress: string }) {
           </div>
           <button onClick={unlink} className="text-[10px] text-slate-600 hover:text-red-400 transition-colors font-mono">unlink</button>
         </div>
-        <p className="text-[11px] text-slate-500 mt-1.5">You'll receive personal alerts when your trades execute.</p>
+        <p className="text-[11px] text-slate-500 mt-1.5 leading-relaxed">
+          You will now receive personal alerts when:<br />
+          · A trade executes on SoDEX from your wallet<br />
+          · Your order ID and status are confirmed
+        </p>
       </div>
     );
   }
