@@ -156,7 +156,12 @@ export function TradeModal({
               {isLong ? <ArrowUp size={18} /> : <ArrowDown size={18} />}
             </div>
             <div>
-              <div className="font-semibold text-white">{isLong ? 'Long' : 'Short'} {symbol}</div>
+              <div className="font-semibold text-white">
+                {marketType === 'spot'
+                  ? (isLong ? 'Buy' : 'Sell')
+                  : (isLong ? 'Long' : 'Short')
+                } {symbol}
+              </div>
               <div className="text-xs text-slate-500">
                 SoDEX Testnet · {marketType === 'spot' ? 'Spot' : 'Futures'} · {orderType === 'MARKET' ? 'Market' : 'Limit'} · {quoteAsset}
               </div>
@@ -465,8 +470,10 @@ export function TradeModal({
                 </>
               ) : orderType === 'LIMIT' ? (
                 `Place Limit ${isLong ? 'Buy' : 'Sell'} · ${amount} ${currency} @ $${limitPrice || '—'}`
+              ) : marketType === 'spot' ? (
+                `${isLong ? 'Buy' : 'Sell'} ${amount} ${currency}`
               ) : (
-                `Confirm ${isLong ? 'Long' : 'Short'} ${amount} ${currency}`
+                `${isLong ? 'Long' : 'Short'} ${amount} ${currency}`
               )}
             </button>
           </>
@@ -485,7 +492,7 @@ export function TradeModal({
             {result.success ? (
               <>
                 <p className="text-sm text-slate-400 mb-4">
-                  Your {isLong ? 'long' : 'short'} {orderType === 'LIMIT' ? 'limit' : 'market'} order was submitted to SoDEX Testnet.
+                  Your {marketType === 'spot' ? (isLong ? 'buy' : 'sell') : (isLong ? 'long' : 'short')} {orderType === 'LIMIT' ? 'limit' : 'market'} order was submitted to SoDEX Testnet.
                 </p>
 
                 {/* Order proof card */}
@@ -497,7 +504,7 @@ export function TradeModal({
                     { label: 'Order ID',  value: result.orderId ?? '—', mono: true },
                     { label: 'Status',    value: 'Submitted ✓' },
                     { label: 'Pair',      value: symbol, mono: true },
-                    { label: 'Side',      value: isLong ? 'LONG' : 'SHORT' },
+                    { label: 'Side', value: marketType === 'spot' ? (isLong ? 'BUY' : 'SELL') : (isLong ? 'LONG' : 'SHORT') },
                     { label: 'Size',      value: `${amount} ${currency}${orderType === 'LIMIT' ? ` @ $${limitPrice}` : ''}`, mono: true },
                   ].map(({ label, value, mono }) => (
                     <div key={label} className="flex items-center justify-between gap-4">

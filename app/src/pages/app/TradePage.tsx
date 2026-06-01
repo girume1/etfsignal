@@ -295,7 +295,7 @@ export default function TradePage() {
           }}
         >
           <TrendingUp size={16} />
-          Long {currentAsset.label}
+          Buy {currentAsset.label}
         </button>
 
         <button
@@ -311,7 +311,7 @@ export default function TradePage() {
           }}
         >
           <TrendingDown size={16} />
-          Short {currentAsset.label}
+          Sell {currentAsset.label}
         </button>
       </div>
 
@@ -382,7 +382,7 @@ export default function TradePage() {
                     className="text-[10px] font-bold px-2 py-0.5 rounded-md shrink-0 font-mono"
                     style={{ background: isLong ? 'rgba(52,211,153,0.12)' : 'rgba(248,113,113,0.12)', color: sideColor }}
                   >
-                    {isLong ? 'LONG' : 'SHORT'}
+                    {isLong ? 'BUY' : 'SELL'}
                   </span>
 
                   {/* Pair + size */}
