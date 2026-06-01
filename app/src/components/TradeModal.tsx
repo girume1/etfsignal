@@ -308,18 +308,18 @@ export function TradeModal({
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-xs font-semibold text-slate-300">No {quoteAsset} found on SoDEX Testnet</span>
                     <a
-                      href="https://testnet.sodex.com"
+                      href={`https://testnet.sodex.com/trade/spot/${baseAsset}_USDC?action=claim`}
                       target="_blank" rel="noopener noreferrer"
                       className="text-xs font-bold hover:opacity-80 transition-opacity inline-flex items-center gap-1"
                       style={{ color: '#00FFA7' }}
                     >
-                      Go to SoDEX
+                      Claim from Faucet
                       <ExternalLink size={10} className="shrink-0" />
                     </a>
                   </div>
                   <ol className="text-[10px] text-slate-500 space-y-0.5 list-none">
-                    <li>1. Go to <a href="https://testnet.sodex.com" target="_blank" rel="noopener noreferrer" className="text-slate-400 underline">testnet.sodex.com</a> and connect your wallet (this registers your account)</li>
-                    <li>2. Find the Faucet section and claim free testnet USDC</li>
+                    <li>1. Connect your wallet at <a href="https://testnet.sodex.com" target="_blank" rel="noopener noreferrer" className="text-slate-400 underline">testnet.sodex.com</a> (registers your account)</li>
+                    <li>2. Click "Claim from Faucet" above to get free testnet {baseAsset} &amp; USDC</li>
                     <li>3. Return here and click the refresh icon ↻ to reload your balance</li>
                   </ol>
                 </div>

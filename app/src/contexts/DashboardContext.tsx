@@ -342,7 +342,8 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     const r = await placeSpotOrder(signer, 1, order);
     if (!r.success) throw new Error(r.error);
 
-    const orderId = `etfsignal-${Date.now()}`;
+    // Use the real SoDEX order ID from the response, fall back to local timestamp
+    const orderId = r.orderId ?? `etfsignal-${Date.now()}`;
     const record: TradeRecord = {
       id:        orderId,
       orderId,
