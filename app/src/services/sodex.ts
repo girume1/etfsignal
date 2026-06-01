@@ -221,6 +221,23 @@ export async function signOrder(
   return typedSig;
 }
 
+// ─── Error translation ────────────────────────────────────────────────────────
+
+function friendlyError(msg: string): string {
+  const m = msg.toLowerCase();
+  if (m.includes('cancel only'))
+    return 'This market is temporarily paused on SoDEX testnet. Try BTC-USDC or check back later.';
+  if (m.includes('no liquidity') || m.includes('insufficient liquidity'))
+    return 'No liquidity on testnet — order submitted but no counterparty. This is expected on testnet.';
+  if (m.includes('insufficient') || m.includes('balance'))
+    return 'Insufficient balance. Claim testnet funds from the SoDEX faucet first.';
+  if (m.includes('api key not found') || m.includes('unauthorized'))
+    return 'Signing error — wallet may not be registered on SoDEX testnet. Visit testnet.sodex.com to register.';
+  if (m.includes('invalid payload') || m.includes('quantity is invalid'))
+    return 'Invalid order size. Try a different amount.';
+  return msg;
+}
+
 // ─── Place Order ──────────────────────────────────────────────────────────────
 
 export interface PlaceOrderResult {
@@ -301,7 +318,9 @@ export async function placeSpotOrder(
       return { success: true, orderId };
     }
 
-    const errMsg = result.msg || result.message || result.error || `SoDEX error (HTTP ${response.status})`;
+    const raw2 = result.msg || result.message || result.error || `SoDEX error (HTTP ${response.status})`;
+    // Translate known SoDEX testnet errors into human-readable messages
+    const errMsg = friendlyError(raw2);
     return { success: false, error: errMsg };
 
   } catch (err: any) {
