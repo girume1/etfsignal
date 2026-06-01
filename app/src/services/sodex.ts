@@ -12,27 +12,44 @@ const symbolIdCache: Record<string, number> = {};
 async function resolveSymbolId(symbol: string): Promise<number> {
   if (symbolIdCache[symbol]) return symbolIdCache[symbol];
 
-  // Convert app symbol format (BTC-USDC) to SoDEX format (vBTC_vUSDC)
-  const parts = symbol.split('-');
-  const sodexSymbol = `v${parts[0]}_v${parts[1]}`;
+  const [base, quote] = symbol.split('-');  // e.g. BTC, USDC
 
   const res = await fetch(`${TESTNET_GW}/markets/symbols`);
   const json: any = await res.json();
-  if (json.code !== 0 || !Array.isArray(json.data)) {
+  if (!Array.isArray(json.data)) {
     throw new Error('Could not fetch SoDEX symbol list');
   }
 
   for (const s of json.data) {
-    // Cache all symbols while we're here
-    const appFmt = s.symbol?.replace('v', '').replace('_v', '-') ?? '';
-    if (s.symbolID && appFmt) symbolIdCache[appFmt] = s.symbolID;
-    if (s.symbol === sodexSymbol && s.symbolID) {
-      symbolIdCache[symbol] = s.symbolID;
-      return s.symbolID;
+    const id = s.symbolID ?? s.id;
+    if (!id) continue;
+
+    // Match by symbol name — case-insensitive, try multiple name variants
+    // SoDEX testnet uses VBTC_VUSDC (all-caps), not vBTC_vUSDC
+    const name = String(s.name ?? s.symbol ?? s.displayName ?? '').toUpperCase();
+    const variants = [
+      `V${base}_V${quote}`,          // VBTC_VUSDC  ← actual testnet format
+      `${base}-${quote}`,            // BTC-USDC
+      `${base}_${quote}`,            // BTC_USDC
+      `${base}${quote}`,             // BTCUSDC
+    ];
+    if (variants.includes(name)) {
+      symbolIdCache[symbol] = Number(id);
+      return Number(id);
+    }
+
+    // Fallback: match by baseCoin/quoteCoin fields
+    const sBase  = String(s.baseCoin  ?? s.baseAsset  ?? '').toUpperCase();
+    const sQuote = String(s.quoteCoin ?? s.quoteAsset ?? '').toUpperCase();
+    if (sBase === base && sQuote === quote) {
+      symbolIdCache[symbol] = Number(id);
+      return Number(id);
     }
   }
 
-  throw new Error(`Symbol ${symbol} (${sodexSymbol}) not found on SoDEX testnet`);
+  // Debug: log what symbols are actually available
+  console.error('[sodex] available symbols:', json.data.map((s: any) => s.name ?? s.symbol).join(', '));
+  throw new Error(`Symbol ${symbol} not found on SoDEX testnet`);
 }
 
 // ─── EIP-712 Domain ───────────────────────────────────────────────────────────
