@@ -178,22 +178,15 @@ export default async function handler(req: Request) {
     return json({ error: 'Missing required signal fields' }, 400);
   }
 
-  const chatIds = await getSubscriberIds();
-
-  if (chatIds.length === 0) {
-    return json({ sent: 0, message: 'No subscribers' }, 200);
-  }
-
-  const message = isTrade ? formatTradeMessage(body) : formatSignalMessage(body);
-
-  // ── Personal alert: send directly to the linked wallet owner ─────────────
+  // ── Personal alert — must run BEFORE the subscriber early-return ─────────
+  // The wallet owner gets notified even if they haven't used /subscribe.
   if (isTrade && body.walletAddress) {
     const linkedChatId = await upstash('GET', `etfsignal:link:wallet:${body.walletAddress.toLowerCase()}`);
     if (linkedChatId) {
       const personalMsg = [
         `🔔 *Your SoDEX Trade Executed*`,
         ``,
-        formatTradeMessage(body).split('\n').slice(1).join('\n'), // reuse body without header
+        formatTradeMessage(body).split('\n').slice(1).join('\n'),
       ].join('\n');
       try {
         await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
@@ -209,6 +202,14 @@ export default async function handler(req: Request) {
       } catch { /* never block on personal alert */ }
     }
   }
+
+  const chatIds = await getSubscriberIds();
+
+  if (chatIds.length === 0) {
+    return json({ sent: 0, message: 'No subscribers' }, 200);
+  }
+
+  const message = isTrade ? formatTradeMessage(body) : formatSignalMessage(body);
 
   const results: { chatId: string; ok: boolean }[] = [];
 
