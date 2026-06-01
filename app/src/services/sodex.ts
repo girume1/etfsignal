@@ -256,7 +256,15 @@ export async function placeSpotOrder(
       timeInForce: order.type === 'MARKET' ? 3 : 1,
     };
     if (order.type === 'LIMIT' && order.price) orderItem.price = String(order.price);
-    orderItem.quantity = String(order.quantity);
+
+    // Use `funds` when user denominated in quote asset (USDC) — "spend X USDC"
+    // Use `quantity` when user denominated in base asset (BTC/ETH) — "buy/sell X BTC"
+    const baseAsset = order.symbol.split('-')[0]; // BTC or ETH
+    if (order.currency && order.currency !== baseAsset) {
+      orderItem.funds = String(order.quantity);    // e.g. spend 10 USDC
+    } else {
+      orderItem.quantity = String(order.quantity); // e.g. buy 0.001 BTC
+    }
 
     const requestBody = { accountID: aid, orders: [orderItem] };
 
@@ -266,7 +274,7 @@ export async function placeSpotOrder(
     const signingEnvelope = { type: 'batchNewOrder', params: requestBody };
     const typedSig = await signOrder(signer, signingEnvelope, nonce);
 
-    console.log('[sodex] placing order', { accountID: aid, symbol: order.symbol, side: order.side, quantity: order.quantity });
+    console.log('[sodex] placing order', { accountID: aid, symbol: order.symbol, side: order.side, quantity: order.quantity, currency: order.currency });
 
     // 6. Submit — X-API-Chain header is required (confirmed from SoDEX reference script)
     const response = await fetch(`${TESTNET_GW}/trade/orders/batch`, {

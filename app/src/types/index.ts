@@ -90,8 +90,9 @@ export interface TradeOrder {
   symbol: string;
   side: OrderSide;
   type: OrderType;
-  quantity: string;
-  price?: string; // for LIMIT orders
+  quantity: string;       // amount entered by user
+  currency: string;       // BTC or USDC — determines quantity vs funds field
+  price?: string;         // for LIMIT orders
 }
 
 export interface TradeConfirmation {

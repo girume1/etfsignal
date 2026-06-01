@@ -96,8 +96,9 @@ export function TradeModal({
       const { orderId } = await onConfirm({
         symbol,
         side,
-        type: orderType,
+        type:     orderType,
         quantity: amount,
+        currency,            // BTC or USDC — determines quantity vs funds on SoDEX
         ...(orderType === 'LIMIT' ? { price: limitPrice } : {}),
       });
       setResult({ success: true, message: '', orderId });
