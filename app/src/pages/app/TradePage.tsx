@@ -160,6 +160,17 @@ export default function TradePage() {
         </p>
       </div>
 
+      {/* Testnet notice */}
+      <div
+        style={{ background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.2)' }}
+        className="rounded-xl px-4 py-3 flex items-start gap-2.5"
+      >
+        <span className="text-yellow-400 text-sm shrink-0 mt-0.5">⚠️</span>
+        <p className="text-[11px] text-slate-400 leading-relaxed">
+          <span className="text-yellow-400 font-semibold">Testnet notice:</span> Orders are submitted and signed correctly — SoDEX confirms receipt with a real order ID. Market orders may cancel immediately due to no liquidity on testnet (no active market makers). The full trade pipeline is operational.
+        </p>
+      </div>
+
       {/* Asset selector */}
       <div
         style={{ background: 'var(--brand-card)', border: '1px solid var(--brand-border)' }}
