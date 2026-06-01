@@ -257,13 +257,14 @@ export async function placeSpotOrder(
     };
     if (order.type === 'LIMIT' && order.price) orderItem.price = String(order.price);
 
-    // Use `funds` when user denominated in quote asset (USDC) — "spend X USDC"
-    // Use `quantity` when user denominated in base asset (BTC/ETH) — "buy/sell X BTC"
+    // funds = spend X USDC to buy base asset — only valid for BUY orders
+    // quantity = sell/buy X base asset — valid for both sides
     const baseAsset = order.symbol.split('-')[0]; // BTC or ETH
-    if (order.currency && order.currency !== baseAsset) {
-      orderItem.funds = String(order.quantity);    // e.g. spend 10 USDC
+    const usesFunds = order.side === 'BUY' && order.currency && order.currency !== baseAsset;
+    if (usesFunds) {
+      orderItem.funds = String(order.quantity);    // BUY: spend 10 USDC
     } else {
-      orderItem.quantity = String(order.quantity); // e.g. buy 0.001 BTC
+      orderItem.quantity = String(order.quantity); // SELL: sell 0.001 BTC  |  BUY: buy 0.001 BTC
     }
 
     const requestBody = { accountID: aid, orders: [orderItem] };

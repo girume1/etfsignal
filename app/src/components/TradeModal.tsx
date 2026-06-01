@@ -27,10 +27,11 @@ export function TradeModal({
   const sodexSymbol = symbol.replace('-', '_');
 
   // ── Order state ──────────────────────────────────────────────────────────
-  const [currency,     setCurrency]     = useState<string>(baseAsset);
+  // SELL orders must use base asset (BTC/ETH) — funds field is BUY-only on SoDEX
+  const [currency,     setCurrency]     = useState<string>(side === 'SELL' ? baseAsset : quoteAsset);
   const [marketType,   setMarketType]   = useState<'spot' | 'futures'>('spot');
   const [orderType,    setOrderType]    = useState<'MARKET' | 'LIMIT'>('MARKET');
-  const [amount,       setAmount]       = useState('0.01');
+  const [amount,       setAmount]       = useState(side === 'SELL' ? '0.001' : '10');
   const [limitPrice,   setLimitPrice]   = useState(
     currentPrice ? currentPrice.toFixed(2) : ''
   );
