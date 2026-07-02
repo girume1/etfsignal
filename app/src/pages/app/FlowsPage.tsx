@@ -1,11 +1,15 @@
-import { useMemo } from 'react';
-import { ArrowUp, ArrowDown, RefreshCw } from 'lucide-react';
+import { useMemo, useState, useEffect } from 'react';
+import { ArrowUp, ArrowDown, RefreshCw, Award } from 'lucide-react';
 import { useDashboard } from '../../contexts/DashboardContext';
 import { useDensity } from '../../contexts/DensityContext';
 import { QuickStats } from '../../components/QuickStats';
 import { PriceFlowChart } from '../../components/PriceFlowChart';
 import { MarketShareDonut } from '../../components/MarketShareDonut';
-import type { HistoricalInflow } from '../../services/sosovalue';
+import { fetchHistoricalInflows, getLastSuccessfulFetch, type HistoricalInflow } from '../../services/sosovalue';
+import { computeFlowStats } from '../../services/flowAnalyzer';
+import type { FlowWindow } from '../../types';
+
+const WINDOWS: FlowWindow[] = [14, 30, 90];
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -149,8 +153,37 @@ export default function FlowsPage() {
   const mobile = density === 'mobile';
   const gap    = density === 'comfortable' ? 'gap-5 p-5' : 'gap-4 p-4';
 
-  const btcStats = useMemo(() => flowStats(btcHist), [btcHist]);
-  const ethStats = useMemo(() => flowStats(ethHist), [ethHist]);
+  // ── 14D/30D/90D window selection (Requirement 4) ──────────────────────────
+  const [selectedWindow, setSelectedWindow] = useState<FlowWindow>(14);
+  const [windowData, setWindowData] = useState<{ btc: HistoricalInflow[]; eth: HistoricalInflow[] } | null>(null);
+  const [windowLoading, setWindowLoading] = useState(false);
+
+  useEffect(() => {
+    if (selectedWindow === 14) { setWindowData(null); return; }
+    setWindowLoading(true);
+    Promise.all([
+      fetchHistoricalInflows('us-btc-spot', selectedWindow),
+      fetchHistoricalInflows('us-eth-spot', selectedWindow),
+    ])
+      .then(([btc, eth]) => setWindowData({ btc, eth }))
+      .finally(() => setWindowLoading(false));
+  }, [selectedWindow]);
+
+  const activeBtcHist = selectedWindow === 14 ? btcHist : (windowData?.btc ?? btcHist);
+  const activeEthHist = selectedWindow === 14 ? ethHist : (windowData?.eth ?? ethHist);
+
+  const btcStats = useMemo(() => flowStats(activeBtcHist), [activeBtcHist]);
+  const ethStats = useMemo(() => flowStats(activeEthHist), [activeEthHist]);
+
+  // Requirement 4.4/4.5: total/avg/streak + 30-day SMA, only meaningful for 30D/90D
+  const btcFlowAnalysis = useMemo(() => selectedWindow !== 14 ? computeFlowStats(activeBtcHist) : null, [selectedWindow, activeBtcHist]);
+  const ethFlowAnalysis = useMemo(() => selectedWindow !== 14 ? computeFlowStats(activeEthHist) : null, [selectedWindow, activeEthHist]);
+
+  // Requirement 4.6: badge when both assets show net positive flow over the 90D window
+  const showAccumulationBadge = selectedWindow === 90 && !!btcFlowAnalysis && !!ethFlowAnalysis
+    && btcFlowAnalysis.totalNetFlow > 0 && ethFlowAnalysis.totalNetFlow > 0;
+
+  const btcLastUpdated = selectedWindow !== 14 ? getLastSuccessfulFetch('us-btc-spot', selectedWindow) : null;
 
   const btcAum = btcData?.totalNetAssets.value;
   const ethAum = ethData?.totalNetAssets.value;
@@ -168,15 +201,34 @@ export default function FlowsPage() {
           <span className="text-xs font-semibold text-white uppercase tracking-widest font-mono">
             Flow Analysis
           </span>
-          <span
-            style={{ background: 'rgba(0,255,167,0.1)', color: '#00FFA7', border: '1px solid rgba(0,255,167,0.25)' }}
-            className="text-[10px] px-2 py-0.5 rounded font-mono"
-          >
-            14-DAY
-          </span>
-          {lastUpdated && (
+          <div className="flex items-center gap-1">
+            {WINDOWS.map(w => (
+              <button
+                key={w}
+                onClick={() => setSelectedWindow(w)}
+                style={{
+                  background: selectedWindow === w ? 'rgba(0,255,167,0.1)' : 'transparent',
+                  color:      selectedWindow === w ? '#00FFA7' : '#64748B',
+                  border:     `1px solid ${selectedWindow === w ? 'rgba(0,255,167,0.25)' : 'var(--brand-border)'}`,
+                }}
+                className="text-[10px] px-2 py-0.5 rounded font-mono transition-colors"
+              >
+                {w}D
+              </button>
+            ))}
+            {windowLoading && (
+              <RefreshCw size={10} className="animate-spin text-slate-600 shrink-0" />
+            )}
+          </div>
+          {lastUpdated && selectedWindow === 14 && (
             <span className="text-[10px] text-slate-600 font-mono hidden sm:inline">
               Updated {lastUpdated.toLocaleTimeString()}
+            </span>
+          )}
+          {selectedWindow !== 14 && (
+            <span className="text-[10px] text-slate-600 font-mono hidden sm:inline">
+              {activeBtcHist.length < selectedWindow && `${activeBtcHist.length} days available · `}
+              {btcLastUpdated && `Last updated: ${btcLastUpdated.toLocaleString()} UTC`}
             </span>
           )}
         </div>
@@ -226,6 +278,50 @@ export default function FlowsPage() {
         />
       </div>
 
+      {/* ── Extended window analysis (30D/90D) — Requirement 4.4, 4.5, 4.6 ──── */}
+      {selectedWindow !== 14 && btcFlowAnalysis && ethFlowAnalysis && (
+        <div className={`grid grid-cols-1 sm:grid-cols-2 ${gap} max-w-screen-2xl mx-auto w-full pt-0`}>
+          {showAccumulationBadge && (
+            <div
+              style={{ background: 'rgba(0,255,167,0.08)', border: '1px solid rgba(0,255,167,0.3)' }}
+              className="rounded-xl p-3 flex items-center gap-2.5 sm:col-span-2"
+            >
+              <Award size={16} style={{ color: '#00FFA7' }} className="shrink-0" />
+              <span className="text-xs font-semibold" style={{ color: '#00FFA7' }}>
+                Sustained Institutional Accumulation — both BTC and ETH show net positive flow over {selectedWindow}D
+              </span>
+            </div>
+          )}
+          {[{ label: 'BTC', analysis: btcFlowAnalysis }, { label: 'ETH', analysis: ethFlowAnalysis }].map(({ label, analysis }) => (
+            <div
+              key={label}
+              style={{ background: 'var(--brand-card)', border: '1px solid var(--brand-border)' }}
+              className="rounded-xl p-3 grid grid-cols-3 gap-2"
+            >
+              <div className="text-center">
+                <div className="text-[9px] text-slate-600 font-mono mb-0.5">{label} {selectedWindow}D TOTAL</div>
+                <div className="text-xs font-mono font-semibold" style={{ color: analysis.totalNetFlow >= 0 ? '#34D399' : '#F87171' }}>
+                  {fmtMil(analysis.totalNetFlow, '$')}
+                </div>
+              </div>
+              <div className="text-center">
+                <div className="text-[9px] text-slate-600 font-mono mb-0.5">DAILY AVG</div>
+                <div className="text-xs font-mono font-semibold" style={{ color: analysis.avgDailyNetFlow >= 0 ? '#34D399' : '#F87171' }}>
+                  {fmtMil(analysis.avgDailyNetFlow, '$')}
+                </div>
+              </div>
+              <div className="text-center">
+                <div className="text-[9px] text-slate-600 font-mono mb-0.5">LONGEST STREAK</div>
+                <div className="text-xs font-mono font-semibold text-slate-300">
+                  {analysis.longestPositiveStreak}d
+                  {analysis.sma30 && <span className="text-slate-600"> · 30D SMA {fmtMil(analysis.sma30[analysis.sma30.length - 1], '$')}</span>}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* ── Side-by-side charts ─────────────────────────────────────────── */}
       <div className={`grid ${mobile ? 'grid-cols-1' : 'grid-cols-1 lg:grid-cols-2'} ${gap} max-w-screen-2xl mx-auto w-full pt-0`}>
 
@@ -253,7 +349,7 @@ export default function FlowsPage() {
               </div>
             )}
 
-            <PriceFlowChart inflows={btcHist} prices={btcPrice} asset="BTC" />
+            <PriceFlowChart inflows={activeBtcHist} prices={btcPrice} asset="BTC" />
             <MarketShareDonut funds={btcData.list} asset="BTC" />
           </div>
         )}
@@ -282,7 +378,7 @@ export default function FlowsPage() {
               </div>
             )}
 
-            <PriceFlowChart inflows={ethHist} prices={ethPrice} asset="ETH" />
+            <PriceFlowChart inflows={activeEthHist} prices={ethPrice} asset="ETH" />
             <MarketShareDonut funds={ethData.list} asset="ETH" />
           </div>
         )}

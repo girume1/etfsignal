@@ -13,6 +13,23 @@
 //   symbol   — BTCUSDT | ETHUSDT                  (QuickChart fallback)
 //   interval — 1m | 1h                            (QuickChart fallback)
 
+// ─── Timeout helper ──────────────────────────────────────────────────────────
+
+const FETCH_TIMEOUT_MS = 5_000;
+
+/**
+ * Wraps a fetch call with an AbortController-based timeout.
+ * Throws a DOMException with name "AbortError" if the timeout fires before
+ * the fetch resolves, which callers can detect via `err.name === "AbortError"`.
+ */
+function fetchWithTimeout(url: string, init?: RequestInit): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  return fetch(url, { ...init, signal: controller.signal }).finally(() =>
+    clearTimeout(timer),
+  );
+}
+
 // ─── chart-img.com config ─────────────────────────────────────────────────────
 // TradingView symbol format: EXCHANGE:PAIR  or  EXCHANGE_PERP:PAIR.P for perps
 
@@ -35,7 +52,7 @@ async function fetchChartImg(cmd: string, apiKey: string): Promise<Buffer> {
     interval: cfg.interval,
   });
 
-  const res = await fetch(`https://api.chart-img.com/v1/tradingview/advanced-chart?${params}`);
+  const res = await fetchWithTimeout(`https://api.chart-img.com/v1/tradingview/advanced-chart?${params}`);
   if (!res.ok) {
     const txt = await res.text().catch(() => '');
     throw new Error(`chart-img ${res.status}: ${txt.slice(0, 100)}`);
@@ -43,13 +60,34 @@ async function fetchChartImg(cmd: string, apiKey: string): Promise<Buffer> {
   return Buffer.from(await res.arrayBuffer());
 }
 
-// ─── QuickChart fallback — Bybit → Kraken → OKX ──────────────────────────────
+// ─── QuickChart fallback — Binance → Bybit → Kraken → OKX ────────────────────
 
 interface Candle { t: number; o: number; h: number; l: number; c: number }
+type SourceName = 'binance' | 'bybit' | 'kraken' | 'okx';
+
+/** Thrown when Binance returns an explicit non-2xx HTTP response (fallback allowed). */
+class HttpStatusError extends Error {
+  constructor(public status: number) { super(`HTTP ${status}`); }
+}
+
+/** Thrown when Binance is unreachable (no HTTP response) — fallback is skipped entirely. */
+class UpstreamUnavailableError extends Error {}
+
+async function fromBinance(symbol: string, interval: string, limit: number): Promise<Candle[]> {
+  const ivMap: Record<string, string> = { '1m': '1m', '1h': '1h', '4h': '4h' };
+  const res = await fetchWithTimeout(
+    `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${ivMap[interval] ?? '1m'}&limit=${limit}`,
+  );
+  if (!res.ok) throw new HttpStatusError(res.status);
+  const raw: [number, string, string, string, string, ...unknown[]][] = await res.json();
+  return raw.map((k) => ({
+    t: k[0], o: parseFloat(k[1]), h: parseFloat(k[2]), l: parseFloat(k[3]), c: parseFloat(k[4]),
+  }));
+}
 
 async function fromBybit(symbol: string, interval: string, limit: number): Promise<Candle[]> {
   const ivMap: Record<string, string> = { '1m': '1', '1h': '60', '4h': '240' };
-  const res = await fetch(
+  const res = await fetchWithTimeout(
     `https://api.bybit.com/v5/market/kline?category=spot&symbol=${symbol}&interval=${ivMap[interval] ?? '1'}&limit=${limit}`,
   );
   if (!res.ok) throw new Error(`Bybit ${res.status}`);
@@ -64,7 +102,7 @@ async function fromBybit(symbol: string, interval: string, limit: number): Promi
 async function fromKraken(symbol: string, interval: string, limit: number): Promise<Candle[]> {
   const pairMap: Record<string, string> = { BTCUSDT: 'XBTUSD', ETHUSDT: 'ETHUSD' };
   const ivMap:   Record<string, string> = { '1m': '1', '1h': '60', '4h': '240' };
-  const res = await fetch(
+  const res = await fetchWithTimeout(
     `https://api.kraken.com/0/public/OHLC?pair=${pairMap[symbol] ?? 'XBTUSD'}&interval=${ivMap[interval] ?? '1'}`,
   );
   if (!res.ok) throw new Error(`Kraken ${res.status}`);
@@ -79,7 +117,7 @@ async function fromKraken(symbol: string, interval: string, limit: number): Prom
 
 async function fromOKX(symbol: string, interval: string, limit: number): Promise<Candle[]> {
   const barMap: Record<string, string> = { '1m': '1m', '1h': '1H', '4h': '4H' };
-  const res = await fetch(
+  const res = await fetchWithTimeout(
     `https://www.okx.com/api/v5/market/candles?instId=${symbol.replace('USDT', '-USDT')}&bar=${barMap[interval] ?? '1m'}&limit=${limit}`,
   );
   if (!res.ok) throw new Error(`OKX ${res.status}`);
@@ -91,11 +129,28 @@ async function fromOKX(symbol: string, interval: string, limit: number): Promise
   }));
 }
 
-async function fetchCandles(symbol: string, interval: string, limit: number): Promise<Candle[]> {
-  for (const fn of [fromBybit, fromKraken, fromOKX]) {
+/**
+ * Binance is primary. An explicit non-2xx HTTP response from Binance falls
+ * through to Bybit → Kraken → OKX. A connection failure or timeout (no HTTP
+ * response at all) skips the fallback chain and throws UpstreamUnavailableError.
+ */
+async function fetchCandlesWithSource(
+  symbol: string,
+  interval: string,
+  limit: number,
+): Promise<{ candles: Candle[]; source: SourceName }> {
+  try {
+    const candles = await fromBinance(symbol, interval, limit);
+    if (candles.length > 0) return { candles, source: 'binance' };
+  } catch (err: any) {
+    if (!(err instanceof HttpStatusError)) throw new UpstreamUnavailableError();
+    // Explicit HTTP error from Binance — fall through to secondary sources below.
+  }
+
+  for (const [fn, source] of [[fromBybit, 'bybit'], [fromKraken, 'kraken'], [fromOKX, 'okx']] as const) {
     try {
-      const c = await fn(symbol, interval, limit);
-      if (c.length > 0) return c;
+      const candles = await fn(symbol, interval, limit);
+      if (candles.length > 0) return { candles, source };
     } catch { /* try next */ }
   }
   throw new Error('All candle sources failed');
@@ -123,7 +178,7 @@ async function renderQuickChart(symbol: string, interval: string, candles: Candl
       legend: { labels: { fontColor: '#94A3B8', fontSize: 12 } },
     },
   };
-  const res = await fetch('https://quickchart.io/chart', {
+  const res = await fetchWithTimeout('https://quickchart.io/chart', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ chart: cfg, width: 800, height: 450, backgroundColor: '#06080B', format: 'png', devicePixelRatio: 2 }),
@@ -152,6 +207,9 @@ export default async function handler(req: any, res: any) {
       res.setHeader('Cache-Control', 'public, max-age=60');
       return res.send(img);
     } catch (err: any) {
+      if (err.name === 'AbortError') {
+        return res.status(502).json({ error: 'timeout' });
+      }
       console.warn('[chart] chart-img failed, falling back to QuickChart:', err.message);
       // Fall through to QuickChart
     }
@@ -159,10 +217,19 @@ export default async function handler(req: any, res: any) {
 
   // ── Mode 2: QuickChart candlestick ────────────────────────────────────────
   let candles: Candle[];
+  let source: SourceName;
   try {
-    candles = await fetchCandles(symbol, interval, limit);
+    const result = await fetchCandlesWithSource(symbol, interval, limit);
+    candles = result.candles;
+    source  = result.source;
   } catch (err: any) {
-    return res.status(502).json({ error: `Candle fetch failed: ${err.message}` });
+    // fetchCandlesWithSource classifies Binance connection failures/timeouts as
+    // UpstreamUnavailableError before any fallback is attempted (Req 1.3); any
+    // other failure here means every source in the chain was exhausted (Req 1.4).
+    if (err instanceof UpstreamUnavailableError) {
+      return res.status(502).json({ error: 'upstream_unavailable' });
+    }
+    return res.status(502).json({ error: 'all_sources_failed', sources_tried: ['binance', 'bybit', 'kraken', 'okx'] });
   }
 
   const last  = candles[candles.length - 1]?.c ?? 0;
@@ -173,6 +240,9 @@ export default async function handler(req: any, res: any) {
   try {
     img = await renderQuickChart(symbol, interval, candles);
   } catch (err: any) {
+    if (err.name === 'AbortError') {
+      return res.status(502).json({ error: 'timeout' });
+    }
     return res.status(502).json({ error: `Chart render failed: ${err.message}` });
   }
 
@@ -180,5 +250,6 @@ export default async function handler(req: any, res: any) {
   res.setHeader('Cache-Control', 'public, max-age=60, stale-while-revalidate=30');
   res.setHeader('X-Pct',         pct.toFixed(2));
   res.setHeader('X-Trending',    pct >= 0 ? '1' : '0');
+  res.setHeader('X-Source',      source);
   return res.send(img);
 }

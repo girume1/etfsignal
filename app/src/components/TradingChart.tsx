@@ -145,9 +145,10 @@ export function TradingChart({
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef     = useRef<IChartApi | null>(null);
 
-  const [loading, setLoading]   = useState(true);
-  const [error,   setError]     = useState<string | null>(null);
-  const [stats,   setStats]     = useState<{
+  const [loading,    setLoading]    = useState(true);
+  const [error,      setError]      = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
+  const [stats,      setStats]      = useState<{
     latest: number;
     change: number;
     changePct: number;
@@ -245,9 +246,9 @@ export function TradingChart({
         chartRef.current = null;
       }
     };
-  // Re-create the chart when symbol or interval changes
+  // Re-create the chart when symbol, interval, limit, or retryCount changes
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [symbol, interval, limit]);
+  }, [symbol, interval, limit, retryCount]);
 
   // ── Derive display price: live WebSocket > latest candle close ────────────
   const displayPrice = currentPrice ?? stats?.latest;
@@ -331,9 +332,10 @@ export function TradingChart({
           <span className="text-red-400 text-sm">⚠ {error}</span>
           <button
             onClick={() => {
-              // Re-trigger useEffect by forcing re-mount — parent should toggle key
+              klineCache.delete(`${symbol}-${interval}-${limit}`);
               setError(null);
               setLoading(true);
+              setRetryCount(c => c + 1);
             }}
             className="text-xs font-mono text-slate-400 hover:text-white border border-white/10 hover:border-white/20 px-3 py-1.5 rounded-lg transition-colors"
           >

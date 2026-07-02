@@ -9,6 +9,7 @@ import {
   fetchEtfMetrics, fetchNews, fetchHistoricalInflows, fetchPriceHistory,
   fetchSignalHistory,
 } from '../services/sosovalue';
+import { saveSignal, evaluatePendingSignals } from '../services/signalArchive';
 import { deriveAlerts } from '../services/alerts';
 import type { HistoricalInflow, PricePoint } from '../types';
 import { computeSentiment } from '../services/sentiment';
@@ -19,7 +20,7 @@ import { saveTrade, getTradeHistory } from '../services/tradeHistory';
 import { useLivePrices } from '../hooks/useLivePrices';
 import { useConnectionStatus } from './ConnectionStatusContext';
 import type {
-  EtfData, NewsItem, MarketSignal, Alert, HistoricalSignal, TradeRecord,
+  EtfData, EtfType, NewsItem, MarketSignal, Alert, HistoricalSignal, TradeRecord,
   ActiveTab, WalletState, TradeOrder, OrderSide, SentimentScore,
 } from '../types';
 
@@ -241,68 +242,33 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
       headline:   sig.headline,
       timestamp:  Date.now(),
       entryPrice: livePrice,
+      pnlReal:    false,
+      // Only direction-bearing signals with a known entry price are eligible
+      // for real backtested evaluation; NEUTRAL signals stay legacy/unevaluated.
+      ...(sig.direction !== 'NEUTRAL' && livePrice != null && {
+        tpPrice: sig.takeProfit.price,
+        slPrice: sig.stopLoss.price,
+        outcome: 'PENDING' as const,
+      }),
     };
 
-    // 1. localStorage (always, instant)
-    const existing: HistoricalSignal[] = JSON.parse(
-      localStorage.getItem('etfsignal:history') ?? '[]'
-    );
-    localStorage.setItem(
-      'etfsignal:history',
-      JSON.stringify([entry, ...existing].slice(0, 20))
-    );
-
-    // 2. Redis via API (fire-and-forget, survives browser wipe)
-    fetch('/api/signal-archive', {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify(entry),
-    }).catch(() => {});
+    saveSignal(entry).catch(() => {});
   }, [liveBtcPx, latestBtcPx, liveEthPx, latestEthPx]);
 
   // ── Signal performance evaluation ────────────────────────────────────────
-  // Runs whenever history or live prices update.
-  // Signals older than 24h with a stored entryPrice get a real pnlPct.
+  // Evaluates PENDING signals ≥24h old against real Binance candles, on mount
+  // and every 5 minutes thereafter.
   useEffect(() => {
-    if (!history.length) return;
-    const btcPx = liveBtcPx ?? latestBtcPx;
-    const ethPx = liveEthPx ?? latestEthPx;
-    if (!btcPx && !ethPx) return;
-
-    const TWENTY_FOUR_H = 24 * 60 * 60 * 1000;
-    const now = Date.now();
-    let changed = false;
-
-    const evaluated = history.map(sig => {
-      // Skip: already evaluated, no entry price, or less than 24h old
-      if (sig.pnlReal || !sig.entryPrice || (now - sig.timestamp) < TWENTY_FOUR_H) return sig;
-
-      const currentPx = sig.asset === 'BTC' ? btcPx : ethPx;
-      if (!currentPx) return sig;
-
-      const delta = (currentPx - sig.entryPrice) / sig.entryPrice * 100;
-      const pnlPct = sig.direction === 'BULLISH' ?  delta
-                   : sig.direction === 'BEARISH' ? -delta
-                   : 0;
-
-      changed = true;
-      const updated = { ...sig, pnlPct: parseFloat(pnlPct.toFixed(2)), pnlReal: true };
-
-      // Persist evaluation to Redis in background
-      fetch('/api/signal-archive', {
-        method:  'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ id: sig.id, pnlPct: updated.pnlPct, pnlReal: true }),
-      }).catch(() => {});
-
-      return updated;
-    });
-
-    if (changed) {
-      setHistory(evaluated);
-      localStorage.setItem('etfsignal:history', JSON.stringify(evaluated));
-    }
-  }, [history, liveBtcPx, latestBtcPx, liveEthPx, latestEthPx]);
+    const evaluate = () => {
+      evaluatePendingSignals()
+        .then(fetchSignalHistory)
+        .then(setHistory)
+        .catch(() => {});
+    };
+    evaluate();
+    const i = setInterval(evaluate, 5 * 60 * 1000);
+    return () => clearInterval(i);
+  }, []);
 
   // ── AI signal ────────────────────────────────────────────────────────────
   const handleAnalyze = useCallback(async () => {
@@ -312,7 +278,27 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     setSignalError(null);
     try {
       const livePrice = activeTab === 'btc' ? (liveBtcPx ?? latestBtcPx) : (liveEthPx ?? latestEthPx);
-      const r = await analyzeMarket(activeLabel, activeData, news, livePrice);
+      const etfType: EtfType = activeTab === 'btc' ? 'us-btc-spot' : 'us-eth-spot';
+
+      // Requirement 2.10: track record from already-loaded real-evaluated signals (>=5 required)
+      const resolvedReal = history.filter(s => s.pnlReal === true && typeof s.pnlPct === 'number');
+      const backtestSummary = resolvedReal.length >= 5
+        ? {
+            hitRate: Math.round((resolvedReal.filter(s => s.outcome === 'HIT').length / resolvedReal.length) * 100),
+            avgPnl: resolvedReal.reduce((a, s) => a + (s.pnlPct as number), 0) / resolvedReal.length,
+            sampleSize: resolvedReal.length,
+          }
+        : undefined;
+
+      // Requirement 4.7: 30D/90D flow totals for prompt context
+      const [flow30, flow90] = await Promise.all([
+        fetchHistoricalInflows(etfType, 30),
+        fetchHistoricalInflows(etfType, 90),
+      ]);
+      const flow30dTotal = flow30.length > 0 ? flow30.reduce((a, h) => a + h.inflow, 0) : undefined;
+      const flow90dTotal = flow90.length > 0 ? flow90.reduce((a, h) => a + h.inflow, 0) : undefined;
+
+      const r = await analyzeMarket(activeLabel, activeData, news, livePrice, { backtestSummary, flow30dTotal, flow90dTotal });
       setSignal(r);
       persistSignal(r, activeLabel);
       // Fire-and-forget: notify Telegram subscribers (never blocks the UI)
@@ -327,7 +313,7 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     } finally {
       setSignalLoading(false);
     }
-  }, [activeData, activeLabel, news, persistSignal, setSourceStatus]);
+  }, [activeData, activeLabel, activeTab, news, persistSignal, setSourceStatus, history]);
 
   // ── Trade modal ───────────────────────────────────────────────────────────
   const openTradeModal  = useCallback((side: OrderSide) => setTradeModal({ side }), []);

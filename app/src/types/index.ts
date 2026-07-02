@@ -147,6 +147,12 @@ export interface HistoricalSignal {
   entryPrice?: number; // live price at signal generation time
   pnlPct?: number;     // real evaluated outcome (after 24h) or mock
   pnlReal?: boolean;   // true = evaluated from real price, false/absent = mock
+
+  // Wave 3 fields
+  tpPrice?: number;                                     // take-profit absolute price
+  slPrice?: number;                                     // stop-loss absolute price
+  outcome?: 'PENDING' | 'HIT' | 'MISS' | 'EXPIRED';   // evaluation outcome
+  evaluatedAt?: number;                                 // ms epoch, set after evaluation
 }
 
 export interface SentimentScore {
@@ -184,3 +190,80 @@ export const NEWS_CATEGORY_MAP: Record<number, string> = {
   9: 'Price Alert',
   10: 'On-Chain',
 };
+
+// ─── Wave 3: Backtester Types ──────────────────────────────────────────────
+
+export type SignalOutcome = 'HIT' | 'MISS' | 'EXPIRED';
+
+export interface HourlyCandle {
+  time: number;   // Unix ms timestamp
+  high: number;
+  low: number;
+  close: number;
+}
+
+export interface BacktestSignalInput {
+  id: string;
+  direction: 'BULLISH' | 'BEARISH';
+  confidence: number;
+  entryPrice: number;
+  tpPrice: number;
+  slPrice: number;
+  timestamp: number; // signal generation time (ms)
+}
+
+export interface SignalBacktestResult {
+  id: string;
+  outcome: SignalOutcome;
+  pnlPct: number;
+  evaluatedAt: number; // ms timestamp
+}
+
+export interface BacktestAggregates {
+  totalCount: number;
+  hitRate: number;     // 0–100
+  avgPnl: number;
+  cumPnl: number;
+  maxDrawdown: number; // >= 0, largest peak-to-trough decline
+}
+
+export interface BacktestResult {
+  perSignal: SignalBacktestResult[];
+  aggregates: BacktestAggregates;
+}
+
+// ─── Wave 3: Risk Manager Types ────────────────────────────────────────────
+
+export interface RiskInput {
+  balance: number;          // vUSDC wallet balance
+  confidence: number;       // 0.01–0.99 (decimal, not percentage)
+  tpPct: number;            // positive number, e.g. 4.5 for +4.5%
+  slPct: number;            // positive magnitude, e.g. 2.8 for -2.8% SL
+  entryPrice?: number;      // optional, required if ATR is provided
+  atr?: number;             // optional Average True Range
+  slPrice?: number;         // optional absolute SL price (for ATR calc)
+  defaultBalance?: boolean; // injected by caller if balance came from fallback
+}
+
+export interface RiskResult {
+  positionSize: number;        // vUSDC, always >= 0
+  riskRewardRatio: number;     // tpPct / slPct, or 0 if slPct is 0
+  riskRewardWarning: boolean;
+  clamped: boolean;            // true if floor applied
+  capped: boolean;             // true if ceiling applied
+  slInAtr?: number;            // abs(entryPrice - slPrice) / atr
+  atrWarning?: boolean;        // slInAtr > 3.0
+  defaultBalance?: boolean;    // true if caller used fallback 100 vUSDC
+}
+
+// ─── Wave 3: Flow Analyzer Types ───────────────────────────────────────────
+
+export type FlowWindow = 14 | 30 | 90;
+
+export interface FlowStats {
+  totalNetFlow: number;
+  avgDailyNetFlow: number;
+  longestPositiveStreak: number; // max consecutive positive-inflow days
+  sma30?: number[];              // 30-day SMA values, only if data.length >= 30
+}
+

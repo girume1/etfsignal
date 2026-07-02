@@ -53,6 +53,16 @@ export async function fetchEtfMetrics(type: EtfType): Promise<EtfData> {
 
 // ─── Historical Inflows ───────────────────────────────────────────────────────
 
+// Last successfully fetched (real, non-demo) data per (type, days) — used to show
+// a stale-data timestamp when a later fetch for the same or another window fails.
+const lastGood = new Map<string, { data: HistoricalInflow[]; ts: number }>();
+const goodKey = (type: EtfType, days: number) => `${type}-${days}`;
+
+export function getLastSuccessfulFetch(type: EtfType, days: number): Date | null {
+  const entry = lastGood.get(goodKey(type, days));
+  return entry ? new Date(entry.ts) : null;
+}
+
 export async function fetchHistoricalInflows(
   type: EtfType,
   days = 14,
@@ -91,12 +101,24 @@ export async function fetchHistoricalInflows(
           }))
           .filter(x => x.date !== '');
 
-        if (normalised.length > 0) return normalised;
+        if (normalised.length > 0) {
+          lastGood.set(goodKey(type, days), { data: normalised, ts: Date.now() });
+          return normalised;
+        }
       } catch { /* try next attempt/host */ }
     }
   }
-  // API unavailable — return representative demo data so the sentiment gauge
-  // always has ≥4 points and the AI pipeline stays interactive.
+
+  // API unreachable for this window — fall back to the most recent successful
+  // fetch for this EtfType (any window size), so the UI shows real data with a
+  // "last updated" label instead of silently reverting to demo data.
+  const staleForType = [...lastGood.entries()]
+    .filter(([key]) => key.startsWith(`${type}-`))
+    .sort((a, b) => b[1].ts - a[1].ts)[0];
+  if (staleForType) return staleForType[1].data;
+
+  // Never had a successful fetch — return representative demo data so the
+  // sentiment gauge always has ≥4 points and the AI pipeline stays interactive.
   const today = new Date();
   const makeDate = (daysAgo: number) => {
     const d = new Date(today);

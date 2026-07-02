@@ -1,16 +1,32 @@
 import type { EtfData, NewsItem, MarketSignal } from '../types';
 import { getNewsTitle, formatUSD } from './sosovalue';
 
+/** Requirement 2.10, 4.7: optional quantitative context appended to the AI prompt. */
+export interface SignalContext {
+  backtestSummary?: { hitRate: number; avgPnl: number; sampleSize: number };
+  flow30dTotal?: number;
+  flow90dTotal?: number;
+}
+
 export function buildPrompt(
   etfType: 'BTC' | 'ETH',
   etfData: EtfData,
   news: NewsItem[],
-  currentPrice: number | null
+  currentPrice: number | null,
+  context: SignalContext = {},
 ): string {
   const inflow = etfData.dailyNetInflow.value;
   const cumInflow = etfData.cumNetInflow.value;
   const netAssets = etfData.totalNetAssets.value;
   const holdings = etfData.totalTokenHoldings.value;
+
+  const trackRecord = context.backtestSummary
+    ? `\n## Signal Track Record (last ${context.backtestSummary.sampleSize} real-evaluated signals)\n- Hit Rate: ${context.backtestSummary.hitRate}%\n- Avg P&L: ${context.backtestSummary.avgPnl.toFixed(2)}%\n`
+    : '';
+
+  const flowWindows = (context.flow30dTotal !== undefined || context.flow90dTotal !== undefined)
+    ? `\n## Extended Flow Context\n- 30-Day Net Flow: ${context.flow30dTotal !== undefined ? formatUSD(context.flow30dTotal) : 'unavailable'}\n- 90-Day Net Flow: ${context.flow90dTotal !== undefined ? formatUSD(context.flow90dTotal) : 'unavailable'}\n`
+    : '';
 
   const topFunds = etfData.list
     .filter(f => f.dailyNetInflow.value !== null)
@@ -36,7 +52,7 @@ ${priceContext}
 - Daily Net Inflow: ${formatUSD(inflow)}
 - Cumulative Net Inflow: ${formatUSD(cumInflow)}
 - Total ${etfType} Holdings: ${holdings?.toLocaleString() || '—'} ${etfType}
-
+${trackRecord}${flowWindows}
 ## Top Fund Flows
 ${topFunds || '  No data available'}
 
@@ -140,9 +156,10 @@ export async function analyzeMarket(
   etfType: 'BTC' | 'ETH',
   etfData: EtfData,
   news: NewsItem[],
-  currentPrice?: number | null
+  currentPrice?: number | null,
+  context: SignalContext = {},
 ): Promise<MarketSignal> {
-  const prompt = buildPrompt(etfType, etfData, news, currentPrice ?? null);
+  const prompt = buildPrompt(etfType, etfData, news, currentPrice ?? null, context);
 
   // Calls our serverless function — NOT Anthropic directly
   // API key stays safe on the server

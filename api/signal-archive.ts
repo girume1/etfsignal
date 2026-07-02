@@ -72,7 +72,7 @@ export default async function handler(req: Request) {
     let body: any;
     try { body = await req.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
 
-    const { id, pnlPct, pnlReal } = body ?? {};
+    const { id, pnlPct, pnlReal, outcome, evaluatedAt } = body ?? {};
     if (!id || pnlPct == null) return json({ error: 'Missing id or pnlPct' }, 400);
 
     // Read list, find + update the matching entry, write back
@@ -84,7 +84,13 @@ export default async function handler(req: Request) {
       try {
         const entry = JSON.parse(raw[i]);
         if (entry.id === id) {
-          const patched = JSON.stringify({ ...entry, pnlPct, pnlReal: pnlReal ?? true });
+          const patched = JSON.stringify({
+            ...entry,
+            pnlPct,
+            pnlReal: pnlReal ?? true,
+            ...(outcome && { outcome }),
+            ...(evaluatedAt != null && { evaluatedAt }),
+          });
           await upstash('LSET', ARCHIVE_KEY, i, patched);
           updated = true;
           break;

@@ -56,48 +56,84 @@ function resolvePnl(sig: HistoricalSignal): { pnl: number; real: boolean } | nul
   return isNaN(mock) ? null : { pnl: mock, real: false };
 }
 
-function computeStats(signals: HistoricalSignal[]) {
-  const resolved = signals
-    .map(s => resolvePnl(s))
-    .filter((p): p is { pnl: number; real: boolean } => p !== null);
+function statsOf(resolved: { pnl: number }[]) {
+  const wins   = resolved.filter(p => p.pnl > 0).length;
+  const cumPnl = resolved.reduce((a, b) => a + b.pnl, 0);
 
-  if (!resolved.length) return null;
-
-  const wins       = resolved.filter(p => p.pnl > 0).length;
-  const hitRate    = Math.round((wins / resolved.length) * 100);
-  const avgPnl     = resolved.reduce((a, b) => a + b.pnl, 0) / resolved.length;
-  const cumPnl     = resolved.reduce((a, b) => a + b.pnl, 0);
-  const realCount  = resolved.filter(p => p.real).length;
-
-  // Drawdown: biggest drop from running peak in cumulative PnL
   let peak = 0, runSum = 0, maxDD = 0;
   for (const { pnl } of resolved) {
     runSum += pnl;
     if (runSum > peak) peak = runSum;
-    const dd = peak - runSum;
-    if (dd > maxDD) maxDD = dd;
+    maxDD = Math.max(maxDD, peak - runSum);
   }
 
-  return { total: resolved.length, hitRate, avgPnl, cumPnl, maxDD, realCount };
+  return {
+    total:   resolved.length,
+    hitRate: Math.round((wins / resolved.length) * 100),
+    avgPnl:  cumPnl / resolved.length,
+    cumPnl,
+    maxDD,
+  };
 }
 
-function buildChartData(signals: HistoricalSignal[]) {
-  // Oldest first for cumulative chart
-  const ordered = [...signals].reverse();
-  let cum = 0;
-  return ordered
+/** Requirement 5.4: exclusive real-outcome stats, shown once >=3 real records exist. */
+export function computeRealStats(signals: HistoricalSignal[]) {
+  const real = signals.filter(s => s.pnlReal === true && typeof s.pnlPct === 'number');
+  if (real.length < 3) return null;
+  return statsOf(real.map(s => ({ pnl: s.pnlPct as number })));
+}
+
+/** Requirement 5.5: estimated/simulated stats for signals not (yet) real-evaluated. */
+export function computeEstimatedStats(signals: HistoricalSignal[]) {
+  const resolved = signals
+    .filter(s => s.pnlReal !== true)
     .map(s => resolvePnl(s))
-    .filter((p): p is { pnl: number; real: boolean } => p !== null)
-    .map((p, i) => {
-      cum += p.pnl;
-      return { i, cum: parseFloat(cum.toFixed(2)), real: p.real };
-    });
+    .filter((p): p is { pnl: number; real: boolean } => p !== null);
+  return resolved.length >= 3 ? statsOf(resolved) : null;
+}
+
+/** Requirement 2.7: any resolved outcome (real or estimated), used only to gate the "insufficient data" notice. */
+export function countResolved(signals: HistoricalSignal[]): number {
+  return signals.filter(s => resolvePnl(s) !== null).length;
+}
+
+/** Requirement 5.7: sparkline uses only real-evaluated records, oldest first, colored by outcome. */
+export function buildRealChartData(signals: HistoricalSignal[]) {
+  const ordered = [...signals].filter(s => s.pnlReal === true && typeof s.pnlPct === 'number').reverse();
+  let cum = 0;
+  return ordered.map((s, i) => {
+    cum += s.pnlPct as number;
+    return { i, cum: parseFloat(cum.toFixed(2)), hit: s.outcome === 'HIT' };
+  });
+}
+
+function StatsGrid({ stats, dimmed }: { stats: ReturnType<typeof statsOf>; dimmed?: boolean }) {
+  return (
+    <div
+      className="grid grid-cols-4 gap-1 rounded-lg p-2.5"
+      style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', opacity: dimmed ? 0.6 : 1 }}
+    >
+      {[
+        { label: 'RESOLVED', value: stats.total.toString(), color: '#94A3B8' },
+        { label: 'WIN RATE', value: `${stats.hitRate}%`, color: stats.hitRate >= 50 ? '#34D399' : '#F87171' },
+        { label: 'AVG P&L', value: `${stats.avgPnl >= 0 ? '+' : ''}${stats.avgPnl.toFixed(1)}%`, color: stats.avgPnl >= 0 ? '#34D399' : '#F87171' },
+        { label: 'CUMUL.', value: `${stats.cumPnl >= 0 ? '+' : ''}${stats.cumPnl.toFixed(1)}%`, color: stats.cumPnl >= 0 ? '#34D399' : '#F87171' },
+      ].map(({ label, value, color }) => (
+        <div key={label} className="text-center">
+          <div className="text-[9px] text-slate-600 font-mono mb-0.5 tracking-wider">{label}</div>
+          <div className="text-xs font-bold font-mono" style={{ color }}>{value}</div>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 export function SignalHistory({ signals, loading }: SignalHistoryProps) {
-  const stats     = !loading ? computeStats(signals) : null;
-  const chartData = !loading ? buildChartData(signals) : [];
-  const chartColor = stats && stats.cumPnl >= 0 ? '#34D399' : '#F87171';
+  const realStats      = !loading ? computeRealStats(signals) : null;
+  const estimatedStats = !loading ? computeEstimatedStats(signals) : null;
+  const resolvedCount   = !loading ? countResolved(signals) : 0;
+  const chartData       = !loading ? buildRealChartData(signals) : [];
+  const chartColor      = realStats && realStats.cumPnl >= 0 ? '#34D399' : '#F87171';
 
   return (
     <div
@@ -113,27 +149,26 @@ export function SignalHistory({ signals, loading }: SignalHistoryProps) {
         <span className="text-[10px] text-slate-600 font-mono">{signals.length} signal{signals.length !== 1 ? 's' : ''}</span>
       </div>
 
-      {/* Performance stats */}
-      {stats && (
-        <div
-          className="grid grid-cols-4 gap-1 mb-3 rounded-lg p-2.5"
-          style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}
-        >
-          {[
-            { label: 'RESOLVED', value: stats.total.toString(), color: '#94A3B8' },
-            { label: 'WIN RATE', value: `${stats.hitRate}%`, color: stats.hitRate >= 50 ? '#34D399' : '#F87171' },
-            { label: 'AVG P&L', value: `${stats.avgPnl >= 0 ? '+' : ''}${stats.avgPnl.toFixed(1)}%`, color: stats.avgPnl >= 0 ? '#34D399' : '#F87171' },
-            { label: 'CUMUL.', value: `${stats.cumPnl >= 0 ? '+' : ''}${stats.cumPnl.toFixed(1)}%`, color: chartColor },
-          ].map(({ label, value, color }) => (
-            <div key={label} className="text-center">
-              <div className="text-[9px] text-slate-600 font-mono mb-0.5 tracking-wider">{label}</div>
-              <div className="text-xs font-bold font-mono" style={{ color }}>{value}</div>
-            </div>
-          ))}
+      {/* Performance stats — real evaluated outcomes shown separately from estimates (Req 5.4, 5.6) */}
+      {realStats && (
+        <div className="mb-2">
+          <div className="text-[9px] text-emerald-400 font-mono mb-1 tracking-wider">✓ REAL ({realStats.total})</div>
+          <StatsGrid stats={realStats} />
         </div>
       )}
+      {estimatedStats && (
+        <div className="mb-3">
+          <div className="text-[9px] text-slate-600 font-mono mb-1 tracking-wider">~ESTIMATED ({estimatedStats.total})</div>
+          <StatsGrid stats={estimatedStats} dimmed />
+        </div>
+      )}
+      {!realStats && !estimatedStats && resolvedCount > 0 && (
+        <p className="text-[10px] text-slate-600 font-mono text-center py-2 mb-3">
+          Insufficient data for backtest ({resolvedCount}/3 resolved)
+        </p>
+      )}
 
-      {/* Cumulative PnL sparkline */}
+      {/* Cumulative real P&L sparkline (Req 5.7) */}
       {chartData.length >= 2 && (
         <div className="mb-3 rounded-lg overflow-hidden" style={{ background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.05)' }}>
           <div className="text-[9px] text-slate-600 font-mono px-2 pt-1.5 uppercase tracking-wider">Cumulative P&L %</div>
@@ -158,7 +193,11 @@ export function SignalHistory({ signals, loading }: SignalHistoryProps) {
                 dataKey="cum"
                 stroke={chartColor}
                 strokeWidth={1.5}
-                dot={false}
+                dot={(props: { cx?: number; cy?: number; payload?: { hit: boolean }; index?: number }) => {
+                  const { cx, cy, payload, index } = props;
+                  const color = payload?.hit ? '#34D399' : '#F87171';
+                  return <circle key={index} cx={cx} cy={cy} r={2.5} fill={color} stroke={color} />;
+                }}
                 activeDot={{ r: 3, fill: chartColor }}
               />
             </LineChart>
@@ -235,7 +274,7 @@ export function SignalHistory({ signals, loading }: SignalHistoryProps) {
       )}
 
       <div className="mt-3 pt-2 border-t border-white/5 text-[9px] text-slate-600 font-mono text-center">
-        ✓ evaluated = real 24h price delta · ~estimated = deterministic projection · Not financial advice
+        ✓ evaluated = real 24h TP/SL backtest · ~estimated = deterministic projection · Not financial advice
       </div>
     </div>
   );

@@ -1,11 +1,70 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   X, TrendingUp, Zap, Target, ArrowUp, ArrowDown,
-  ArrowUpDown, RefreshCw, ExternalLink, AlertTriangle,
+  ArrowUpDown, RefreshCw, ExternalLink, AlertTriangle, Shield,
   ChevronUp, ChevronDown, CheckCircle2, XCircle,
 } from 'lucide-react';
 import type { MarketSignal, OrderSide, TradeOrder } from '../types';
 import { fetchBalances } from '../services/sodex';
+import { computePositionSize } from '../services/riskManager';
+
+function RiskPanel({
+  balance, defaultBalance, confidence, tpPct, slPct, entryPrice, slPrice, amountUsd,
+}: {
+  balance: number; defaultBalance: boolean; confidence: number;
+  tpPct: number; slPct: number; entryPrice?: number; slPrice?: number; amountUsd: number;
+}) {
+  const risk = useMemo(() => computePositionSize({
+    balance,
+    confidence: confidence / 100,
+    tpPct: Math.abs(tpPct),
+    slPct: Math.abs(slPct),
+    entryPrice,
+    slPrice,
+    defaultBalance,
+  }), [balance, confidence, tpPct, slPct, entryPrice, slPrice, defaultBalance]);
+
+  const warnings = [
+    risk.riskRewardWarning && 'Risk/reward below 1.5x',
+    risk.atrWarning && 'Stop-loss beyond 3x ATR',
+    risk.clamped && 'Clamped to 10 vUSDC minimum',
+    risk.capped && 'Capped to 20% of balance',
+  ].filter((w): w is string => Boolean(w));
+
+  return (
+    <div
+      style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--brand-border)' }}
+      className="rounded-xl p-3 mb-4"
+    >
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs text-slate-500 uppercase tracking-wider font-semibold flex items-center gap-1.5">
+          <Shield size={12} /> Suggested Position (half-Kelly)
+        </span>
+        {risk.defaultBalance && (
+          <span className="text-[9px] text-amber-400 font-mono">using default balance</span>
+        )}
+      </div>
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="font-mono text-lg font-bold text-white">${risk.positionSize.toFixed(2)}</span>
+        <span className="text-xs font-mono" style={{ color: risk.riskRewardWarning ? '#F87171' : '#34D399' }}>
+          R:R {risk.riskRewardRatio.toFixed(2)}x
+        </span>
+      </div>
+      <div className="text-[10px] text-slate-600 font-mono mb-1.5">
+        Your amount: ${amountUsd.toFixed(2)} ({risk.positionSize > 0 ? (amountUsd / risk.positionSize).toFixed(1) : '—'}x recommended)
+      </div>
+      {warnings.length > 0 && (
+        <ul className="space-y-0.5">
+          {warnings.map(w => (
+            <li key={w} className="text-[10px] text-amber-400 flex items-center gap-1">
+              <AlertTriangle size={10} className="shrink-0" /> {w}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
 
 interface TradeModalProps {
   signal: MarketSignal;
@@ -63,6 +122,13 @@ export function TradeModal({
     }
   }, [currentPrice, orderType, limitPrice]);
 
+  // ── Risk panel: debounced amount → quote-asset (USD) terms ────────────────
+  const [debouncedAmount, setDebouncedAmount] = useState(amount);
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedAmount(amount), 300);
+    return () => clearTimeout(t);
+  }, [amount]);
+
   // ── Derived colours ──────────────────────────────────────────────────────
   const isLong    = side === 'BUY';
   const color     = isLong ? '#34D399' : '#F87171';
@@ -73,6 +139,15 @@ export function TradeModal({
   const availableRaw = balances[currency];
   const available    = availableRaw !== undefined ? parseFloat(availableRaw) : null;
   const isBalanceZero = available !== null && available === 0;
+
+  // ── Risk sizing inputs (quote-asset/vUSDC terms) ───────────────────────────
+  const quoteBalanceRaw   = balances[quoteAsset];
+  const quoteBalance      = quoteBalanceRaw !== undefined ? parseFloat(quoteBalanceRaw) : null;
+  const riskBalance       = quoteBalance ?? 100; // ponytail: no ATR data source in this codebase — omitted from RiskPanel, not fabricated
+  const riskDefaultBalance = quoteBalance === null;
+  const amountUsd = currency === baseAsset
+    ? parseFloat(debouncedAmount || '0') * (currentPrice ?? 0)
+    : parseFloat(debouncedAmount || '0');
 
   function formatBalance(val: number | null): string {
     if (val === null) return '—';
@@ -223,6 +298,18 @@ export function TradeModal({
                 {signal.direction} · {signal.confidence}% confidence
               </div>
             </div>
+
+            {/* ── Risk panel (position sizing + risk/reward) ────────────── */}
+            <RiskPanel
+              balance={riskBalance}
+              defaultBalance={riskDefaultBalance}
+              confidence={signal.confidence}
+              tpPct={signal.takeProfit.pct}
+              slPct={signal.stopLoss.pct}
+              entryPrice={currentPrice}
+              slPrice={signal.stopLoss.price}
+              amountUsd={amountUsd}
+            />
 
             {/* ── Limit price input ─────────────────────────────────────── */}
             {orderType === 'LIMIT' && (
