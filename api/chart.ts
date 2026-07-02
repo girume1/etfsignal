@@ -207,11 +207,9 @@ export default async function handler(req: any, res: any) {
       res.setHeader('Cache-Control', 'public, max-age=60');
       return res.send(img);
     } catch (err: any) {
-      if (err.name === 'AbortError') {
-        return res.status(502).json({ error: 'timeout' });
-      }
+      // Any chart-img failure — including a timeout — falls through to the
+      // independent Mode 2 fallback chain instead of failing the request outright.
       console.warn('[chart] chart-img failed, falling back to QuickChart:', err.message);
-      // Fall through to QuickChart
     }
   }
 
