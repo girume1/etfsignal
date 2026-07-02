@@ -1,9 +1,10 @@
-import { Settings as SettingsIcon, LogOut, Copy, ExternalLink, Trash2 } from 'lucide-react';
-import { useState } from 'react';
+import { Settings as SettingsIcon, LogOut, Copy, ExternalLink, Trash2, Camera } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
 import { useDashboard } from '../../contexts/DashboardContext';
 import { DensityToggle } from '../../components/DensityToggle';
 import { truncateAddress } from '../../services/sodex';
 import { clearTradeHistory } from '../../services/tradeHistory';
+import { setProfile, resizeImageToDataUrl } from '../../services/profile';
 
 function SettingsCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -18,9 +19,16 @@ function SettingsCard({ title, children }: { title: string; children: React.Reac
 }
 
 export default function SettingsPage() {
-  const { wallet, handleDisconnectWallet, refreshTradeHistory } = useDashboard();
+  const { wallet, handleDisconnectWallet, refreshTradeHistory, profile, refreshProfile } = useDashboard();
   const [copied, setCopied] = useState(false);
   const [cleared, setCleared] = useState(false);
+  const [name, setName] = useState(profile.name);
+  const [nameSaved, setNameSaved] = useState(false);
+  const [avatarError, setAvatarError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Sync local field when the underlying profile changes (e.g. wallet switch)
+  useEffect(() => setName(profile.name), [profile.name]);
 
   async function copyAddress() {
     if (!wallet.address) return;
@@ -29,6 +37,28 @@ export default function SettingsPage() {
       setCopied(true);
       setTimeout(() => setCopied(false), 1800);
     } catch {}
+  }
+
+  async function handleAvatarPick(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !wallet.address) return;
+    try {
+      const avatar = await resizeImageToDataUrl(file);
+      setProfile(wallet.address, { name, avatar });
+      refreshProfile();
+      setAvatarError(null);
+    } catch {
+      setAvatarError('Could not load that image');
+    }
+  }
+
+  function saveName() {
+    if (!wallet.address) return;
+    setProfile(wallet.address, { name, avatar: profile.avatar });
+    refreshProfile();
+    setNameSaved(true);
+    setTimeout(() => setNameSaved(false), 1500);
   }
 
   return (
@@ -42,6 +72,61 @@ export default function SettingsPage() {
       </div>
 
       <div className="max-w-screen-md mx-auto w-full p-5 flex flex-col gap-4">
+
+        <SettingsCard title="Profile">
+          {wallet.connected && wallet.address ? (
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                title="Change profile picture"
+                className="relative shrink-0 w-16 h-16 rounded-full overflow-hidden group"
+                style={{ border: '1px solid var(--brand-border)' }}
+              >
+                {profile.avatar ? (
+                  <img src={profile.avatar} alt="Profile" className="w-full h-full object-cover" />
+                ) : (
+                  <div
+                    className="w-full h-full flex items-center justify-center text-lg font-bold text-white"
+                    style={{ background: 'linear-gradient(135deg, #FF7637, #E86530)' }}
+                  >
+                    {(profile.name || wallet.address).slice(0, 1).toUpperCase()}
+                  </div>
+                )}
+                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                  <Camera size={16} className="text-white" />
+                </div>
+              </button>
+              <input ref={fileInputRef} type="file" accept="image/*" onChange={handleAvatarPick} className="hidden" />
+
+              <div className="flex-1 min-w-0">
+                <label className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold mb-1 block">Display Name</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={e => setName(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && saveName()}
+                    placeholder={truncateAddress(wallet.address)}
+                    maxLength={24}
+                    style={{ background: 'var(--brand-card)', border: '1px solid var(--brand-border)', color: 'white' }}
+                    className="flex-1 px-3 py-1.5 rounded-lg text-sm focus:outline-none focus:border-blue-500 transition-colors min-w-0"
+                  />
+                  <button
+                    onClick={saveName}
+                    className="text-xs px-3 py-1.5 rounded-lg font-semibold transition-colors shrink-0"
+                    style={{ background: 'rgba(0,255,167,0.12)', color: nameSaved ? '#34D399' : '#00FFA7' }}
+                  >
+                    {nameSaved ? 'Saved!' : 'Save'}
+                  </button>
+                </div>
+                {avatarError && <p className="text-[10px] text-red-400 mt-1">{avatarError}</p>}
+                <p className="text-[10px] text-slate-600 mt-1">Shown only in this browser — not published anywhere.</p>
+              </div>
+            </div>
+          ) : (
+            <p className="text-xs text-slate-600">Connect a wallet to set a profile picture and display name.</p>
+          )}
+        </SettingsCard>
 
         <SettingsCard title="Layout Density">
           <p className="text-xs text-slate-500 mb-3">Choose how dense the dashboard layout is, or let it auto-adapt to your screen.</p>

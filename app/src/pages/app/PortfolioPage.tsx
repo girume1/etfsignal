@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
-import { PieChart, RefreshCw, ArrowUp, ArrowDown, ExternalLink } from 'lucide-react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { PieChart, RefreshCw, ArrowUp, ArrowDown, ExternalLink, Wallet } from 'lucide-react';
 import { useDashboard } from '../../contexts/DashboardContext';
 import { fetchBalances, truncateAddress } from '../../services/sodex';
+import { formatUSD } from '../../services/sosovalue';
 
 function timeAgo(ts: number): string {
   const diffMs = Date.now() - ts;
@@ -18,8 +19,14 @@ const STATUS_COLOR: Record<string, string> = {
   failed:    '#F87171',
 };
 
+const CURRENCY_STYLE: Record<string, { color: string; label: string }> = {
+  BTC:  { color: '#F59E0B', label: 'Bitcoin' },
+  ETH:  { color: '#818CF8', label: 'Ethereum' },
+  USDC: { color: '#00FFA7', label: 'USD Coin' },
+};
+
 export default function PortfolioPage() {
-  const { wallet, tradeHistory } = useDashboard();
+  const { wallet, tradeHistory, liveBtcPx, liveEthPx, latestBtcPx, latestEthPx } = useDashboard();
   const [balances,   setBalances]   = useState<Record<string, string>>({});
   const [balLoading, setBalLoading] = useState(false);
 
@@ -34,30 +41,64 @@ export default function PortfolioPage() {
 
   useEffect(() => { loadBalances(); }, [loadBalances]);
 
+  const btcPrice = liveBtcPx ?? latestBtcPx ?? 0;
+  const ethPrice = liveEthPx ?? latestEthPx ?? 0;
+
+  const totalUsd = useMemo(() => {
+    return Object.entries(balances).reduce((sum, [currency, amount]) => {
+      const n = parseFloat(amount) || 0;
+      if (currency === 'BTC') return sum + n * btcPrice;
+      if (currency === 'ETH') return sum + n * ethPrice;
+      return sum + n; // USDC and anything else treated as ~$1
+    }, 0);
+  }, [balances, btcPrice, ethPrice]);
+
+  const buys  = tradeHistory.filter(t => t.side === 'BUY').length;
+  const sells = tradeHistory.filter(t => t.side === 'SELL').length;
+
   return (
     <div>
+      {/* Hero */}
       <div
-        style={{ background: 'var(--brand-panel)', borderBottom: '1px solid var(--brand-border)' }}
-        className="px-5 py-3 flex items-center justify-between gap-2"
+        className="relative overflow-hidden px-5 py-6"
+        style={{
+          background: 'linear-gradient(135deg, rgba(0,255,167,0.07) 0%, rgba(0,255,167,0.03) 50%, rgba(0,255,167,0.05) 100%)',
+          borderBottom: '1px solid rgba(0,255,167,0.08)',
+        }}
       >
-        <div className="flex items-center gap-2">
-          <PieChart size={14} className="text-slate-500 shrink-0" />
-          <span className="text-xs font-semibold text-white uppercase tracking-widest font-mono">Portfolio</span>
-          {wallet.address && (
-            <span className="text-[10px] text-slate-600 font-mono hidden sm:inline">
-              {truncateAddress(wallet.address)} · SoDEX Testnet
-            </span>
-          )}
+        <svg className="absolute inset-0 w-full h-full opacity-[0.035] pointer-events-none" aria-hidden>
+          <defs>
+            <pattern id="portfolio-grid" width="40" height="40" patternUnits="userSpaceOnUse">
+              <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(0,255,167,0.4)" strokeWidth="0.5" />
+            </pattern>
+          </defs>
+          <rect width="100%" height="100%" fill="url(#portfolio-grid)" />
+        </svg>
+
+        <div className="relative flex items-center justify-between gap-6 flex-wrap">
+          <div>
+            <p className="text-[10px] font-mono uppercase tracking-widest mb-1.5 flex items-center gap-2" style={{ color: '#00FFA7' }}>
+              <PieChart size={12} className="shrink-0" /> Portfolio
+            </p>
+            <div className="text-3xl font-bold font-mono text-white mb-1">
+              {balLoading ? <div className="shimmer h-9 w-40 rounded" /> : formatUSD(totalUsd)}
+            </div>
+            {wallet.address && (
+              <p className="text-xs text-slate-500 font-mono flex items-center gap-1.5">
+                <Wallet size={11} className="shrink-0" /> {truncateAddress(wallet.address)} · SoDEX Testnet
+              </p>
+            )}
+          </div>
+          <button
+            onClick={loadBalances}
+            disabled={balLoading}
+            style={{ border: '1px solid rgba(255,255,255,0.1)', color: '#94A3B8' }}
+            className="px-3 py-1.5 rounded-lg text-xs font-mono hover:text-white hover:bg-white/5 disabled:opacity-40 transition-colors flex items-center gap-1.5"
+          >
+            <RefreshCw size={11} className={`shrink-0${balLoading ? ' animate-spin' : ''}`} />
+            {balLoading ? 'Loading…' : 'Refresh'}
+          </button>
         </div>
-        <button
-          onClick={loadBalances}
-          disabled={balLoading}
-          style={{ border: '1px solid var(--brand-border)', color: '#64748B' }}
-          className="px-2.5 py-1 rounded-lg text-[10px] font-mono hover:text-white hover:bg-white/5 disabled:opacity-40 transition-colors flex items-center gap-1"
-        >
-          <RefreshCw size={10} className={`shrink-0${balLoading ? ' animate-spin' : ''}`} />
-          {balLoading ? 'Loading…' : 'Refresh'}
-        </button>
       </div>
 
       <div className="max-w-screen-2xl mx-auto w-full p-5 flex flex-col gap-4">
@@ -69,19 +110,36 @@ export default function PortfolioPage() {
         >
           <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Wallet Balances</h3>
           {balLoading ? (
-            <div className="grid grid-cols-3 gap-3">
-              {Array(3).fill(0).map((_, i) => <div key={i} className="shimmer h-14 rounded" />)}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {Array(3).fill(0).map((_, i) => <div key={i} className="shimmer h-16 rounded-xl" />)}
             </div>
           ) : Object.keys(balances).length === 0 ? (
             <p className="text-xs text-slate-600 text-center py-4 font-mono">No balances found on SoDEX Testnet</p>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {Object.entries(balances).map(([currency, amount]) => (
-                <div key={currency} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--brand-border)' }} className="rounded-lg p-3">
-                  <div className="text-[10px] text-slate-500 font-mono uppercase tracking-wider mb-0.5">{currency}</div>
-                  <div className="text-sm font-bold font-mono text-white">{parseFloat(amount).toLocaleString(undefined, { maximumFractionDigits: 6 })}</div>
-                </div>
-              ))}
+              {Object.entries(balances).map(([currency, amount]) => {
+                const style = CURRENCY_STYLE[currency] ?? { color: '#94A3B8', label: currency };
+                return (
+                  <div
+                    key={currency}
+                    style={{ background: `${style.color}0D`, border: `1px solid ${style.color}33` }}
+                    className="rounded-xl p-3.5 flex items-center gap-3"
+                  >
+                    <div
+                      style={{ background: `${style.color}20`, border: `1px solid ${style.color}50`, color: style.color }}
+                      className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
+                    >
+                      {currency.slice(0, 3)}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-[10px] text-slate-500 font-mono uppercase tracking-wider">{style.label}</div>
+                      <div className="text-sm font-bold font-mono text-white truncate">
+                        {parseFloat(amount).toLocaleString(undefined, { maximumFractionDigits: 6 })}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
@@ -91,7 +149,14 @@ export default function PortfolioPage() {
           style={{ background: 'var(--brand-card)', border: '1px solid var(--brand-border)' }}
           className="rounded-xl p-4"
         >
-          <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Trade History</h3>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Trade History</h3>
+            {tradeHistory.length > 0 && (
+              <span className="text-[10px] text-slate-600 font-mono">
+                {tradeHistory.length} trade{tradeHistory.length !== 1 ? 's' : ''} · <span style={{ color: '#34D399' }}>{buys} buy</span> · <span style={{ color: '#F87171' }}>{sells} sell</span>
+              </span>
+            )}
+          </div>
           {tradeHistory.length === 0 ? (
             <p className="text-xs text-slate-600 text-center py-4 font-mono">No trades yet — execute one from an AI signal</p>
           ) : (
@@ -100,7 +165,11 @@ export default function PortfolioPage() {
                 const isBuy = t.side === 'BUY';
                 const color = isBuy ? '#34D399' : '#F87171';
                 return (
-                  <div key={t.id} style={{ borderBottom: '1px solid var(--brand-border)' }} className="flex items-center gap-3 py-2 text-sm">
+                  <div
+                    key={t.id}
+                    style={{ background: 'rgba(255,255,255,0.02)', borderLeft: `2px solid ${color}` }}
+                    className="flex items-center gap-3 py-2.5 px-3 text-sm rounded-lg hover:bg-white/5 transition-colors"
+                  >
                     <span style={{ color, background: `${color}20`, border: `1px solid ${color}40` }} className="w-7 h-7 rounded-full flex items-center justify-center shrink-0">
                       {isBuy ? <ArrowUp size={13} /> : <ArrowDown size={13} />}
                     </span>

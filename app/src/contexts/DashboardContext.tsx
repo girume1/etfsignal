@@ -10,6 +10,7 @@ import {
   fetchSignalHistory,
 } from '../services/sosovalue';
 import { saveSignal, evaluatePendingSignals } from '../services/signalArchive';
+import { getProfile, type UserProfile } from '../services/profile';
 import { deriveAlerts } from '../services/alerts';
 import type { HistoricalInflow, PricePoint } from '../types';
 import { computeSentiment } from '../services/sentiment';
@@ -72,6 +73,8 @@ interface DashboardContextValue {
   symbol: string;
   tradeHistory: TradeRecord[];
   refreshTradeHistory: () => void;
+  profile: UserProfile;
+  refreshProfile: () => void;
 }
 
 const DashboardContext = createContext<DashboardContextValue | null>(null);
@@ -131,6 +134,11 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
   const handleDisconnectWallet = useCallback(() => {
     handleLogOut();
   }, [handleLogOut]);
+
+  // ── Display profile (per-wallet name/avatar, cosmetic only) ────────────────
+  const [profile, setProfile] = useState<UserProfile>(() => getProfile(null));
+  useEffect(() => { setProfile(getProfile(wallet.address)); }, [wallet.address]);
+  const refreshProfile = useCallback(() => setProfile(getProfile(wallet.address)), [wallet.address]);
 
   // ── Connection status ────────────────────────────────────────────────────
   const { setSourceStatus } = useConnectionStatus();
@@ -370,6 +378,7 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     tradeModal, openTradeModal, closeTradeModal, confirmTrade,
     symbol,
     tradeHistory, refreshTradeHistory,
+    profile, refreshProfile,
   };
 
   return (

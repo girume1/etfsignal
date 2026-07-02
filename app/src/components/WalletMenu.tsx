@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Copy, ExternalLink, LogOut, ChevronUp, ChevronDown } from 'lucide-react';
 import type { WalletState } from '../types';
 import { truncateAddress } from '../services/sodex';
+import { useDashboard } from '../contexts/DashboardContext';
 
 const EXPLORER = 'https://testnet.sodex.com/portfolio?address=';
 
@@ -12,6 +13,7 @@ interface WalletMenuProps {
 }
 
 export function WalletMenu({ wallet, onConnect, onDisconnect }: WalletMenuProps) {
+  const { profile } = useDashboard();
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -61,8 +63,12 @@ export function WalletMenu({ wallet, onConnect, onDisconnect }: WalletMenuProps)
         }}
         className="px-3 py-1.5 rounded-lg text-xs md:text-sm font-medium transition-all hover:opacity-90 flex items-center gap-2"
       >
-        <span className="w-1.5 h-1.5 rounded-full bg-green-400 inline-block" />
-        <span className="hidden sm:inline">{truncateAddress(wallet.address)}</span>
+        {profile.avatar ? (
+          <img src={profile.avatar} alt="" className="w-4 h-4 rounded-full object-cover shrink-0" />
+        ) : (
+          <span className="w-1.5 h-1.5 rounded-full bg-green-400 inline-block" />
+        )}
+        <span className="hidden sm:inline">{profile.name || truncateAddress(wallet.address)}</span>
         <span className="sm:hidden">Wallet</span>
         {open ? <ChevronUp size={12} className="text-slate-400 shrink-0" /> : <ChevronDown size={12} className="text-slate-400 shrink-0" />}
       </button>
@@ -83,13 +89,18 @@ export function WalletMenu({ wallet, onConnect, onDisconnect }: WalletMenuProps)
             className="px-4 py-4"
           >
             <div className="flex items-center gap-3 mb-3">
-              {/* Jazzicon-style avatar */}
-              <div
-                style={{ background: 'linear-gradient(135deg, #FF7637, #E86530)' }}
-                className="w-10 h-10 rounded-full shrink-0"
-              />
+              {profile.avatar ? (
+                <img src={profile.avatar} alt="" className="w-10 h-10 rounded-full object-cover shrink-0" />
+              ) : (
+                <div
+                  style={{ background: 'linear-gradient(135deg, #FF7637, #E86530)' }}
+                  className="w-10 h-10 rounded-full shrink-0 flex items-center justify-center text-white font-bold"
+                >
+                  {(profile.name || wallet.address).slice(0, 1).toUpperCase()}
+                </div>
+              )}
               <div className="min-w-0">
-                <div className="text-xs text-slate-400 mb-0.5">Connected</div>
+                <div className="text-xs text-slate-400 mb-0.5">{profile.name || 'Connected'}</div>
                 <div className="text-sm font-mono text-white truncate">{wallet.address}</div>
               </div>
             </div>
