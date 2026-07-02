@@ -4,6 +4,7 @@ import { Header } from './Header';
 import { AppSidebar } from './AppSidebar';
 import { TradeModal } from './TradeModal';
 import { WalletGate } from './WalletGate';
+import { OnboardingTour, shouldShowTour } from './OnboardingTour';
 import { useDashboard } from '../contexts/DashboardContext';
 import { RefreshCw } from 'lucide-react';
 
@@ -20,6 +21,7 @@ export function AppShell() {
     : (liveEthPx ?? latestEthPx ?? null);
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [showTour, setShowTour] = useState(shouldShowTour);
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: 'var(--brand-dark)' }}>
@@ -60,6 +62,11 @@ export function AppShell() {
           </WalletGate>
         </main>
       </div>
+
+      {/* ── First-visit onboarding tour ──────────────────────── */}
+      {wallet.connected && showTour && (
+        <OnboardingTour onDone={() => setShowTour(false)} />
+      )}
 
       {/* ── Trade modal ──────────────────────────────────────── */}
       {tradeModal && signal && (

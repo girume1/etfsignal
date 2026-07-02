@@ -1,8 +1,10 @@
-import { Zap, ChevronDown, Diamond, ExternalLink } from 'lucide-react';
+import { useState } from 'react';
+import { Zap, ChevronDown, Diamond, ExternalLink, Star } from 'lucide-react';
 import type { EtfData, EtfFund, ActiveTab } from '../types';
 import type { HistoricalInflow } from '../services/sosovalue';
 import { formatUSD } from '../services/sosovalue';
 import { TradingChart } from './TradingChart';
+import { isWatched, toggleWatch } from '../services/watchlist';
 
 interface EtfPanelProps {
   btcData: EtfData | null;
@@ -131,18 +133,29 @@ function MetricCard({ label, value, positive }: { label: string; value: string; 
   );
 }
 
-function FundRow({ fund, anomalies }: { fund: EtfFund; anomalies: AnomalyKind[] }) {
+export function FundRow({ fund, anomalies }: { fund: EtfFund; anomalies: AnomalyKind[] }) {
   const dailyInflow = fund.dailyNetInflow.value;
   const netAssets   = fund.netAssets.value;
   const fee         = fund.fee.value;
   const isPositive  = dailyInflow !== null ? dailyInflow >= 0 : null;
   const flowColor   = isPositive === null ? '#94A3B8' : isPositive ? '#34D399' : '#F87171';
+  const [watched, setWatched] = useState(() => isWatched(fund.ticker));
 
   return (
     <div
       style={{ borderBottom: '1px solid var(--brand-border)' }}
       className="flex items-center gap-3 py-3 px-1 text-sm hover:bg-white/5 transition-colors rounded"
     >
+      {/* Watchlist star */}
+      <button
+        onClick={() => setWatched(toggleWatch(fund.ticker).includes(fund.ticker))}
+        title={watched ? 'Remove from watchlist' : 'Add to watchlist'}
+        className="shrink-0 transition-colors"
+        style={{ color: watched ? '#F59E0B' : '#334155' }}
+      >
+        <Star size={14} fill={watched ? '#F59E0B' : 'none'} />
+      </button>
+
       {/* Logo avatar */}
       <FundAvatar ticker={fund.ticker} />
 

@@ -14,6 +14,9 @@ import SignalsPage   from './pages/app/SignalsPage';
 import AlertsPage    from './pages/app/AlertsPage';
 import NewsPage      from './pages/app/NewsPage';
 import TradePage     from './pages/app/TradePage';
+import WatchlistPage from './pages/app/WatchlistPage';
+import PortfolioPage from './pages/app/PortfolioPage';
+import SettingsPage  from './pages/app/SettingsPage';
 
 export default function App() {
   return (
@@ -46,8 +49,11 @@ export default function App() {
               <Route path="flows"   element={<FlowsPage />} />
               <Route path="signals" element={<SignalsPage />} />
               <Route path="trade"   element={<TradePage />} />
-              <Route path="alerts"  element={<AlertsPage />} />
-              <Route path="news"    element={<NewsPage />} />
+              <Route path="alerts"    element={<AlertsPage />} />
+              <Route path="news"      element={<NewsPage />} />
+              <Route path="watchlist" element={<WatchlistPage />} />
+              <Route path="portfolio" element={<PortfolioPage />} />
+              <Route path="settings"  element={<SettingsPage />} />
             </Route>
 
             {/* Catch-all */}

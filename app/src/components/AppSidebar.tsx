@@ -21,9 +21,9 @@ const NAV_TRADE = [
 ];
 
 const NAV_ACCOUNT = [
-  { icon: Star,      label: 'Watchlist',  disabled: true },
-  { icon: PieChart,  label: 'Portfolio',  disabled: true },
-  { icon: Settings,  label: 'Settings',   disabled: true },
+  { path: '/app/watchlist', icon: Star,     label: 'Watchlist', exact: false },
+  { path: '/app/portfolio', icon: PieChart, label: 'Portfolio', exact: false },
+  { path: '/app/settings',  icon: Settings, label: 'Settings',  exact: false },
 ];
 
 interface AppSidebarProps {
@@ -162,7 +162,7 @@ export function AppSidebar({ open, onClose }: AppSidebarProps) {
 
           <NavSection label="Account">
             {NAV_ACCOUNT.map(item => (
-              <NavItem key={item.label} icon={item.icon} label={item.label} disabled />
+              <NavItem key={item.path} path={item.path} icon={item.icon} label={item.label} exact={item.exact} />
             ))}
           </NavSection>
         </nav>
