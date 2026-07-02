@@ -60,7 +60,13 @@ export function SentimentGauge({ sentiment, asset }: SentimentGaugeProps) {
         <span className="text-[10px] text-slate-600 font-mono tracking-wider">14-day</span>
       </div>
 
-      <svg width="100%" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="xMidYMid meet" className="block overflow-visible">
+      <svg
+        width="100%"
+        viewBox={`0 0 ${w} ${h}`}
+        preserveAspectRatio="xMidYMid meet"
+        className="block overflow-visible mx-auto"
+        style={{ maxWidth: 280 }}
+      >
         {/* Track — dim zone backgrounds */}
         {ZONES.map(([from, to, col]) => arc(from, to, col, 0.18))}
 
