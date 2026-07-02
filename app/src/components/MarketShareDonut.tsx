@@ -16,6 +16,7 @@ interface SliceItem {
   value: number;
   color: string;
   pct: number;
+  metricLabel: string;
 }
 
 interface CustomTooltipProps {
@@ -37,9 +38,9 @@ function CustomTooltip({ active, payload }: CustomTooltipProps) {
       boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
     }}>
       <div style={{ color: s.color, fontWeight: 600 }}>{s.label}</div>
-      <div style={{ color: '#94A3B8', marginTop: 2 }}>{s.pct.toFixed(1)}% market share</div>
+      <div style={{ color: '#94A3B8', marginTop: 2 }}>{s.pct.toFixed(1)}% share</div>
       <div style={{ color: '#64748B', fontSize: 10, marginTop: 2 }}>
-        ${(s.value / 1e9).toFixed(2)}B AUM
+        ${(s.value / 1e9).toFixed(2)}B {s.metricLabel}
       </div>
     </div>
   );
@@ -55,37 +56,54 @@ export function MarketShareDonut({ funds, asset }: MarketShareDonutProps) {
   const safe = (v: number | null | undefined): number =>
     typeof v === 'number' && isFinite(v) ? v : 0;
 
-  const sorted = funds
+  const byAssets = funds
     .filter(f => safe(f.netAssets.value) > 0 || safe(f.netAssetsPercentage.value) > 0)
     .sort((a, b) => safe(b.netAssets.value) - safe(a.netAssets.value));
+
+  // Some SoSoValue API responses don't populate netAssets for every fund/tier —
+  // fall back to daily inflow magnitude so the donut still shows something
+  // useful instead of an empty "0 groups" state.
+  const usingFlowFallback = byAssets.length === 0;
+  const sorted = usingFlowFallback
+    ? funds
+        .filter(f => safe(f.dailyNetInflow.value) !== 0)
+        .sort((a, b) => Math.abs(safe(b.dailyNetInflow.value)) - Math.abs(safe(a.dailyNetInflow.value)))
+    : byAssets;
+
+  const metricValue = (f: EtfFund): number =>
+    usingFlowFallback ? Math.abs(safe(f.dailyNetInflow.value)) : safe(f.netAssets.value);
+  const metricLabel = usingFlowFallback ? "Today's Flow" : 'AUM';
 
   const top    = sorted.slice(0, 6);
   const rest   = sorted.slice(6);
 
-  // Total from netAssets values (fallback to 1 to avoid division by zero)
-  const total  = Math.max(sorted.reduce((s, f) => s + safe(f.netAssets.value), 0), 1);
-  const restTotal = rest.reduce((s, f) => s + safe(f.netAssets.value), 0);
+  // Total from the active metric (fallback to 1 to avoid division by zero)
+  const total  = Math.max(sorted.reduce((s, f) => s + metricValue(f), 0), 1);
+  const restTotal = rest.reduce((s, f) => s + metricValue(f), 0);
 
-  // Compute % — prefer netAssetsPercentage from API if available, else derive from netAssets
+  // Compute % — prefer netAssetsPercentage from API when using the assets metric
   const getPct = (f: EtfFund): number => {
-    const apiPct = safe(f.netAssetsPercentage.value);
-    if (apiPct > 0) return apiPct * 100; // API returns fraction (0–1)
-    const v = safe(f.netAssets.value);
-    return (v / total) * 100;
+    if (!usingFlowFallback) {
+      const apiPct = safe(f.netAssetsPercentage.value);
+      if (apiPct > 0) return apiPct * 100; // API returns fraction (0–1)
+    }
+    return (metricValue(f) / total) * 100;
   };
 
   const slices: SliceItem[] = [
     ...top.map((f, i) => ({
       label: f.ticker,
-      value: safe(f.netAssets.value),
+      value: metricValue(f),
       color: PALETTE[i],
       pct:   getPct(f),
+      metricLabel,
     })),
     ...(rest.length > 0 ? [{
       label: `+${rest.length} others`,
       value: restTotal,
       color: PALETTE[6],
       pct:   (restTotal / total) * 100,
+      metricLabel,
     }] : []),
   ];
 
@@ -98,7 +116,7 @@ export function MarketShareDonut({ funds, asset }: MarketShareDonutProps) {
     >
       <div className="flex items-center justify-between mb-3">
         <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-          {asset} ETF Market Share
+          {asset} ETF Market Share {usingFlowFallback && <span className="text-slate-600 normal-case">(by today's flow)</span>}
         </span>
         <span className="text-[10px] text-slate-600 font-mono">{slices.length} groups</span>
       </div>

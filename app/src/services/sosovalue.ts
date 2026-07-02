@@ -135,11 +135,28 @@ export async function fetchHistoricalInflows(
 // ─── Price History ────────────────────────────────────────────────────────────
 // Binance WebSocket is the live price source; this endpoint is unused in production.
 
+// Daily close prices from Binance (public, no key, browser CORS allowed — same
+// source TradingChart.tsx already uses). Oldest-first, matching the historical
+// inflow array's ordering so PriceFlowChart can zip them by index.
 export async function fetchPriceHistory(
-  _type: EtfType,
-  _days = 14,
+  type: EtfType,
+  days = 14,
 ): Promise<PricePoint[]> {
-  return [];
+  const symbol = type === 'us-btc-spot' ? 'BTCUSDT' : 'ETHUSDT';
+  try {
+    const res = await fetch(
+      `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=1d&limit=${days}`,
+      { cache: 'no-store' },
+    );
+    if (!res.ok) return [];
+    const raw: [number, string, string, string, string, ...unknown[]][] = await res.json();
+    return raw.map((k) => ({
+      date:  new Date(k[0]).toISOString().slice(0, 10),
+      price: parseFloat(k[4]), // close
+    }));
+  } catch {
+    return [];
+  }
 }
 
 // ─── Smart Alerts ─────────────────────────────────────────────────────────────

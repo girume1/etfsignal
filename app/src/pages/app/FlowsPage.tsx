@@ -5,7 +5,7 @@ import { useDensity } from '../../contexts/DensityContext';
 import { QuickStats } from '../../components/QuickStats';
 import { PriceFlowChart } from '../../components/PriceFlowChart';
 import { MarketShareDonut } from '../../components/MarketShareDonut';
-import { fetchHistoricalInflows, getLastSuccessfulFetch, type HistoricalInflow } from '../../services/sosovalue';
+import { fetchHistoricalInflows, fetchPriceHistory, getLastSuccessfulFetch, type HistoricalInflow, type PricePoint } from '../../services/sosovalue';
 import { computeFlowStats } from '../../services/flowAnalyzer';
 import type { FlowWindow } from '../../types';
 
@@ -155,7 +155,9 @@ export default function FlowsPage() {
 
   // ── 14D/30D/90D window selection (Requirement 4) ──────────────────────────
   const [selectedWindow, setSelectedWindow] = useState<FlowWindow>(14);
-  const [windowData, setWindowData] = useState<{ btc: HistoricalInflow[]; eth: HistoricalInflow[] } | null>(null);
+  const [windowData, setWindowData] = useState<{
+    btc: HistoricalInflow[]; eth: HistoricalInflow[]; btcPrice: PricePoint[]; ethPrice: PricePoint[];
+  } | null>(null);
   const [windowLoading, setWindowLoading] = useState(false);
 
   useEffect(() => {
@@ -164,13 +166,17 @@ export default function FlowsPage() {
     Promise.all([
       fetchHistoricalInflows('us-btc-spot', selectedWindow),
       fetchHistoricalInflows('us-eth-spot', selectedWindow),
+      fetchPriceHistory('us-btc-spot', selectedWindow),
+      fetchPriceHistory('us-eth-spot', selectedWindow),
     ])
-      .then(([btc, eth]) => setWindowData({ btc, eth }))
+      .then(([btc, eth, btcPx, ethPx]) => setWindowData({ btc, eth, btcPrice: btcPx, ethPrice: ethPx }))
       .finally(() => setWindowLoading(false));
   }, [selectedWindow]);
 
-  const activeBtcHist = selectedWindow === 14 ? btcHist : (windowData?.btc ?? btcHist);
-  const activeEthHist = selectedWindow === 14 ? ethHist : (windowData?.eth ?? ethHist);
+  const activeBtcHist  = selectedWindow === 14 ? btcHist  : (windowData?.btc  ?? btcHist);
+  const activeEthHist  = selectedWindow === 14 ? ethHist  : (windowData?.eth  ?? ethHist);
+  const activeBtcPrice = selectedWindow === 14 ? btcPrice : (windowData?.btcPrice ?? btcPrice);
+  const activeEthPrice = selectedWindow === 14 ? ethPrice : (windowData?.ethPrice ?? ethPrice);
 
   const btcStats = useMemo(() => flowStats(activeBtcHist), [activeBtcHist]);
   const ethStats = useMemo(() => flowStats(activeEthHist), [activeEthHist]);
@@ -187,8 +193,12 @@ export default function FlowsPage() {
 
   const btcAum = btcData?.totalNetAssets.value;
   const ethAum = ethData?.totalNetAssets.value;
-  const btcToday = btcData?.dailyNetInflow.value;
-  const ethToday = ethData?.dailyNetInflow.value;
+  // dailyNetInflow.value is raw dollars (unlike the historical inflow array,
+  // which is already in millions) — convert so fmtMil's scale assumption holds.
+  const btcTodayRaw = btcData?.dailyNetInflow.value;
+  const ethTodayRaw = ethData?.dailyNetInflow.value;
+  const btcToday = btcTodayRaw != null ? btcTodayRaw / 1_000_000 : null;
+  const ethToday = ethTodayRaw != null ? ethTodayRaw / 1_000_000 : null;
 
   return (
     <div>
@@ -349,7 +359,7 @@ export default function FlowsPage() {
               </div>
             )}
 
-            <PriceFlowChart inflows={activeBtcHist} prices={btcPrice} asset="BTC" />
+            <PriceFlowChart inflows={activeBtcHist} prices={activeBtcPrice} asset="BTC" />
             <MarketShareDonut funds={btcData.list} asset="BTC" />
           </div>
         )}
@@ -378,7 +388,7 @@ export default function FlowsPage() {
               </div>
             )}
 
-            <PriceFlowChart inflows={activeEthHist} prices={ethPrice} asset="ETH" />
+            <PriceFlowChart inflows={activeEthHist} prices={activeEthPrice} asset="ETH" />
             <MarketShareDonut funds={ethData.list} asset="ETH" />
           </div>
         )}
