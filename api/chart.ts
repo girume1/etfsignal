@@ -162,7 +162,8 @@ async function renderQuickChart(symbol: string, interval: string, candles: Candl
     data: {
       datasets: [{
         label: `${symbol} (${interval})`,
-        data:  candles,
+        // chartjs-chart-financial (Chart.js v3+) expects {x, o, h, l, c} — not {t, o, h, l, c}
+        data: candles.map(c => ({ x: c.t, o: c.o, h: c.h, l: c.l, c: c.c })),
         color: {
           up:        'rgba(52,211,153,0.9)',
           down:      'rgba(248,113,113,0.9)',
@@ -172,16 +173,19 @@ async function renderQuickChart(symbol: string, interval: string, candles: Candl
     },
     options: {
       scales: {
-        xAxes: [{ ticks: { fontColor: '#64748B', maxTicksLimit: 8, maxRotation: 0 }, gridLines: { color: 'rgba(255,255,255,0.05)' } }],
-        yAxes: [{ position: 'right', ticks: { fontColor: '#64748B' }, gridLines: { color: 'rgba(255,255,255,0.05)' } }],
+        x: { ticks: { color: '#64748B', maxTicksLimit: 8, maxRotation: 0 }, grid: { color: 'rgba(255,255,255,0.05)' } },
+        y: { position: 'right', ticks: { color: '#64748B' }, grid: { color: 'rgba(255,255,255,0.05)' } },
       },
-      legend: { labels: { fontColor: '#94A3B8', fontSize: 12 } },
+      plugins: {
+        legend: { labels: { color: '#94A3B8', font: { size: 12 } } },
+      },
     },
   };
   const res = await fetchWithTimeout('https://quickchart.io/chart', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ chart: cfg, width: 800, height: 450, backgroundColor: '#06080B', format: 'png', devicePixelRatio: 2 }),
+    // candlestick type requires Chart.js v3+ (v2 default doesn't know this chart type)
+    body: JSON.stringify({ chart: cfg, width: 800, height: 450, backgroundColor: '#06080B', format: 'png', devicePixelRatio: 2, version: '3' }),
   });
   if (!res.ok) throw new Error(`QuickChart ${res.status}`);
   return Buffer.from(await res.arrayBuffer());
