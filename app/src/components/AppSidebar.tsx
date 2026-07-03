@@ -32,9 +32,8 @@ interface AppSidebarProps {
 }
 
 export function AppSidebar({ open, onClose }: AppSidebarProps) {
-  const { alerts } = useDashboard();
+  const { unreadAlertCount } = useDashboard();
   const location = useLocation();
-  const highAlerts = alerts.filter(a => a.severity === 'high').length;
   const [showAIModal, setShowAIModal] = useState(false);
 
   function NavItem({
@@ -149,7 +148,7 @@ export function AppSidebar({ open, onClose }: AppSidebarProps) {
                 icon={item.icon}
                 label={item.label}
                 exact={item.exact}
-                badge={item.path === '/app/alerts' ? highAlerts : 0}
+                badge={item.path === '/app/alerts' ? unreadAlertCount : 0}
               />
             ))}
           </NavSection>

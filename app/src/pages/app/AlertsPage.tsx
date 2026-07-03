@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ChevronUp, ChevronDown, ArrowLeftRight, Diamond, Zap, RefreshCw } from 'lucide-react';
 import { useDashboard } from '../../contexts/DashboardContext';
 import { useDensity } from '../../contexts/DensityContext';
@@ -36,12 +36,15 @@ function timeAgo(ts: number): string {
 }
 
 export default function AlertsPage() {
-  const { alerts, loading, refresh } = useDashboard();
+  const { alerts, loading, refresh, markAlertsAsSeen } = useDashboard();
   const { density } = useDensity();
   const gap = density === 'comfortable' ? 'p-5 gap-5' : 'p-4 gap-4';
 
   const [kind,     setKind]     = useState<FilterKind>('all');
   const [severity, setSeverity] = useState<FilterSeverity>('all');
+
+  // Visiting this page clears the sidebar's unread badge
+  useEffect(() => { markAlertsAsSeen(); }, [alerts, markAlertsAsSeen]);
 
   const filtered = filterAlerts(alerts, kind, severity);
 

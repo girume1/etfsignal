@@ -11,6 +11,7 @@ import {
 } from '../services/sosovalue';
 import { saveSignal, evaluatePendingSignals } from '../services/signalArchive';
 import { getProfile, type UserProfile } from '../services/profile';
+import { getSeenAlertIds, markAlertsSeen } from '../services/alertsSeen';
 import { deriveAlerts } from '../services/alerts';
 import type { HistoricalInflow, PricePoint } from '../types';
 import { computeSentiment } from '../services/sentiment';
@@ -75,6 +76,8 @@ interface DashboardContextValue {
   refreshTradeHistory: () => void;
   profile: UserProfile;
   refreshProfile: () => void;
+  unreadAlertCount: number;
+  markAlertsAsSeen: () => void;
 }
 
 const DashboardContext = createContext<DashboardContextValue | null>(null);
@@ -139,6 +142,18 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<UserProfile>(() => getProfile(null));
   useEffect(() => { setProfile(getProfile(wallet.address)); }, [wallet.address]);
   const refreshProfile = useCallback(() => setProfile(getProfile(wallet.address)), [wallet.address]);
+
+  // ── Alerts: unread-since-last-visit badge ───────────────────────────────────
+  const [seenAlertIds, setSeenAlertIds] = useState<string[]>(() => getSeenAlertIds());
+  const unreadAlertCount = useMemo(
+    () => alerts.filter(a => !seenAlertIds.includes(a.id)).length,
+    [alerts, seenAlertIds],
+  );
+  const markAlertsAsSeen = useCallback(() => {
+    const ids = alerts.map(a => a.id);
+    markAlertsSeen(ids);
+    setSeenAlertIds(ids);
+  }, [alerts]);
 
   // ── Connection status ────────────────────────────────────────────────────
   const { setSourceStatus } = useConnectionStatus();
@@ -379,6 +394,7 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     symbol,
     tradeHistory, refreshTradeHistory,
     profile, refreshProfile,
+    unreadAlertCount, markAlertsAsSeen,
   };
 
   return (
