@@ -110,7 +110,7 @@ export function buildRealChartData(signals: HistoricalSignal[]) {
 function StatsGrid({ stats, dimmed }: { stats: ReturnType<typeof statsOf>; dimmed?: boolean }) {
   return (
     <div
-      className="grid grid-cols-4 gap-1 rounded-lg p-2.5"
+      className="grid grid-cols-5 gap-1 rounded-lg p-2.5"
       style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', opacity: dimmed ? 0.6 : 1 }}
     >
       {[
@@ -118,6 +118,7 @@ function StatsGrid({ stats, dimmed }: { stats: ReturnType<typeof statsOf>; dimme
         { label: 'WIN RATE', value: `${stats.hitRate}%`, color: stats.hitRate >= 50 ? '#34D399' : '#F87171' },
         { label: 'AVG P&L', value: `${stats.avgPnl >= 0 ? '+' : ''}${stats.avgPnl.toFixed(1)}%`, color: stats.avgPnl >= 0 ? '#34D399' : '#F87171' },
         { label: 'CUMUL.', value: `${stats.cumPnl >= 0 ? '+' : ''}${stats.cumPnl.toFixed(1)}%`, color: stats.cumPnl >= 0 ? '#34D399' : '#F87171' },
+        { label: 'MAX DD', value: stats.maxDD > 0 ? `-${stats.maxDD.toFixed(1)}%` : '0.0%', color: '#F87171' },
       ].map(({ label, value, color }) => (
         <div key={label} className="text-center">
           <div className="text-[9px] text-slate-600 font-mono mb-0.5 tracking-wider">{label}</div>
