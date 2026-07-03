@@ -233,6 +233,8 @@ function friendlyError(msg: string): string {
     return 'Insufficient balance. Claim testnet funds from the SoDEX faucet first.';
   if (m.includes('api key not found') || m.includes('unauthorized'))
     return 'Signing error — wallet may not be registered on SoDEX testnet. Visit testnet.sodex.com to register.';
+  if (m.includes('notional is invalid'))
+    return 'Order value is too small — SoDEX testnet requires a minimum order of $5.';
   if (m.includes('invalid payload') || m.includes('quantity is invalid'))
     return 'Invalid order size. Try a different amount.';
   return msg;

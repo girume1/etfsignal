@@ -345,7 +345,10 @@ export function TradeModal({
             {/* ── Amount + Currency selector ────────────────────────────── */}
             <div className="mb-3">
               <div className="flex items-center justify-between mb-1.5">
-                <label className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Amount</label>
+                <label className="text-xs text-slate-500 uppercase tracking-wider font-semibold flex items-center gap-1.5">
+                  Amount
+                  <span className="text-[10px] text-slate-600 normal-case font-normal">min order $5</span>
+                </label>
 
                 {/* Available balance */}
                 <div className="flex items-center gap-1.5">
