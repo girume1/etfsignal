@@ -1,4 +1,4 @@
-import type { EtfData, EtfType, NewsItem, HistoricalSignal } from '../types';
+import type { EtfData, EtfFund, EtfMetric, EtfType, NewsItem, HistoricalSignal } from '../types';
 export type { HistoricalInflow, PricePoint } from '../types';
 import type { HistoricalInflow, PricePoint } from '../types';
 
@@ -31,6 +31,43 @@ async function sosoProxy<T>(opts: ProxyOpts): Promise<T> {
 
 // ─── ETF Metrics ──────────────────────────────────────────────────────────────
 
+// SoSoValue returns every numeric field as a JSON string (e.g. "value":"123.45"),
+// not a native number. Callers throughout the app rely on EtfMetric.value being a
+// real `number` (arithmetic, typeof-based guards like MarketShareDonut's, etc.),
+// so normalize once here rather than coercing at every call site.
+function toNum(v: unknown): number | null {
+  if (v === null || v === undefined || v === '') return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+function normalizeMetric(m: any): EtfMetric {
+  return { value: toNum(m?.value), lastUpdateDate: m?.lastUpdateDate ?? '', status: m?.status };
+}
+
+function normalizeEtfData(raw: any): EtfData {
+  return {
+    totalNetAssets:           normalizeMetric(raw?.totalNetAssets),
+    totalNetAssetsPercentage: normalizeMetric(raw?.totalNetAssetsPercentage),
+    totalTokenHoldings:       normalizeMetric(raw?.totalTokenHoldings),
+    dailyNetInflow:           normalizeMetric(raw?.dailyNetInflow),
+    cumNetInflow:             normalizeMetric(raw?.cumNetInflow),
+    dailyTotalValueTraded:    normalizeMetric(raw?.dailyTotalValueTraded),
+    list: (Array.isArray(raw?.list) ? raw.list : []).map((f: any): EtfFund => ({
+      id:                  String(f.id),
+      ticker:              f.ticker,
+      institute:           f.institute,
+      netAssets:           normalizeMetric(f.netAssets),
+      netAssetsPercentage: normalizeMetric(f.netAssetsPercentage),
+      dailyNetInflow:      normalizeMetric(f.dailyNetInflow),
+      cumNetInflow:        normalizeMetric(f.cumNetInflow),
+      dailyValueTraded:    normalizeMetric(f.dailyValueTraded),
+      fee:                 normalizeMetric(f.fee),
+      discountPremiumRate: normalizeMetric(f.discountPremiumRate),
+    })),
+  };
+}
+
 export async function fetchEtfMetrics(type: EtfType): Promise<EtfData> {
   // Try primary v2 endpoint, then fallback to alt host
   const attempts = [
@@ -43,7 +80,7 @@ export async function fetchEtfMetrics(type: EtfType): Promise<EtfData> {
     try {
       const json: any = await sosoProxy(attempt);
       if (json.code !== 0) throw new Error(json.msg || 'ETF API error');
-      return json.data as EtfData;
+      return normalizeEtfData(json.data);
     } catch (err: any) {
       lastErr = err;
     }

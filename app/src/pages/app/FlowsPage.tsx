@@ -276,13 +276,13 @@ export default function FlowsPage() {
         />
         <StatCard
           label="BTC ETF AUM"
-          value={btcAum ? `$${(btcAum / 1_000).toFixed(1)}B` : '—'}
+          value={btcAum ? `$${(btcAum / 1_000_000_000).toFixed(1)}B` : '—'}
           sub="total net assets"
           accent="#F59E0B"
         />
         <StatCard
           label="ETH ETF AUM"
-          value={ethAum ? `$${(ethAum / 1_000).toFixed(1)}B` : '—'}
+          value={ethAum ? `$${(ethAum / 1_000_000_000).toFixed(1)}B` : '—'}
           sub="total net assets"
           accent="#818CF8"
         />
