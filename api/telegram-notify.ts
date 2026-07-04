@@ -30,7 +30,7 @@ interface SignalNotification {
   // trade-specific fields
   orderId?:       string;
   pair?:          string;
-  side?:          'LONG' | 'SHORT';
+  side?:          'LONG' | 'SHORT' | 'BUY' | 'SELL';
   size?:          string;
   currency?:      string;
   price?:         string;
@@ -38,6 +38,8 @@ interface SignalNotification {
   signal?:        string;
   timestamp?:     number;
   walletAddress?: string;
+  marketType?:    'spot' | 'futures';
+  leverage?:      number;
 }
 
 // ─── Upstash Redis helper ────────────────────────────────────────────────────
@@ -118,19 +120,22 @@ function formatSignalMessage(sig: SignalNotification): string {
 // ─── Trade message formatting ────────────────────────────────────────────────
 
 function formatTradeMessage(body: SignalNotification): string {
-  const isLong  = body.side === 'LONG';
-  const emoji   = isLong ? '🟢' : '🔴';
-  const asset   = (body.asset ?? 'BTC').toUpperCase();
-  const orderId = body.orderId ?? '—';
-  const time    = body.timestamp
+  const isFutures = body.marketType === 'futures';
+  const isLong    = body.side === 'LONG' || body.side === 'BUY';
+  const emoji     = isLong ? '🟢' : '🔴';
+  const asset     = (body.asset ?? 'BTC').toUpperCase();
+  const orderId   = body.orderId ?? '—';
+  const dirLabel  = isFutures ? (isLong ? 'LONG' : 'SHORT') : (isLong ? 'BUY' : 'SELL');
+  const marketTag = isFutures ? `Futures${body.leverage ? ` ${body.leverage}x` : ''}` : 'Spot';
+  const time      = body.timestamp
     ? new Date(body.timestamp).toUTCString().replace('GMT', 'UTC')
     : new Date().toUTCString().replace('GMT', 'UTC');
 
   return [
     `✅ *SoDEX Trade Executed*`,
     ``,
-    `${emoji} *${isLong ? 'LONG' : 'SHORT'} ${asset}* · ${body.orderType ?? 'MARKET'}`,
-    `Pair: \`${body.pair ?? `${asset}-USDC`}\``,
+    `${emoji} *${dirLabel} ${asset}* · ${marketTag} · ${body.orderType ?? 'MARKET'}`,
+    `Pair: \`${body.pair ?? `${asset}-${isFutures ? 'USD' : 'USDC'}`}\``,
     `Size: \`${body.size ?? '—'} ${body.currency ?? asset}${body.price ? ` @ $${body.price}` : ''}\``,
     ``,
     `🔖 Order ID: \`${orderId}\``,

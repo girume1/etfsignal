@@ -50,6 +50,10 @@ export async function notifyTelegramSubscribers(
  * Fire-and-forget — never blocks the UI.
  */
 export async function notifyTelegramTrade(record: TradeRecord): Promise<void> {
+  // Futures uses LONG/SHORT terminology; spot uses BUY/SELL — don't relabel a spot trade as futures.
+  const isFutures = record.marketType === 'futures';
+  const side = isFutures ? (record.side === 'BUY' ? 'LONG' : 'SHORT') : record.side;
+
   try {
     await fetch('/api/telegram-notify', {
       method: 'POST',
@@ -58,7 +62,7 @@ export async function notifyTelegramTrade(record: TradeRecord): Promise<void> {
         type:      'trade',
         orderId:   record.orderId,
         pair:      record.pair,
-        side:      record.side === 'BUY' ? 'LONG' : 'SHORT',
+        side,
         size:      record.size,
         currency:  record.currency,
         price:     record.price,
@@ -67,6 +71,8 @@ export async function notifyTelegramTrade(record: TradeRecord): Promise<void> {
         signal:        record.signal,
         timestamp:     record.timestamp,
         walletAddress: record.walletAddress,
+        marketType:    record.marketType,
+        leverage:      record.leverage,
       }),
     });
   } catch {

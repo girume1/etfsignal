@@ -110,13 +110,15 @@ export interface TradeRecord {
   side:      OrderSide;   // BUY | SELL
   type:      OrderType;   // MARKET | LIMIT
   size:      string;      // "0.01"
-  currency:  string;      // BTC | USDC
+  currency:  string;      // whichever currency the size is denominated in — BTC/ETH or USDC
   price?:    string;      // limit price (LIMIT orders only)
   timestamp: number;      // ms epoch
   status:    'submitted' | 'filled' | 'failed';
   asset:          'BTC' | 'ETH';
   signal?:        string;   // signal headline for context
   walletAddress?: string;   // linked wallet — used for personal Telegram alert
+  marketType?:    'spot' | 'futures';
+  leverage?:      number;   // futures only
 }
 
 export interface WalletState {

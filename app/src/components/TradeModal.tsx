@@ -169,7 +169,8 @@ export function TradeModal({
 
   // ── Derived symbol (perps uses BTC-USD, distinct from spot's BTC-USDC) ────
   const displaySymbol = marketType === 'futures' ? `${baseAsset}-USD` : symbol;
-  const sodexSymbol   = displaySymbol.replace('-', '_');
+  // SoDEX's UI URLs differ by market: spot uses underscores (BTC_USDC), futures keeps the hyphen (BTC-USD)
+  const sodexSymbol   = marketType === 'futures' ? displaySymbol : displaySymbol.replace('-', '_');
 
   // ── Derived colours ──────────────────────────────────────────────────────
   const isLong    = side === 'BUY';
