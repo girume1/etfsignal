@@ -350,7 +350,13 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     if (!signer) throw new Error('Wallet not connected');
     const r = order.marketType === 'futures'
       ? await placePerpsOrder(signer, {
-          symbol: order.symbol, side: order.side, quantity: order.quantity, leverage: order.leverage ?? 20,
+          symbol: order.symbol,
+          side: order.side,
+          leverage: order.leverage ?? 20,
+          // perps schema allows sizing by base-asset quantity or USDC funds, either side
+          ...(order.currency === order.symbol.split('-')[0]
+            ? { quantity: order.quantity }
+            : { funds: order.quantity }),
         })
       : await placeSpotOrder(signer, 1, order);
     if (!r.success) throw new Error(r.error);

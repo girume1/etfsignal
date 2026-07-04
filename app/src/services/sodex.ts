@@ -389,7 +389,8 @@ export async function placeSpotOrder(
 export interface PerpsOrder {
   symbol: string;     // e.g. "BTC-USD"
   side: 'BUY' | 'SELL';
-  quantity: string;   // base-asset amount, e.g. "0.001" BTC
+  quantity?: string;  // base-asset amount, e.g. "0.001" BTC — exactly one of quantity/funds
+  funds?: string;     // USD-denominated size, e.g. "50" — schema allows funds on either side for perps
   leverage: number;
 }
 
@@ -448,18 +449,23 @@ export async function placePerpsOrder(
     await setPerpsLeverage(signer, order.symbol, order.leverage);
 
     // PerpsOrderItem field order (exact, per SoDEX schema):
-    // clOrdID, modifier, side, type, timeInForce, price*, quantity, funds*,
+    // clOrdID, modifier, side, type, timeInForce, price*, quantity*, funds*,
     // stopPrice*, stopType*, triggerType*, reduceOnly, positionSide  (*omitempty)
+    // Exactly one of quantity/funds must be set — quantity if provided, else funds.
     const orderItem: Record<string, unknown> = {
       clOrdID:     `etfsignal-${nonce}`,
       modifier:    1,
       side:        order.side === 'BUY' ? 1 : 2,
       type:        2, // MARKET
       timeInForce: 3, // IOC
-      quantity:    String(order.quantity),
-      reduceOnly:  false,
-      positionSide: 1, // BOTH — always 1 for new orders (see note above)
     };
+    if (order.quantity) {
+      orderItem.quantity = String(order.quantity);
+    } else if (order.funds) {
+      orderItem.funds = String(order.funds);
+    }
+    orderItem.reduceOnly = false;
+    orderItem.positionSide = 1; // BOTH — always 1 for new orders (see note above)
 
     // PerpsNewOrderRequest: accountID, symbolID, orders
     const requestBody = { accountID: aid, symbolID, orders: [orderItem] };
@@ -468,7 +474,8 @@ export async function placePerpsOrder(
     const signingEnvelope = { type: 'newOrder', params: requestBody };
     const typedSig = await signOrder(signer, signingEnvelope, nonce, 'futures');
 
-    console.log('[sodex] placing perps order', { accountID: aid, symbol: order.symbol, side: order.side, quantity: order.quantity, leverage: order.leverage });
+    console.log('[sodex] placing perps order', { accountID: aid, symbol: order.symbol, side: order.side, quantity: order.quantity, funds: order.funds, leverage: order.leverage });
+    console.log('[sodex] perps order item', orderItem);
 
     const response = await fetch(`${PERPS_GW}/trade/orders`, {
       method: 'POST',
@@ -491,7 +498,11 @@ export async function placePerpsOrder(
     if (response.ok && result.code === 0) {
       const first = result.data?.[0];
       if (first && first.code !== 0) {
-        return { success: false, error: friendlyError(first.msg || first.message || 'Order rejected') };
+        // Show the raw per-order detail (not just a generic fallback) so a
+        // rejection reason SoDEX didn't put under msg/message is still visible.
+        const detail = first.msg || first.message || first.error || first.reason
+          || `rejected (code ${first.code}): ${JSON.stringify(first)}`;
+        return { success: false, error: friendlyError(detail) };
       }
       const orderId = first?.orderID != null ? String(first.orderID) : first?.clOrdID ?? `sodex-${nonce}`;
       return { success: true, orderId };

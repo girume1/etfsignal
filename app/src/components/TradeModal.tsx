@@ -150,14 +150,15 @@ export function TradeModal({
     }
   }, [currentPrice, orderType, limitPrice]);
 
-  // Perps orders are always quantity-denominated (base asset) — no funds/USDC option
+  // Reset amount when switching into futures — schema allows sizing by either
+  // base-asset quantity or USDC funds on perps, unlike spot (SELL is base-asset only)
   useEffect(() => {
     if (marketType === 'futures') {
-      setCurrency(baseAsset);
       setPct(0);
-      setAmount('0.001');
+      setAmount(currency === baseAsset ? '0.001' : '50');
     }
-  }, [marketType, baseAsset]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [marketType]);
 
   // ── Risk panel: debounced amount → quote-asset (USD) terms ────────────────
   const [debouncedAmount, setDebouncedAmount] = useState(amount);
@@ -217,7 +218,7 @@ export function TradeModal({
               side,
               type:     'MARKET',
               quantity: amount,
-              currency: baseAsset,
+              currency,            // BTC (quantity) or USDC (funds) — perps allows either, either side
               marketType: 'futures',
               leverage,
             }
@@ -291,7 +292,7 @@ export function TradeModal({
                 } {displaySymbol}
               </div>
               <div className="text-xs text-slate-500">
-                SoDEX Testnet · {marketType === 'spot' ? 'Spot' : `Futures · ${leverage}x`} · {orderType === 'MARKET' ? 'Market' : 'Limit'} · {quoteAsset}
+                SoDEX Testnet · {marketType === 'spot' ? 'Spot' : `Futures · ${leverage}x`} · {orderType === 'MARKET' ? 'Market' : 'Limit'} · {currency}
               </div>
             </div>
           </div>
@@ -495,15 +496,7 @@ export function TradeModal({
                   className="flex-1 px-4 py-3 rounded-xl font-mono text-lg focus:outline-none focus:border-blue-500 transition-colors"
                 />
 
-                {/* Currency dropdown — perps is always base-asset quantity, no funds option */}
-                {marketType === 'futures' ? (
-                  <div
-                    style={{ background: 'var(--brand-card)', border: '1px solid var(--brand-border)' }}
-                    className="flex items-center px-3 py-3 rounded-xl text-white font-semibold text-sm whitespace-nowrap"
-                  >
-                    {baseAsset}
-                  </div>
-                ) : (
+                {/* Currency dropdown — both spot and perps support base-asset or USDC sizing */}
                 <div className="relative">
                   <button
                     onClick={() => setDropOpen(v => !v)}
@@ -542,7 +535,6 @@ export function TradeModal({
                     </div>
                   )}
                 </div>
-                )}
               </div>
               {marketType === 'futures' && (
                 <p className="text-[10px] text-slate-600 mt-1.5">
