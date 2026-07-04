@@ -6,29 +6,43 @@ import {
 } from 'lucide-react';
 import type { MarketSignal, OrderSide, TradeOrder } from '../types';
 import { fetchBalances } from '../services/sodex';
-import { computePositionSize } from '../services/riskManager';
+import { computePositionSize, computeLeveragedRisk, type LeveragedRiskResult } from '../services/riskManager';
+
+const LEVERAGE_OPTIONS = [2, 5, 10, 20];
 
 function RiskPanel({
   balance, defaultBalance, confidence, tpPct, slPct, entryPrice, slPrice, amountUsd,
+  leverage, side,
 }: {
   balance: number; defaultBalance: boolean; confidence: number;
   tpPct: number; slPct: number; entryPrice?: number; slPrice?: number; amountUsd: number;
+  leverage?: number; side?: OrderSide;
 }) {
-  const risk = useMemo(() => computePositionSize({
-    balance,
-    confidence: confidence / 100,
-    tpPct: Math.abs(tpPct),
-    slPct: Math.abs(slPct),
-    entryPrice,
-    slPrice,
-    defaultBalance,
-  }), [balance, confidence, tpPct, slPct, entryPrice, slPrice, defaultBalance]);
+  const isFutures = leverage !== undefined && side !== undefined;
+
+  const risk = useMemo(() => {
+    const input = {
+      balance,
+      confidence: confidence / 100,
+      tpPct: Math.abs(tpPct),
+      slPct: Math.abs(slPct),
+      entryPrice,
+      slPrice,
+      defaultBalance,
+    };
+    return isFutures
+      ? computeLeveragedRisk({ ...input, leverage: leverage!, side: side! })
+      : computePositionSize(input);
+  }, [balance, confidence, tpPct, slPct, entryPrice, slPrice, defaultBalance, isFutures, leverage, side]);
+
+  const leveraged: LeveragedRiskResult | null = isFutures ? (risk as LeveragedRiskResult) : null;
 
   const warnings = [
     risk.riskRewardWarning && 'Risk/reward below 1.5x',
     risk.atrWarning && 'Stop-loss beyond 3x ATR',
     risk.clamped && 'Clamped to 10 vUSDC minimum',
     risk.capped && 'Capped to 20% of balance',
+    leveraged?.liquidationWarning && 'Liquidation within 15% of entry',
   ].filter((w): w is string => Boolean(w));
 
   return (
@@ -53,6 +67,20 @@ function RiskPanel({
       <div className="text-[10px] text-slate-600 font-mono mb-1.5">
         Your amount: ${amountUsd.toFixed(2)} ({risk.positionSize > 0 ? (amountUsd / risk.positionSize).toFixed(1) : '—'}x recommended)
       </div>
+      {leveraged && (
+        <div className="grid grid-cols-2 gap-2 mb-1.5 pt-1.5" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+          <div>
+            <div className="text-[9px] text-slate-600 font-mono uppercase">Margin Required</div>
+            <div className="text-xs font-mono text-white">${leveraged.marginRequired.toFixed(2)}</div>
+          </div>
+          <div>
+            <div className="text-[9px] text-slate-600 font-mono uppercase">Est. Liquidation</div>
+            <div className="text-xs font-mono" style={{ color: leveraged.liquidationWarning ? '#F87171' : '#E2E8F0' }}>
+              {leveraged.liquidationPrice > 0 ? `$${leveraged.liquidationPrice.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : '—'}
+            </div>
+          </div>
+        </div>
+      )}
       {warnings.length > 0 && (
         <ul className="space-y-0.5">
           {warnings.map(w => (
@@ -83,7 +111,6 @@ export function TradeModal({
 }: TradeModalProps) {
   const baseAsset   = symbol.split('-')[0]; // BTC or ETH
   const quoteAsset  = symbol.split('-')[1]; // USDC
-  const sodexSymbol = symbol.replace('-', '_');
 
   // ── Order state ──────────────────────────────────────────────────────────
   // SELL orders must use base asset (BTC/ETH) — funds field is BUY-only on SoDEX
@@ -99,6 +126,7 @@ export function TradeModal({
   const [acknowledged, setAcknowledged] = useState(false);
   const [submitting,   setSubmitting]   = useState(false);
   const [result,       setResult]       = useState<{ success: boolean; message: string; orderId?: string } | null>(null);
+  const [leverage,     setLeverage]     = useState(20);
 
   // ── Balance state ────────────────────────────────────────────────────────
   const [balances,   setBalances]   = useState<Record<string, string>>({});
@@ -122,12 +150,25 @@ export function TradeModal({
     }
   }, [currentPrice, orderType, limitPrice]);
 
+  // Perps orders are always quantity-denominated (base asset) — no funds/USDC option
+  useEffect(() => {
+    if (marketType === 'futures') {
+      setCurrency(baseAsset);
+      setPct(0);
+      setAmount('0.001');
+    }
+  }, [marketType, baseAsset]);
+
   // ── Risk panel: debounced amount → quote-asset (USD) terms ────────────────
   const [debouncedAmount, setDebouncedAmount] = useState(amount);
   useEffect(() => {
     const t = setTimeout(() => setDebouncedAmount(amount), 300);
     return () => clearTimeout(t);
   }, [amount]);
+
+  // ── Derived symbol (perps uses BTC-USD, distinct from spot's BTC-USDC) ────
+  const displaySymbol = marketType === 'futures' ? `${baseAsset}-USD` : symbol;
+  const sodexSymbol   = displaySymbol.replace('-', '_');
 
   // ── Derived colours ──────────────────────────────────────────────────────
   const isLong    = side === 'BUY';
@@ -169,14 +210,26 @@ export function TradeModal({
     if (orderType === 'LIMIT' && !limitPrice) return;
     setSubmitting(true);
     try {
-      const { orderId } = await onConfirm({
-        symbol,
-        side,
-        type:     orderType,
-        quantity: amount,
-        currency,            // BTC or USDC — determines quantity vs funds on SoDEX
-        ...(orderType === 'LIMIT' ? { price: limitPrice } : {}),
-      });
+      const { orderId } = await onConfirm(
+        marketType === 'futures'
+          ? {
+              symbol:   `${baseAsset}-USD`, // perps symbol format, distinct from spot's BTC-USDC
+              side,
+              type:     'MARKET',
+              quantity: amount,
+              currency: baseAsset,
+              marketType: 'futures',
+              leverage,
+            }
+          : {
+              symbol,
+              side,
+              type:     orderType,
+              quantity: amount,
+              currency,            // BTC or USDC — determines quantity vs funds on SoDEX
+              ...(orderType === 'LIMIT' ? { price: limitPrice } : {}),
+            },
+      );
       setResult({ success: true, message: '', orderId });
     } catch (err: any) {
       setResult({ success: false, message: err.message || 'Order failed' });
@@ -235,10 +288,10 @@ export function TradeModal({
                 {marketType === 'spot'
                   ? (isLong ? 'Buy' : 'Sell')
                   : (isLong ? 'Long' : 'Short')
-                } {symbol}
+                } {displaySymbol}
               </div>
               <div className="text-xs text-slate-500">
-                SoDEX Testnet · {marketType === 'spot' ? 'Spot' : 'Futures'} · {orderType === 'MARKET' ? 'Market' : 'Limit'} · {quoteAsset}
+                SoDEX Testnet · {marketType === 'spot' ? 'Spot' : `Futures · ${leverage}x`} · {orderType === 'MARKET' ? 'Market' : 'Limit'} · {quoteAsset}
               </div>
             </div>
           </div>
@@ -257,34 +310,54 @@ export function TradeModal({
               <SegmentBtn active={marketType === 'spot'} onClick={() => setMarketType('spot')}>
                 <span className="flex items-center justify-center gap-1.5"><TrendingUp size={13} /> Spot</span>
               </SegmentBtn>
-              {/* Futures locked until Wave 3 */}
-              <div
-                className="flex-1 py-2 rounded-lg text-sm font-semibold flex items-center justify-center gap-1.5 cursor-not-allowed select-none"
-                style={{ color: '#334155', border: '1px solid transparent' }}
-                title="Coming in Wave 3"
-              >
-                <Zap size={13} />
-                Futures
-                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded" style={{ background: 'rgba(148,163,184,0.08)', color: '#475569' }}>Wave 3</span>
-              </div>
+              <SegmentBtn active={marketType === 'futures'} onClick={() => { setMarketType('futures'); setOrderType('MARKET'); }}>
+                <span className="flex items-center justify-center gap-1.5"><Zap size={13} /> Futures</span>
+              </SegmentBtn>
             </div>
 
-            {/* ── Row 2: Market / Limit ──────────────────────────────────── */}
-            <div
-              style={{ background: 'var(--brand-card)', border: '1px solid var(--brand-border)' }}
-              className="flex rounded-xl p-1 mb-4 gap-1"
-            >
-              <SegmentBtn active={orderType === 'MARKET'} onClick={() => setOrderType('MARKET')}>
-                <span className="flex items-center justify-center gap-1.5"><Zap size={13} /> Market</span>
-              </SegmentBtn>
-              <SegmentBtn active={orderType === 'LIMIT'}  onClick={() => {
-                setOrderType('LIMIT');
-                if (!limitPrice && currentPrice) setLimitPrice(currentPrice.toFixed(2));
-                setCurrency(baseAsset); // limit orders always quantity (base asset)
-              }}>
-                <span className="flex items-center justify-center gap-1.5"><Target size={13} /> Limit</span>
-              </SegmentBtn>
-            </div>
+            {/* ── Row 2: Market / Limit (spot only — perps testnet is market-only) ── */}
+            {marketType === 'spot' && (
+              <div
+                style={{ background: 'var(--brand-card)', border: '1px solid var(--brand-border)' }}
+                className="flex rounded-xl p-1 mb-4 gap-1"
+              >
+                <SegmentBtn active={orderType === 'MARKET'} onClick={() => setOrderType('MARKET')}>
+                  <span className="flex items-center justify-center gap-1.5"><Zap size={13} /> Market</span>
+                </SegmentBtn>
+                <SegmentBtn active={orderType === 'LIMIT'}  onClick={() => {
+                  setOrderType('LIMIT');
+                  if (!limitPrice && currentPrice) setLimitPrice(currentPrice.toFixed(2));
+                  setCurrency(baseAsset); // limit orders always quantity (base asset)
+                }}>
+                  <span className="flex items-center justify-center gap-1.5"><Target size={13} /> Limit</span>
+                </SegmentBtn>
+              </div>
+            )}
+
+            {/* ── Leverage selector (futures only) ────────────────────────── */}
+            {marketType === 'futures' && (
+              <div className="mb-4">
+                <label className="text-xs text-slate-500 uppercase tracking-wider font-semibold mb-1.5 block">Leverage</label>
+                <div
+                  style={{ background: 'var(--brand-card)', border: '1px solid var(--brand-border)' }}
+                  className="flex rounded-xl p-1 gap-1"
+                >
+                  {LEVERAGE_OPTIONS.map(lev => (
+                    <button
+                      key={lev}
+                      onClick={() => setLeverage(lev)}
+                      className="flex-1 py-2 rounded-lg text-sm font-semibold transition-all"
+                      style={leverage === lev
+                        ? { background: bgColor, color, border: `1px solid ${borderCol}` }
+                        : { color: '#64748b', border: '1px solid transparent' }
+                      }
+                    >
+                      {lev}x
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
 
             {/* ── Signal context ────────────────────────────────────────── */}
@@ -309,6 +382,7 @@ export function TradeModal({
               entryPrice={currentPrice}
               slPrice={signal.stopLoss.price}
               amountUsd={amountUsd}
+              {...(marketType === 'futures' ? { leverage, side } : {})}
             />
 
             {/* ── Limit price input ─────────────────────────────────────── */}
@@ -347,7 +421,9 @@ export function TradeModal({
               <div className="flex items-center justify-between mb-1.5">
                 <label className="text-xs text-slate-500 uppercase tracking-wider font-semibold flex items-center gap-1.5">
                   Amount
-                  <span className="text-[10px] text-slate-600 normal-case font-normal">min order $5</span>
+                  <span className="text-[10px] text-slate-600 normal-case font-normal">
+                    min order {marketType === 'futures' ? '$10' : '$5'}
+                  </span>
                 </label>
 
                 {/* Available balance */}
@@ -419,7 +495,15 @@ export function TradeModal({
                   className="flex-1 px-4 py-3 rounded-xl font-mono text-lg focus:outline-none focus:border-blue-500 transition-colors"
                 />
 
-                {/* Currency dropdown */}
+                {/* Currency dropdown — perps is always base-asset quantity, no funds option */}
+                {marketType === 'futures' ? (
+                  <div
+                    style={{ background: 'var(--brand-card)', border: '1px solid var(--brand-border)' }}
+                    className="flex items-center px-3 py-3 rounded-xl text-white font-semibold text-sm whitespace-nowrap"
+                  >
+                    {baseAsset}
+                  </div>
+                ) : (
                 <div className="relative">
                   <button
                     onClick={() => setDropOpen(v => !v)}
@@ -458,7 +542,13 @@ export function TradeModal({
                     </div>
                   )}
                 </div>
+                )}
               </div>
+              {marketType === 'futures' && (
+                <p className="text-[10px] text-slate-600 mt-1.5">
+                  Balance shown is your spot wallet — perps margin is a separate SoDEX sub-account.
+                </p>
+              )}
             </div>
 
             {/* ── % slider ─────────────────────────────────────────────── */}
@@ -508,6 +598,11 @@ export function TradeModal({
                 Risk Warning
               </div>
               <p className="text-xs text-slate-400 leading-relaxed">{signal.riskWarning}</p>
+              {marketType === 'futures' && (
+                <p className="text-xs text-slate-400 leading-relaxed mt-1.5 pt-1.5" style={{ borderTop: '1px solid rgba(251,191,36,0.15)' }}>
+                  Leverage amplifies both gains and losses. At {leverage}x, a small adverse price move can liquidate your entire margin — this is testnet, but the mechanics mirror mainnet risk.
+                </p>
+              )}
             </div>
 
             {/* ── Acknowledgment ────────────────────────────────────────── */}
@@ -578,7 +673,7 @@ export function TradeModal({
                   {[
                     { label: 'Order ID',  value: result.orderId ?? '—', mono: true },
                     { label: 'Status',    value: 'Submitted ✓' },
-                    { label: 'Pair',      value: symbol, mono: true },
+                    { label: 'Pair',      value: displaySymbol, mono: true },
                     { label: 'Side', value: marketType === 'spot' ? (isLong ? 'BUY' : 'SELL') : (isLong ? 'LONG' : 'SHORT') },
                     { label: 'Size',      value: `${amount} ${currency}${orderType === 'LIMIT' ? ` @ $${limitPrice}` : ''}`, mono: true },
                   ].map(({ label, value, mono }) => (

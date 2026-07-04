@@ -93,6 +93,8 @@ export interface TradeOrder {
   quantity: string;       // amount entered by user
   currency: string;       // BTC or USDC — determines quantity vs funds field
   price?: string;         // for LIMIT orders
+  marketType?: 'spot' | 'futures'; // futures orders route to perps signing/endpoint
+  leverage?: number;               // futures only
 }
 
 export interface TradeConfirmation {

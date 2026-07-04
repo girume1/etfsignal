@@ -53,3 +53,34 @@ export function computePositionSize(input: RiskInput): RiskResult {
 
   return result;
 }
+
+export interface LeveragedRiskResult extends RiskResult {
+  marginRequired: number;    // positionSize / leverage — actual vUSDC posted as collateral
+  leveragedNotional: number; // positionSize itself (margin * leverage)
+  liquidationPrice: number;  // 0 if entryPrice is unknown/zero
+  liquidationWarning: boolean; // true if liquidation is within 15% of entry
+}
+
+/**
+ * Same half-Kelly sizing as computePositionSize, plus perps-specific margin
+ * and liquidation-price estimates. Liquidation distance uses a 0.9 maintenance-
+ * margin buffer: LONG = entry * (1 - 1/(leverage*0.9)), SHORT = entry * (1 + 1/(leverage*0.9)).
+ */
+export function computeLeveragedRisk(
+  input: RiskInput & { leverage: number; side: 'BUY' | 'SELL' },
+): LeveragedRiskResult {
+  const base = computePositionSize(input);
+  const leverage = Math.max(1, input.leverage);
+  const entryPrice = input.entryPrice ?? 0;
+
+  const marginRequired = base.positionSize / leverage;
+  const leveragedNotional = base.positionSize;
+
+  const liqDistanceFrac = 1 / (leverage * 0.9);
+  const liquidationPrice = entryPrice > 0
+    ? (input.side === 'BUY' ? entryPrice * (1 - liqDistanceFrac) : entryPrice * (1 + liqDistanceFrac))
+    : 0;
+  const liquidationWarning = entryPrice > 0 && Math.abs(entryPrice - liquidationPrice) / entryPrice < 0.15;
+
+  return { ...base, marginRequired, leveragedNotional, liquidationPrice, liquidationWarning };
+}

@@ -16,7 +16,7 @@ import { deriveAlerts } from '../services/alerts';
 import type { HistoricalInflow, PricePoint } from '../types';
 import { computeSentiment } from '../services/sentiment';
 import { analyzeMarket } from '../services/ai';
-import { placeSpotOrder } from '../services/sodex';
+import { placeSpotOrder, placePerpsOrder } from '../services/sodex';
 import { notifyTelegramSubscribers, notifyTelegramTrade } from '../services/telegram';
 import { saveTrade, getTradeHistory } from '../services/tradeHistory';
 import { useLivePrices } from '../hooks/useLivePrices';
@@ -348,7 +348,11 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
 
   const confirmTrade = useCallback(async (order: TradeOrder): Promise<{ orderId: string }> => {
     if (!signer) throw new Error('Wallet not connected');
-    const r = await placeSpotOrder(signer, 1, order);
+    const r = order.marketType === 'futures'
+      ? await placePerpsOrder(signer, {
+          symbol: order.symbol, side: order.side, quantity: order.quantity, leverage: order.leverage ?? 20,
+        })
+      : await placeSpotOrder(signer, 1, order);
     if (!r.success) throw new Error(r.error);
 
     // Use the real SoDEX order ID from the response, fall back to local timestamp

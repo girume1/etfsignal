@@ -2,6 +2,7 @@ import { ethers } from 'ethers';
 import type { TradeOrder } from '../types';
 
 const TESTNET_GW  = 'https://testnet-gw.sodex.dev/api/v1/spot';
+const PERPS_GW    = 'https://testnet-gw.sodex.dev/api/v1/perps';
 const CHAIN_ID     = 138565;         // SoDEX testnet (ValueChain)
 const CHAIN_ID_HEX = '0x21D45';     // hex for wallet_switchEthereumChain
 
@@ -52,14 +53,54 @@ async function resolveSymbolId(symbol: string): Promise<number> {
   throw new Error(`Symbol ${symbol} not found on SoDEX testnet`);
 }
 
-// ─── EIP-712 Domain ───────────────────────────────────────────────────────────
+// ─── Perps symbol resolution ──────────────────────────────────────────────────
+// Perps symbols are named "BTC-USD" directly (no V-prefix, unlike spot's VBTC_VUSDC).
 
-const domain = {
-  name: 'spot',
-  version: '1',
-  chainId: CHAIN_ID,
-  verifyingContract: '0x0000000000000000000000000000000000000000',
-};
+const perpsSymbolIdCache: Record<string, number> = {};
+
+async function resolvePerpsSymbolId(symbol: string): Promise<number> {
+  if (perpsSymbolIdCache[symbol]) return perpsSymbolIdCache[symbol];
+
+  const [base] = symbol.split('-'); // e.g. BTC
+
+  const res = await fetch(`${PERPS_GW}/markets/symbols`);
+  const json: any = await res.json();
+  if (!Array.isArray(json.data)) {
+    throw new Error('Could not fetch SoDEX perps symbol list');
+  }
+
+  for (const s of json.data) {
+    const id = s.id ?? s.symbolID;
+    if (!id) continue;
+
+    const name = String(s.name ?? s.symbol ?? s.displayName ?? '').toUpperCase();
+    if (name === symbol.toUpperCase() || name === `${base.toUpperCase()}-USD`) {
+      perpsSymbolIdCache[symbol] = Number(id);
+      return Number(id);
+    }
+
+    const sBase = String(s.baseCoin ?? s.baseAsset ?? '').toUpperCase();
+    if (sBase === base.toUpperCase()) {
+      perpsSymbolIdCache[symbol] = Number(id);
+      return Number(id);
+    }
+  }
+
+  console.error('[sodex] available perps symbols:', json.data.map((s: any) => s.name ?? s.symbol).join(', '));
+  throw new Error(`Perps symbol ${symbol} not found on SoDEX testnet`);
+}
+
+// ─── EIP-712 Domain ───────────────────────────────────────────────────────────
+// Spot uses domain.name "spot"; perps uses "futures" — same chain, same types.
+
+function makeDomain(name: 'spot' | 'futures') {
+  return {
+    name,
+    version: '1',
+    chainId: CHAIN_ID,
+    verifyingContract: '0x0000000000000000000000000000000000000000',
+  };
+}
 
 const types = {
   EIP712Domain: [
@@ -100,9 +141,11 @@ async function ensureSoDEXNetwork(): Promise<void> {
 }
 
 // ─── Account ID ───────────────────────────────────────────────────────────────
+// Spot and perps are separate sub-accounts on SoDEX — each has its own
+// accounts/{address}/state endpoint and its own account ID.
 
-async function fetchAccountId(address: string): Promise<number> {
-  const res = await fetch(`${TESTNET_GW}/accounts/${address}/state`);
+async function fetchAccountId(address: string, baseUrl: string = TESTNET_GW): Promise<number> {
+  const res = await fetch(`${baseUrl}/accounts/${address}/state`);
   const raw = await res.text();
   let json: any = {};
   try { json = JSON.parse(raw); } catch { /* non-JSON */ }
@@ -172,6 +215,7 @@ export async function signOrder(
   signer: ethers.Signer,
   payload: object,
   nonce: number,
+  domainName: 'spot' | 'futures' = 'spot',
 ): Promise<string> {
   // Use standard JSON.stringify — SoDEX reference script uses JSON.stringify directly
   const payloadJson = JSON.stringify(payload);
@@ -186,7 +230,7 @@ export async function signOrder(
   let rawSig: string;
   try {
     rawSig = await (signer as any).signTypedData(
-      domain,
+      makeDomain(domainName),
       { ExchangeAction: types.ExchangeAction },
       message,
     );
@@ -234,7 +278,7 @@ function friendlyError(msg: string): string {
   if (m.includes('api key not found') || m.includes('unauthorized'))
     return 'Signing error — wallet may not be registered on SoDEX testnet. Visit testnet.sodex.com to register.';
   if (m.includes('notional is invalid'))
-    return 'Order value is too small — SoDEX testnet requires a minimum order of $5.';
+    return 'Order value is too small — below SoDEX testnet\'s minimum order size for this market ($5 spot, $10 perps).';
   if (m.includes('invalid payload') || m.includes('quantity is invalid'))
     return 'Invalid order size. Try a different amount.';
   return msg;
@@ -327,6 +371,134 @@ export async function placeSpotOrder(
     // Translate known SoDEX testnet errors into human-readable messages
     const errMsg = friendlyError(raw2);
     return { success: false, error: errMsg };
+
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Unknown error' };
+  }
+}
+
+// ─── Perps (futures) orders ───────────────────────────────────────────────────
+// Confirmed with SoDEX support: perps is a separate sub-account/endpoint from
+// spot, signed with EIP-712 domain "futures" (not "spot"), envelope type
+// "newOrder" (not "batchNewOrder"), submitted to /trade/orders (not /orders/batch).
+//
+// positionSide is ALWAYS 1 (BOTH) for new orders — per SoDEX's own schema,
+// LONG(2)/SHORT(3) are declared but "not supported in order placement yet".
+// Direction is controlled entirely by `side` (1=BUY/LONG, 2=SELL/SHORT).
+
+export interface PerpsOrder {
+  symbol: string;     // e.g. "BTC-USD"
+  side: 'BUY' | 'SELL';
+  quantity: string;   // base-asset amount, e.g. "0.001" BTC
+  leverage: number;
+}
+
+/**
+ * Sets leverage before placing an order. Best-effort: SoDEX rejects leverage
+ * changes while a position/open order exists on that symbol, which is a normal
+ * condition (not a failure) once a position is already open at that leverage.
+ */
+async function setPerpsLeverage(
+  signer: ethers.Signer,
+  symbol: string,
+  leverage: number,
+): Promise<void> {
+  const address = await signer.getAddress();
+  const nonce = Date.now();
+  const symbolID = await resolvePerpsSymbolId(symbol);
+  const aid = await fetchAccountId(address, PERPS_GW);
+
+  const requestBody = { accountID: aid, symbolID, leverage: Math.round(leverage), isIsolated: true };
+  const signingEnvelope = { type: 'updateLeverage', params: requestBody };
+  const typedSig = await signOrder(signer, signingEnvelope, nonce, 'futures');
+
+  try {
+    const response = await fetch(`${PERPS_GW}/trade/leverage`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept':       'application/json',
+        'X-API-Sign':   typedSig,
+        'X-API-Nonce':  String(nonce),
+        'X-API-Chain':  String(CHAIN_ID),
+      },
+      body: JSON.stringify(requestBody),
+    });
+    const raw = await response.text();
+    console.log('[sodex] setPerpsLeverage response', response.status, raw);
+  } catch (err) {
+    console.warn('[sodex] setPerpsLeverage failed (non-fatal, likely an existing position):', err);
+  }
+}
+
+export async function placePerpsOrder(
+  signer: ethers.Signer,
+  order: PerpsOrder,
+): Promise<PlaceOrderResult> {
+  try {
+    await ensureSoDEXNetwork();
+
+    const address = await signer.getAddress();
+    const nonce   = Date.now();
+
+    const symbolID = await resolvePerpsSymbolId(order.symbol);
+    const aid = await fetchAccountId(address, PERPS_GW);
+
+    // Best-effort — SoDEX rejects this if a position is already open on the symbol.
+    await setPerpsLeverage(signer, order.symbol, order.leverage);
+
+    // PerpsOrderItem field order (exact, per SoDEX schema):
+    // clOrdID, modifier, side, type, timeInForce, price*, quantity, funds*,
+    // stopPrice*, stopType*, triggerType*, reduceOnly, positionSide  (*omitempty)
+    const orderItem: Record<string, unknown> = {
+      clOrdID:     `etfsignal-${nonce}`,
+      modifier:    1,
+      side:        order.side === 'BUY' ? 1 : 2,
+      type:        2, // MARKET
+      timeInForce: 3, // IOC
+      quantity:    String(order.quantity),
+      reduceOnly:  false,
+      positionSide: 1, // BOTH — always 1 for new orders (see note above)
+    };
+
+    // PerpsNewOrderRequest: accountID, symbolID, orders
+    const requestBody = { accountID: aid, symbolID, orders: [orderItem] };
+
+    // Signing envelope: { type: 'newOrder', params: requestBody }, domain "futures"
+    const signingEnvelope = { type: 'newOrder', params: requestBody };
+    const typedSig = await signOrder(signer, signingEnvelope, nonce, 'futures');
+
+    console.log('[sodex] placing perps order', { accountID: aid, symbol: order.symbol, side: order.side, quantity: order.quantity, leverage: order.leverage });
+
+    const response = await fetch(`${PERPS_GW}/trade/orders`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept':       'application/json',
+        'X-API-Sign':   typedSig,
+        'X-API-Nonce':  String(nonce),
+        'X-API-Chain':  String(CHAIN_ID),
+      },
+      body: JSON.stringify(requestBody),
+    });
+
+    const raw = await response.text();
+    let result: any = {};
+    try { result = JSON.parse(raw); } catch { /* non-JSON */ }
+
+    console.log('[sodex] perps response', response.status, raw);
+
+    if (response.ok && result.code === 0) {
+      const first = result.data?.[0];
+      if (first && first.code !== 0) {
+        return { success: false, error: friendlyError(first.msg || first.message || 'Order rejected') };
+      }
+      const orderId = first?.orderID != null ? String(first.orderID) : first?.clOrdID ?? `sodex-${nonce}`;
+      return { success: true, orderId };
+    }
+
+    const raw2 = result.msg || result.message || result.error || `SoDEX error (HTTP ${response.status})`;
+    return { success: false, error: friendlyError(raw2) };
 
   } catch (err: any) {
     return { success: false, error: err.message || 'Unknown error' };
