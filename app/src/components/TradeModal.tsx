@@ -160,6 +160,18 @@ export function TradeModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [marketType]);
 
+  // SoDEX only accepts quote-currency (funds) sizing for spot MARKET BUY orders —
+  // never spot SELL, never spot LIMIT (either side). Perps allows funds on either
+  // side. Picking the "wrong" currency there would silently be reinterpreted as a
+  // base-asset quantity server-side (e.g. typing "50" meaning $50 sent as 50 BTC).
+  const fundsAllowed = marketType === 'futures' || (orderType === 'MARKET' && side === 'BUY');
+  useEffect(() => {
+    if (!fundsAllowed && currency !== baseAsset) {
+      setCurrency(baseAsset);
+      setPct(0);
+    }
+  }, [fundsAllowed, currency, baseAsset]);
+
   // ── Risk panel: debounced amount → quote-asset (USD) terms ────────────────
   const [debouncedAmount, setDebouncedAmount] = useState(amount);
   useEffect(() => {
@@ -497,7 +509,16 @@ export function TradeModal({
                   className="flex-1 px-4 py-3 rounded-xl font-mono text-lg focus:outline-none focus:border-blue-500 transition-colors"
                 />
 
-                {/* Currency dropdown — both spot and perps support base-asset or USDC sizing */}
+                {/* Currency dropdown — USDC/funds sizing only offered where SoDEX actually accepts it */}
+                {!fundsAllowed ? (
+                  <div
+                    style={{ background: 'var(--brand-card)', border: '1px solid var(--brand-border)' }}
+                    className="flex items-center px-3 py-3 rounded-xl text-white font-semibold text-sm whitespace-nowrap"
+                    title={marketType === 'spot' ? 'SoDEX only accepts USDC sizing for spot market buys' : undefined}
+                  >
+                    {baseAsset}
+                  </div>
+                ) : (
                 <div className="relative">
                   <button
                     onClick={() => setDropOpen(v => !v)}
@@ -536,6 +557,7 @@ export function TradeModal({
                     </div>
                   )}
                 </div>
+                )}
               </div>
               {marketType === 'futures' && (
                 <p className="text-[10px] text-slate-600 mt-1.5">
