@@ -121,6 +121,24 @@ export interface TradeRecord {
   leverage?:      number;   // futures only
 }
 
+// SoDEX perps position — from GET /accounts/{address}/positions/history.
+// isTakenOver + takeOverPrice are SoDEX's authoritative liquidation record,
+// straight from their schema (not inferred from our own trade history).
+export interface PerpsPosition {
+  id:            string;
+  symbol:        string;
+  size:          string;   // DecimalString; negative = short, positive = long
+  leverage:      number;
+  avgEntryPrice: string;
+  avgClosePrice: string;
+  realizedPnL:   string;   // includes trading fees and liquidation loss
+  active:        boolean;
+  isTakenOver:   boolean;  // true = position was liquidated
+  takeOverPrice: string;   // mark price at the moment of liquidation, "0" if not liquidated
+  createdAt:     number;   // ms epoch
+  updatedAt:     number;   // ms epoch
+}
+
 export interface WalletState {
   connected: boolean;
   address: string | null;

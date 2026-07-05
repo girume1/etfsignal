@@ -1,5 +1,5 @@
 import { ethers } from 'ethers';
-import type { TradeOrder } from '../types';
+import type { TradeOrder, PerpsPosition } from '../types';
 
 const TESTNET_GW  = 'https://testnet-gw.sodex.dev/api/v1/spot';
 const PERPS_GW    = 'https://testnet-gw.sodex.dev/api/v1/perps';
@@ -182,6 +182,22 @@ export async function fetchBalances(address: string): Promise<Record<string, str
     }
   } catch { /* fall through */ }
   return {};
+}
+
+// ─── Perps position history ────────────────────────────────────────────────
+// Public read, no signing needed. isTakenOver/takeOverPrice are SoDEX's own
+// liquidation record — confirmed against their schema docs and live endpoint.
+
+export async function fetchPerpsPositionHistory(address: string, limit = 20): Promise<PerpsPosition[]> {
+  try {
+    const res = await fetch(`${PERPS_GW}/accounts/${address}/positions/history?limit=${limit}`);
+    if (!res.ok) return [];
+    const json: any = await res.json();
+    if (json.code !== 0 || !Array.isArray(json.data)) return [];
+    return json.data as PerpsPosition[];
+  } catch {
+    return [];
+  }
 }
 
 // ─── EIP-712 signing ──────────────────────────────────────────────────────────

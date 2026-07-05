@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { PieChart, RefreshCw, ArrowUp, ArrowDown, ExternalLink, Wallet } from 'lucide-react';
+import { PieChart, RefreshCw, ArrowUp, ArrowDown, ExternalLink, Wallet, Zap } from 'lucide-react';
 import { useDashboard } from '../../contexts/DashboardContext';
-import { fetchBalances, truncateAddress } from '../../services/sodex';
+import { fetchBalances, fetchPerpsPositionHistory, truncateAddress } from '../../services/sodex';
 import { formatUSD } from '../../services/sosovalue';
+import type { PerpsPosition } from '../../types';
 
 function timeAgo(ts: number): string {
   const diffMs = Date.now() - ts;
@@ -40,6 +41,20 @@ export default function PortfolioPage() {
   }, [wallet.address]);
 
   useEffect(() => { loadBalances(); }, [loadBalances]);
+
+  const [positions,    setPositions]    = useState<PerpsPosition[]>([]);
+  const [posLoading,   setPosLoading]   = useState(false);
+
+  const loadPositions = useCallback(() => {
+    if (!wallet.address) return;
+    setPosLoading(true);
+    fetchPerpsPositionHistory(wallet.address)
+      .then(setPositions)
+      .catch(() => setPositions([]))
+      .finally(() => setPosLoading(false));
+  }, [wallet.address]);
+
+  useEffect(() => { loadPositions(); }, [loadPositions]);
 
   const btcPrice = liveBtcPx ?? latestBtcPx ?? 0;
   const ethPrice = liveEthPx ?? latestEthPx ?? 0;
@@ -90,13 +105,13 @@ export default function PortfolioPage() {
             )}
           </div>
           <button
-            onClick={loadBalances}
-            disabled={balLoading}
+            onClick={() => { loadBalances(); loadPositions(); }}
+            disabled={balLoading || posLoading}
             style={{ border: '1px solid rgba(255,255,255,0.1)', color: '#94A3B8' }}
             className="px-3 py-1.5 rounded-lg text-xs font-mono hover:text-white hover:bg-white/5 disabled:opacity-40 transition-colors flex items-center gap-1.5"
           >
-            <RefreshCw size={11} className={`shrink-0${balLoading ? ' animate-spin' : ''}`} />
-            {balLoading ? 'Loading…' : 'Refresh'}
+            <RefreshCw size={11} className={`shrink-0${(balLoading || posLoading) ? ' animate-spin' : ''}`} />
+            {(balLoading || posLoading) ? 'Loading…' : 'Refresh'}
           </button>
         </div>
       </div>
@@ -136,6 +151,65 @@ export default function PortfolioPage() {
                       <div className="text-sm font-bold font-mono text-white truncate">
                         {parseFloat(amount).toLocaleString(undefined, { maximumFractionDigits: 6 })}
                       </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Perps position history — liquidation status is SoDEX's own record (isTakenOver), not our estimate */}
+        <div
+          style={{ background: 'var(--brand-card)', border: '1px solid var(--brand-border)' }}
+          className="rounded-xl p-4"
+        >
+          <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Perps Position History</h3>
+          {posLoading ? (
+            <div className="space-y-2">
+              {Array(2).fill(0).map((_, i) => <div key={i} className="shimmer h-14 rounded-lg" />)}
+            </div>
+          ) : positions.length === 0 ? (
+            <p className="text-xs text-slate-600 text-center py-4 font-mono">No perps positions yet — open one from an AI signal (Futures tab)</p>
+          ) : (
+            <div className="space-y-2">
+              {positions.map(p => {
+                const isLongPos = parseFloat(p.size) >= 0;
+                const pnl = parseFloat(p.realizedPnL) || 0;
+                const pnlColor = pnl >= 0 ? '#34D399' : '#F87171';
+                return (
+                  <div
+                    key={p.id}
+                    style={{ background: 'rgba(255,255,255,0.02)', borderLeft: `2px solid ${p.isTakenOver ? '#F87171' : pnlColor}` }}
+                    className="flex items-center gap-3 py-2.5 px-3 text-sm rounded-lg"
+                  >
+                    <span style={{ color: isLongPos ? '#34D399' : '#F87171', background: `${isLongPos ? '#34D399' : '#F87171'}20`, border: `1px solid ${isLongPos ? '#34D399' : '#F87171'}40` }} className="w-7 h-7 rounded-full flex items-center justify-center shrink-0">
+                      {isLongPos ? <ArrowUp size={13} /> : <ArrowDown size={13} />}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-white text-xs">{isLongPos ? 'LONG' : 'SHORT'} {p.symbol} · {p.leverage}x</span>
+                        {p.isTakenOver ? (
+                          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded flex items-center gap-0.5" style={{ background: 'rgba(248,113,113,0.15)', color: '#F87171' }}>
+                            <Zap size={9} className="shrink-0" /> Liquidated
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded" style={{ background: p.active ? 'rgba(0,255,167,0.12)' : 'rgba(148,163,184,0.1)', color: p.active ? '#00FFA7' : '#94A3B8' }}>
+                            {p.active ? 'Open' : 'Closed'}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[10px] text-slate-600 mt-0.5">
+                        Entry ${parseFloat(p.avgEntryPrice).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                        {' → '}
+                        {p.isTakenOver ? `Liquidated $${parseFloat(p.takeOverPrice).toLocaleString(undefined, { maximumFractionDigits: 0 })}` : (parseFloat(p.avgClosePrice) > 0 ? `$${parseFloat(p.avgClosePrice).toLocaleString(undefined, { maximumFractionDigits: 0 })}` : '—')}
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <div className="font-mono text-xs font-semibold" style={{ color: pnlColor }}>
+                        {pnl >= 0 ? '+' : ''}{pnl.toFixed(2)}
+                      </div>
+                      <div className="text-[10px] text-slate-600">{timeAgo(p.updatedAt)}</div>
                     </div>
                   </div>
                 );
