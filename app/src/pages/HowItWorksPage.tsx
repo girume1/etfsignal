@@ -37,11 +37,27 @@ export function HowItWorksPage() {
     },
     {
       num: '05',
+      title: 'Size',
+      subtitle: 'Half-Kelly risk management',
+      desc: 'Before any order goes out, the Risk Manager recommends a position size from wallet balance, signal confidence, and TP/SL — with a floor, a ceiling, and warnings for a weak risk-reward ratio or (for leveraged perps) a stop-loss that sits too close to liquidation.',
+      tech: ['Half-Kelly sizing', 'Risk-reward + ATR warnings', 'Liquidation estimate (perps)'],
+      color: '#F59E0B',
+    },
+    {
+      num: '06',
       title: 'Execute',
       subtitle: 'On-chain confirmation',
-      desc: 'User reviews the suggested order, acknowledges the risk warning explicitly, then confirms. The order is signed via EIP712 with their wallet and submitted to SoDEX testnet — no funds at risk during the buildathon.',
-      tech: ['SoDEX Testnet API', 'EIP712 typed signing', 'Risk acknowledgment'],
+      desc: 'User reviews the suggested order, acknowledges the risk warning explicitly, then confirms. The order is signed via EIP-712 with their own wallet and submitted to SoDEX testnet — spot (buy/sell) or perps (long/short, 2×–20× leverage) — no funds at risk during the buildathon.',
+      tech: ['SoDEX Testnet API — spot & perps', 'EIP-712 typed signing', 'Risk acknowledgment'],
       color: '#F59E0B',
+    },
+    {
+      num: '07',
+      title: 'Track',
+      subtitle: 'Real outcomes, not guesses',
+      desc: 'Every signal is re-evaluated 24h later against real Binance hourly candles — HIT, MISS, or EXPIRED, feeding a genuine hit rate, average P&L, and max drawdown. Closed perps positions show SoDEX\'s own liquidation record, not an estimate.',
+      tech: ['Real 24h backtest', 'Hit rate / P&L / drawdown', 'SoDEX position history'],
+      color: '#00FFA7',
     },
   ];
 
@@ -61,7 +77,7 @@ export function HowItWorksPage() {
             The Pipeline
           </p>
           <h1 className="font-display text-white text-5xl md:text-7xl mb-6 leading-tight">
-            Five steps. <em style={{ color: 'var(--brand-accent)' }}>Zero noise.</em>
+            Seven steps. <em style={{ color: 'var(--brand-accent)' }}>Zero noise.</em>
           </h1>
           <p className="text-lg text-slate-400 max-w-2xl mx-auto">
             Every signal in ETFSignal AI follows the same disciplined workflow —
@@ -150,8 +166,11 @@ export function HowItWorksPage() {
                   ['SoSoValue', '/openapi/v2/etf/currentEtfDataMetrics', 'Live BTC/ETH ETF flow metrics'],
                   ['SoSoValue', '/api/v1/news/featured', 'Categorized crypto news feed'],
                   ['Anthropic', 'claude-sonnet-4-20250514', 'Market signal synthesis'],
-                  ['SoDEX Testnet', 'testnet-gw.sodex.dev/api/v1/spot', 'EIP712-signed order placement'],
-                  ['SoDEX Testnet', 'wss://testnet-gw.sodex.dev/ws/spot', 'Real-time price feed (Wave 2)'],
+                  ['Binance', 'wss://stream.binance.com — miniTicker', 'Live BTC/ETH price, ~1s cadence'],
+                  ['Binance', '/api/v3/klines', 'Hourly/daily candles — charts + real 24h backtest evaluation'],
+                  ['SoDEX Testnet', 'testnet-gw.sodex.dev/api/v1/spot', 'EIP-712 signed spot order placement'],
+                  ['SoDEX Testnet', 'testnet-gw.sodex.dev/api/v1/perps', 'EIP-712 signed perps order placement + position history'],
+                  ['Upstash Redis', 'REST API', 'Signal archive with real evaluated outcomes'],
                 ].map(([src, ep, purpose], i) => (
                   <tr key={i} style={{ borderTop: '1px solid var(--brand-border)' }}>
                     <td className="px-6 py-4 font-semibold text-white">{src}</td>

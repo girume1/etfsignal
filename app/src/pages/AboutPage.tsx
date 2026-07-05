@@ -113,8 +113,8 @@ export function AboutPage() {
             <div className="space-y-4">
               {[
                 { wave: 'Wave 1', status: '✓', state: 'Shipped', label: 'Concept + Full Scaffold + APIs Integrated', color: '#34D399' },
-                { wave: 'Wave 2', status: '◯', state: 'Next', label: 'Real-time WebSocket · Historical charts · Polished trade flow', color: '#00FFA7' },
-                { wave: 'Wave 3', status: '◯', state: 'Planned', label: 'Portfolio tracker · Copy-trading · Final demo polish', color: '#00FFA7' },
+                { wave: 'Wave 2', status: '✓', state: 'Shipped', label: 'Signal archive · Telegram bot + wallet-linked alerts · Factor weight breakdown', color: '#34D399' },
+                { wave: 'Wave 3', status: '✓', state: 'Shipped', label: 'Real backtesting · Half-Kelly risk manager · SoDEX perps (long/short, leverage) · 30/90D flow analysis · Watchlist/Portfolio/Settings', color: '#34D399' },
               ].map(w => (
                 <div
                   key={w.wave}
