@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Hexagon, Sparkles, Zap, ArrowRight, Star, ArrowUp, Check } from 'lucide-react';
+import { Hexagon, Sparkles, Zap, ArrowRight, Star, ArrowUp, Check, TrendingUp, Shield, ArrowLeftRight } from 'lucide-react';
 import { Nav, Footer } from '../components/Nav';
 import { HeroVisualizer } from '../components/HeroVisualizer';
 
@@ -37,8 +37,8 @@ const FEATURES = [
   {
     num: '03',
     icon: Zap,
-    title: 'On-Chain Execution',
-    desc: 'Sign and submit spot orders on SoDEX testnet via EIP712. Full risk acknowledgment, testnet-only — zero real capital at risk.',
+    title: 'Risk-Managed Execution',
+    desc: 'Half-Kelly position sizing recommends your size before you trade. Sign and submit spot or leveraged perps orders on SoDEX testnet via EIP-712 — testnet-only, zero real capital at risk.',
     color: '#34D399',
     glow: 'rgba(52,211,153,0.15)',
   },
@@ -115,7 +115,7 @@ export function LandingPage() {
                 className="text-xs font-mono uppercase tracking-wider"
                 style={{ color: 'var(--brand-accent)' }}
               >
-                SoSoValue Buildathon 2026 · Wave 2
+                SoSoValue Buildathon 2026 · Wave 3
               </span>
             </div>
 
@@ -340,14 +340,14 @@ export function LandingPage() {
               variants={fadeUp}
             >
               <p className="text-xs font-mono uppercase tracking-widest mb-4" style={{ color: 'var(--brand-accent)' }}>
-                New in Wave 2
+                Since Wave 2
               </p>
               <h2 className="font-display text-white text-3xl md:text-4xl mb-5 leading-tight">
                 Transparent signal logic.{' '}
                 <em style={{ color: 'var(--brand-accent)' }}>See the weights.</em>
               </h2>
               <p className="text-slate-400 leading-relaxed mb-6">
-                Every AI signal now exposes its decision breakdown — how much ETF inflows,
+                Every AI signal exposes its decision breakdown — how much ETF inflows,
                 cumulative flow trends, news sentiment, and fund concentration each
                 contributed to the call. No more black-box AI.
               </p>
@@ -427,6 +427,59 @@ export function LandingPage() {
                 </div>
               </div>
             </motion.div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── NEW IN WAVE 3 ─────────────────────────────────────────────────────── */}
+      <section className="px-6 py-24" style={{ background: 'var(--brand-panel)' }}>
+        <div className="max-w-6xl mx-auto">
+          <div className="text-center mb-16">
+            <p className="text-xs font-mono uppercase tracking-widest mb-4" style={{ color: 'var(--brand-accent)' }}>
+              New in Wave 3
+            </p>
+            <h2 className="font-display text-white text-4xl md:text-5xl mb-4 leading-tight">
+              Real outcomes.{' '}
+              <em style={{ color: 'var(--brand-accent)' }}>Not estimates.</em>
+            </h2>
+            <p className="text-slate-400 max-w-xl mx-auto">
+              Backtesting, risk sizing, and leveraged execution — all checked against what actually happened, not what should have.
+            </p>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-6">
+            {[
+              {
+                icon: TrendingUp,
+                title: 'Real Backtesting',
+                desc: 'Hit rate, average P&L, and max drawdown computed from actual TP/SL outcomes against real Binance hourly candles — replacing Wave 2\'s simulated tracking.',
+              },
+              {
+                icon: Shield,
+                title: 'Half-Kelly Risk Manager',
+                desc: 'Recommended position size from your balance, the signal\'s confidence, and its TP/SL — with risk-reward and ATR warnings before you ever click submit.',
+              },
+              {
+                icon: ArrowLeftRight,
+                title: 'Perps, Long or Short',
+                desc: 'Leveraged execution (2×–20×) on SoDEX testnet with a liquidation-price estimate up front, and real liquidation status afterward — sourced from SoDEX\'s own record.',
+              },
+            ].map((f, i) => (
+              <motion.div
+                key={f.title}
+                custom={i}
+                initial="hidden"
+                whileInView="visible"
+                viewport={{ once: true, margin: '-60px' }}
+                variants={fadeUp}
+                className="rounded-2xl p-8"
+                style={{ background: 'var(--brand-card)', border: '1px solid var(--brand-border)' }}
+              >
+                <f.icon size={22} style={{ color: 'var(--brand-accent)' }} className="mb-5" />
+                <h3 className="font-display text-white text-xl mb-3">{f.title}</h3>
+                <p className="text-slate-400 text-sm leading-relaxed">{f.desc}</p>
+              </motion.div>
+            ))}
           </div>
         </div>
       </section>
