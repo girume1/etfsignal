@@ -9,6 +9,9 @@ const CHAIN_ID_HEX = '0x21D45';     // hex for wallet_switchEthereumChain
 // Symbol ID cache — populated at runtime from GET /markets/symbols
 // Do NOT hardcode these; they may differ between testnet deployments.
 const symbolIdCache: Record<string, number> = {};
+// pricePrecision differs per market (BTC-USDC is whole dollars, ETH-USDC is $0.10
+// ticks) — populated alongside symbolIdCache from the same /markets/symbols fetch.
+const symbolPrecisionCache: Record<string, number> = {};
 
 async function resolveSymbolId(symbol: string): Promise<number> {
   if (symbolIdCache[symbol]) return symbolIdCache[symbol];
@@ -24,6 +27,7 @@ async function resolveSymbolId(symbol: string): Promise<number> {
   for (const s of json.data) {
     const id = s.symbolID ?? s.id;
     if (!id) continue;
+    const precision = Number(s.pricePrecision ?? 2);
 
     // Match by symbol name — case-insensitive, try multiple name variants
     // SoDEX testnet uses VBTC_VUSDC (all-caps), not vBTC_vUSDC
@@ -36,6 +40,7 @@ async function resolveSymbolId(symbol: string): Promise<number> {
     ];
     if (variants.includes(name)) {
       symbolIdCache[symbol] = Number(id);
+      symbolPrecisionCache[symbol] = precision;
       return Number(id);
     }
 
@@ -44,6 +49,7 @@ async function resolveSymbolId(symbol: string): Promise<number> {
     const sQuote = String(s.quoteCoin ?? s.quoteAsset ?? '').toUpperCase();
     if (sBase === base && sQuote === quote) {
       symbolIdCache[symbol] = Number(id);
+      symbolPrecisionCache[symbol] = precision;
       return Number(id);
     }
   }
@@ -334,7 +340,13 @@ export async function placeSpotOrder(
       type:        order.type === 'MARKET' ? 2 : 1,
       timeInForce: order.type === 'MARKET' ? 3 : 1,
     };
-    if (order.type === 'LIMIT' && order.price) orderItem.price = String(order.price);
+    if (order.type === 'LIMIT' && order.price) {
+      // Each market has its own tick size (BTC-USDC is whole dollars, ETH-USDC is
+      // $0.10 ticks) — a price with more decimals than the market allows is rejected
+      // with "price is invalid". symbolPrecisionCache is populated by resolveSymbolId above.
+      const precision = symbolPrecisionCache[order.symbol] ?? 2;
+      orderItem.price = Number(order.price).toFixed(precision);
+    }
 
     // funds = spend X USDC to buy base asset — MARKET BUY only (no price known in advance)
     // quantity = exact base asset amount — required for LIMIT orders and all SELL orders
