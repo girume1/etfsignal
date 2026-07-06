@@ -383,6 +383,10 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
       asset:         order.symbol.startsWith('BTC') ? 'BTC' : 'ETH',
       marketType:    order.marketType,
       leverage:      order.leverage,
+      marginMode:      order.marginMode,
+      reduceOnly:      order.reduceOnly,
+      takeProfitPrice: order.takeProfitPrice,
+      stopLossPrice:   order.stopLossPrice,
       signal:        signal?.headline,
       walletAddress: wallet.address ?? undefined,
     };

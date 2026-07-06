@@ -123,6 +123,10 @@ export interface TradeRecord {
   walletAddress?: string;   // linked wallet — used for personal Telegram alert
   marketType?:    'spot' | 'futures';
   leverage?:      number;   // futures only
+  marginMode?:      'ISOLATED' | 'CROSS'; // futures only
+  reduceOnly?:      boolean;              // futures only
+  takeProfitPrice?: string;               // futures only — attached TP
+  stopLossPrice?:   string;               // futures only — attached SL
 }
 
 // SoDEX perps position — from GET /accounts/{address}/positions/history.

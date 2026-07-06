@@ -40,6 +40,10 @@ interface SignalNotification {
   walletAddress?: string;
   marketType?:    'spot' | 'futures';
   leverage?:      number;
+  marginMode?:      'ISOLATED' | 'CROSS';
+  reduceOnly?:      boolean;
+  takeProfitPrice?: string;
+  stopLossPrice?:   string;
 }
 
 // ─── Upstash Redis helper ────────────────────────────────────────────────────
@@ -131,12 +135,20 @@ function formatTradeMessage(body: SignalNotification): string {
     ? new Date(body.timestamp).toUTCString().replace('GMT', 'UTC')
     : new Date().toUTCString().replace('GMT', 'UTC');
 
+  const orderTags = [
+    isFutures && body.marginMode ? body.marginMode : '',
+    body.reduceOnly ? 'Reduce-Only' : '',
+  ].filter(Boolean).join(' · ');
+
   return [
     `✅ *SoDEX Trade Executed*`,
     ``,
     `${emoji} *${dirLabel} ${asset}* · ${marketTag} · ${body.orderType ?? 'MARKET'}`,
     `Pair: \`${body.pair ?? `${asset}-${isFutures ? 'USD' : 'USDC'}`}\``,
     `Size: \`${body.size ?? '—'} ${body.currency ?? asset}${body.price ? ` @ $${body.price}` : ''}\``,
+    orderTags ? `Tags: ${orderTags}` : '',
+    body.takeProfitPrice ? `🎯 TP: \`$${body.takeProfitPrice}\`` : '',
+    body.stopLossPrice ? `🛑 SL: \`$${body.stopLossPrice}\`` : '',
     ``,
     `🔖 Order ID: \`${orderId}\``,
     `Status: Submitted ✓`,

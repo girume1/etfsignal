@@ -73,6 +73,10 @@ export async function notifyTelegramTrade(record: TradeRecord): Promise<void> {
         walletAddress: record.walletAddress,
         marketType:    record.marketType,
         leverage:      record.leverage,
+        marginMode:      record.marginMode,
+        reduceOnly:      record.reduceOnly,
+        takeProfitPrice: record.takeProfitPrice,
+        stopLossPrice:   record.stopLossPrice,
       }),
     });
   } catch {
