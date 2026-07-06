@@ -267,18 +267,26 @@ export function TradeModal({
     if (!acknowledged) return;
     if (orderType === 'LIMIT' && !limitPrice) return;
     if (tpInvalid || slInvalid) return;
+
+    // Spot MARKET BUY sends SoDEX's native `funds` field (proven working, see
+    // confirmTrade). Every other quote-currency case — LIMIT orders (schema
+    // forbids `funds` entirely) and perps MARKET (unreliable on this gateway) —
+    // is converted here into an exact base-asset quantity instead, using the
+    // best known reference price (limit price if set, else live market price).
+    // If no reference price is available, refuse to submit rather than
+    // silently falling back to the known-broken `funds` path.
+    const isQuoteCurrency = currency !== baseAsset;
+    const needsClientConversion = isQuoteCurrency && (orderType === 'LIMIT' || marketType === 'futures');
+    const referencePrice = orderType === 'LIMIT' ? parseFloat(limitPrice || '0') : (currentPrice ?? 0);
+    if (needsClientConversion && referencePrice <= 0) {
+      setResult({ success: false, message: `Live price unavailable — refresh and try again, or size in ${baseAsset} instead.` });
+      return;
+    }
+
     setSubmitting(true);
     try {
-      // Spot MARKET BUY sends SoDEX's native `funds` field (proven working, see
-      // confirmTrade). Every other quote-currency case — LIMIT orders (schema
-      // forbids `funds` entirely) and perps MARKET (unreliable on this gateway) —
-      // is converted here into an exact base-asset quantity instead, using the
-      // best known reference price (limit price if set, else live market price).
-      const isQuoteCurrency = currency !== baseAsset;
-      const needsClientConversion = isQuoteCurrency && (orderType === 'LIMIT' || marketType === 'futures');
-      const referencePrice = orderType === 'LIMIT' ? parseFloat(limitPrice || '0') : (currentPrice ?? 0);
       let finalQuantity = amount;
-      if (needsClientConversion && referencePrice > 0) {
+      if (needsClientConversion) {
         const conversionSymbol = marketType === 'futures' ? `${baseAsset}-USD` : symbol;
         const qtyPrecision = await getQuantityPrecision(conversionSymbol, marketType).catch(() => 6);
         finalQuantity = (parseFloat(amount) / referencePrice).toFixed(qtyPrecision);
