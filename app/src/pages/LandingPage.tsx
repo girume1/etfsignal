@@ -496,47 +496,53 @@ export function LandingPage() {
               style={{ background: 'rgba(0,255,167,0.08)', border: '1px solid rgba(0,255,167,0.2)', color: '#00FFA7' }}
             >
               <Star size={12} className="shrink-0" />
-              SoSoValue Buildathon · Wave 1 Votes
+              SoSoValue Buildathon · Wave 1 &amp; 2 Votes
             </div>
             <h2 className="font-display text-white text-3xl md:text-4xl mb-3">
               What the community said
             </h2>
             <p className="text-slate-400 text-sm max-w-lg mx-auto">
-              Independent reviews from the SoSoValue Buildathon Wave 1 evaluation panel.
+              Independent reviews from the SoSoValue Buildathon evaluation panel, across both waves.
             </p>
           </motion.div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {[
               {
+                handle: '@Davislambo',
+                wave: 2,
+                stars: 5,
+                quote: 'One of the strongest technical deliveries in this round. The full SoDEX EIP-712 spot trading pipeline resolved and real order IDs confirmed — the most thoroughly documented SoDEX integration in wave 2.',
+              },
+              {
+                handle: '@Web3Lord01',
+                wave: 2,
+                stars: 5,
+                quote: 'One of the most polished and complete submissions in this wave. The full signal-to-execution pipeline is genuinely end-to-end and each piece is functional. This is a well-built, honest, and complete product.',
+              },
+              {
+                handle: '@BlessinSum',
+                wave: 2,
+                stars: 5,
+                quote: 'One of the most complete signal-to-execution submissions this wave. The full EIP-712 pipeline on SoDEX testnet is verified — real order IDs returned, signing envelope confirmed, symbolID resolved dynamically at runtime.',
+              },
+              {
                 handle: '@0xmiharbi',
+                wave: 1,
                 stars: 5,
                 quote: 'One of the strongest submissions overall. ETFSignal AI is a polished, well-engineered, and highly usable product with outstanding dashboard quality and UX.',
               },
               {
-                handle: '@Davislambo',
+                handle: '@MuhammadBa_2024',
+                wave: 2,
                 stars: 5,
-                quote: 'The full pipeline from SoSoValue ETF flows through Claude AI analysis to EIP712 trade execution on SoDEX is genuinely built and deployed, not just described.',
+                quote: 'This is a top tier Wave 2 execution example with strong system design discipline and one of the clearest "data-to-trade" pipelines in the set.',
               },
               {
                 handle: '@SmartCoded',
-                stars: 5,
+                wave: 1,
+                stars: 4,
                 quote: 'Server-side Claude proxy keeping the API key off the browser is exactly right. The sentiment gauge with zone colors makes ETF flow readable to retail.',
-              },
-              {
-                handle: '@takimi',
-                stars: 5,
-                quote: 'Impressive technical depth and "Bloomberg-esque" professional UI. Integrating SoSoValue data with a Claude AI layer provides actionable intelligence, not just raw numbers.',
-              },
-              {
-                handle: '@jzddd',
-                stars: 4,
-                quote: 'Well-structured prototype with good product clarity. The wallet-gated dashboard and signal interface are stronger than many other submissions.',
-              },
-              {
-                handle: '@crypto4chun',
-                stars: 4,
-                quote: 'Nice UI/UX — this creates a professional trading experience with clear practical value. The SoSoValue data integration is well executed.',
               },
             ].map((v, i) => (
               <motion.div
@@ -568,7 +574,7 @@ export function LandingPage() {
                   style={{ background: 'rgba(0,255,167,0.08)', color: '#00FFA7' }}
                 >
                   <Check size={10} className="shrink-0" />
-                  Voted · Wave 1
+                  Voted · Wave {v.wave}
                 </div>
               </motion.div>
             ))}
