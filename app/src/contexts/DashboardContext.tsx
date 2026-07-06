@@ -353,8 +353,10 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
           symbol: order.symbol,
           side: order.side,
           leverage: order.leverage ?? 20,
-          // perps schema allows sizing by base-asset quantity or USDC funds, either side
-          ...(order.currency === order.symbol.split('-')[0]
+          type: order.type,
+          price: order.price,
+          // funds (USDC) sizing is MARKET-only, same restriction as spot
+          ...(order.type === 'LIMIT' || order.currency === order.symbol.split('-')[0]
             ? { quantity: order.quantity }
             : { funds: order.quantity }),
         })

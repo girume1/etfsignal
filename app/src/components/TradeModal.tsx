@@ -160,11 +160,13 @@ export function TradeModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [marketType]);
 
-  // SoDEX only accepts quote-currency (funds) sizing for spot MARKET BUY orders —
-  // never spot SELL, never spot LIMIT (either side). Perps allows funds on either
-  // side. Picking the "wrong" currency there would silently be reinterpreted as a
-  // base-asset quantity server-side (e.g. typing "50" meaning $50 sent as 50 BTC).
-  const fundsAllowed = marketType === 'futures' || (orderType === 'MARKET' && side === 'BUY');
+  // SoDEX only accepts quote-currency (funds) sizing for MARKET orders — spot
+  // restricts it further to BUY only, perps allows either side. LIMIT orders
+  // (spot or perps) always require an exact base-asset quantity, since funds
+  // sizing depends on execution price being unknown in advance. Picking the
+  // "wrong" currency would silently be reinterpreted as a base-asset quantity
+  // server-side (e.g. typing "50" meaning $50 sent as 50 BTC).
+  const fundsAllowed = orderType === 'MARKET' && (marketType === 'futures' || side === 'BUY');
   useEffect(() => {
     if (!fundsAllowed && currency !== baseAsset) {
       setCurrency(baseAsset);
@@ -229,11 +231,12 @@ export function TradeModal({
           ? {
               symbol:   `${baseAsset}-USD`, // perps symbol format, distinct from spot's BTC-USDC
               side,
-              type:     'MARKET',
+              type:     orderType,
               quantity: amount,
-              currency,            // BTC (quantity) or USDC (funds) — perps allows either, either side
+              currency,            // BTC (quantity) or USDC (funds, MARKET only) — perps allows either side
               marketType: 'futures',
               leverage,
+              ...(orderType === 'LIMIT' ? { price: limitPrice } : {}),
             }
           : {
               symbol,
@@ -329,24 +332,22 @@ export function TradeModal({
               </SegmentBtn>
             </div>
 
-            {/* ── Row 2: Market / Limit (spot only — perps testnet is market-only) ── */}
-            {marketType === 'spot' && (
-              <div
-                style={{ background: 'var(--brand-card)', border: '1px solid var(--brand-border)' }}
-                className="flex rounded-xl p-1 mb-4 gap-1"
-              >
-                <SegmentBtn active={orderType === 'MARKET'} onClick={() => setOrderType('MARKET')}>
-                  <span className="flex items-center justify-center gap-1.5"><Zap size={13} /> Market</span>
-                </SegmentBtn>
-                <SegmentBtn active={orderType === 'LIMIT'}  onClick={() => {
-                  setOrderType('LIMIT');
-                  if (!limitPrice && currentPrice) setLimitPrice(currentPrice.toFixed(2));
-                  setCurrency(baseAsset); // limit orders always quantity (base asset)
-                }}>
-                  <span className="flex items-center justify-center gap-1.5"><Target size={13} /> Limit</span>
-                </SegmentBtn>
-              </div>
-            )}
+            {/* ── Row 2: Market / Limit (spot and perps both support LIMIT) ── */}
+            <div
+              style={{ background: 'var(--brand-card)', border: '1px solid var(--brand-border)' }}
+              className="flex rounded-xl p-1 mb-4 gap-1"
+            >
+              <SegmentBtn active={orderType === 'MARKET'} onClick={() => setOrderType('MARKET')}>
+                <span className="flex items-center justify-center gap-1.5"><Zap size={13} /> Market</span>
+              </SegmentBtn>
+              <SegmentBtn active={orderType === 'LIMIT'}  onClick={() => {
+                setOrderType('LIMIT');
+                if (!limitPrice && currentPrice) setLimitPrice(currentPrice.toFixed(2));
+                setCurrency(baseAsset); // limit orders always quantity (base asset)
+              }}>
+                <span className="flex items-center justify-center gap-1.5"><Target size={13} /> Limit</span>
+              </SegmentBtn>
+            </div>
 
             {/* ── Leverage selector (futures only) ────────────────────────── */}
             {marketType === 'futures' && (
@@ -654,7 +655,7 @@ export function TradeModal({
                   Submitting...
                 </>
               ) : orderType === 'LIMIT' ? (
-                `Place Limit ${isLong ? 'Buy' : 'Sell'} · ${amount} ${currency} @ $${limitPrice || '—'}`
+                `Place Limit ${marketType === 'spot' ? (isLong ? 'Buy' : 'Sell') : (isLong ? 'Long' : 'Short')} · ${amount} ${currency} @ $${limitPrice || '—'}`
               ) : marketType === 'spot' ? (
                 `${isLong ? 'Buy' : 'Sell'} ${amount} ${currency}`
               ) : (

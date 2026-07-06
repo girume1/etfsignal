@@ -63,6 +63,7 @@ async function resolveSymbolId(symbol: string): Promise<number> {
 // Perps symbols are named "BTC-USD" directly (no V-prefix, unlike spot's VBTC_VUSDC).
 
 const perpsSymbolIdCache: Record<string, number> = {};
+const perpsPrecisionCache: Record<string, number> = {};
 
 async function resolvePerpsSymbolId(symbol: string): Promise<number> {
   if (perpsSymbolIdCache[symbol]) return perpsSymbolIdCache[symbol];
@@ -78,16 +79,19 @@ async function resolvePerpsSymbolId(symbol: string): Promise<number> {
   for (const s of json.data) {
     const id = s.id ?? s.symbolID;
     if (!id) continue;
+    const precision = Number(s.pricePrecision ?? 2);
 
     const name = String(s.name ?? s.symbol ?? s.displayName ?? '').toUpperCase();
     if (name === symbol.toUpperCase() || name === `${base.toUpperCase()}-USD`) {
       perpsSymbolIdCache[symbol] = Number(id);
+      perpsPrecisionCache[symbol] = precision;
       return Number(id);
     }
 
     const sBase = String(s.baseCoin ?? s.baseAsset ?? '').toUpperCase();
     if (sBase === base.toUpperCase()) {
       perpsSymbolIdCache[symbol] = Number(id);
+      perpsPrecisionCache[symbol] = precision;
       return Number(id);
     }
   }
@@ -417,8 +421,10 @@ export async function placeSpotOrder(
 export interface PerpsOrder {
   symbol: string;     // e.g. "BTC-USD"
   side: 'BUY' | 'SELL';
+  type?: 'MARKET' | 'LIMIT'; // defaults to MARKET
+  price?: string;     // required for LIMIT
   quantity?: string;  // base-asset amount, e.g. "0.001" BTC — exactly one of quantity/funds
-  funds?: string;     // USD-denominated size, e.g. "50" — schema allows funds on either side for perps
+  funds?: string;     // USD-denominated size, e.g. "50" — MARKET only, same restriction as spot
   leverage: number;
 }
 
@@ -480,13 +486,18 @@ export async function placePerpsOrder(
     // clOrdID, modifier, side, type, timeInForce, price*, quantity*, funds*,
     // stopPrice*, stopType*, triggerType*, reduceOnly, positionSide  (*omitempty)
     // Exactly one of quantity/funds must be set — quantity if provided, else funds.
+    const isLimit = order.type === 'LIMIT';
     const orderItem: Record<string, unknown> = {
       clOrdID:     `etfsignal-${nonce}`,
       modifier:    1,
       side:        order.side === 'BUY' ? 1 : 2,
-      type:        2, // MARKET
-      timeInForce: 3, // IOC
+      type:        isLimit ? 1 : 2,       // LIMIT : MARKET
+      timeInForce: isLimit ? 1 : 3,       // GTC : IOC
     };
+    if (isLimit && order.price) {
+      const precision = perpsPrecisionCache[order.symbol] ?? 2;
+      orderItem.price = Number(order.price).toFixed(precision);
+    }
     if (order.quantity) {
       orderItem.quantity = String(order.quantity);
     } else if (order.funds) {
@@ -502,7 +513,7 @@ export async function placePerpsOrder(
     const signingEnvelope = { type: 'newOrder', params: requestBody };
     const typedSig = await signOrder(signer, signingEnvelope, nonce, 'futures');
 
-    console.log('[sodex] placing perps order', { accountID: aid, symbol: order.symbol, side: order.side, quantity: order.quantity, funds: order.funds, leverage: order.leverage });
+    console.log('[sodex] placing perps order', { accountID: aid, symbol: order.symbol, side: order.side, type: order.type ?? 'MARKET', price: order.price, quantity: order.quantity, funds: order.funds, leverage: order.leverage });
     console.log('[sodex] perps order item', orderItem);
 
     const response = await fetch(`${PERPS_GW}/trade/orders`, {
