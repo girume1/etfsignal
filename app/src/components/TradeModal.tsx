@@ -184,11 +184,15 @@ export function TradeModal({
 
   // SoDEX only accepts quote-currency (funds) sizing for MARKET orders — spot
   // restricts it further to BUY only, perps allows either side. LIMIT orders
-  // (spot or perps) always require an exact base-asset quantity, since funds
-  // sizing depends on execution price being unknown in advance. Picking the
-  // "wrong" currency would silently be reinterpreted as a base-asset quantity
-  // server-side (e.g. typing "50" meaning $50 sent as 50 BTC).
-  const fundsAllowed = orderType === 'MARKET' && (marketType === 'futures' || side === 'BUY');
+  // never send a `funds` field to SoDEX (the schema forbids it), but since the
+  // limit price is known up front (unlike MARKET), a USDC amount can still be
+  // converted client-side into an exact base-asset `quantity` before submit —
+  // offered for futures limit orders per user request. Picking the "wrong"
+  // currency without this conversion would silently be reinterpreted as a
+  // base-asset quantity server-side (e.g. typing "50" meaning $50 sent as 50 BTC).
+  const fundsAllowed =
+    (orderType === 'MARKET' && (marketType === 'futures' || side === 'BUY')) ||
+    (orderType === 'LIMIT' && marketType === 'futures');
   useEffect(() => {
     if (!fundsAllowed && currency !== baseAsset) {
       setCurrency(baseAsset);
@@ -403,7 +407,9 @@ export function TradeModal({
               <SegmentBtn active={orderType === 'LIMIT'}  onClick={() => {
                 setOrderType('LIMIT');
                 if (!limitPrice && currentPrice) setLimitPrice(currentPrice.toFixed(2));
-                setCurrency(baseAsset); // limit orders always quantity (base asset)
+                // Spot limit orders always quantity (base asset) — futures limit
+                // orders allow USDC sizing too (converted to quantity on submit).
+                if (marketType !== 'futures') setCurrency(baseAsset);
               }}>
                 <span className="flex items-center justify-center gap-1.5"><Target size={13} /> Limit</span>
               </SegmentBtn>

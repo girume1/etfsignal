@@ -359,10 +359,15 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
           reduceOnly: order.reduceOnly,
           takeProfitPrice: order.takeProfitPrice,
           stopLossPrice: order.stopLossPrice,
-          // funds (USDC) sizing is MARKET-only, same restriction as spot
-          ...(order.type === 'LIMIT' || order.currency === order.symbol.split('-')[0]
+          // `funds` is MARKET-only — SoDEX's schema forbids it on LIMIT orders.
+          // A USDC-denominated LIMIT amount is instead converted here into an
+          // exact base-asset quantity using the known limit price (unlike
+          // MARKET, where the fill price isn't known up front).
+          ...(order.currency === order.symbol.split('-')[0]
             ? { quantity: order.quantity }
-            : { funds: order.quantity }),
+            : order.type === 'LIMIT'
+              ? { quantity: (parseFloat(order.quantity) / parseFloat(order.price ?? '0')).toFixed(8) }
+              : { funds: order.quantity }),
         })
       : await placeSpotOrder(signer, 1, order);
     if (!r.success) throw new Error(r.error);

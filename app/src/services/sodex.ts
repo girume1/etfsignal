@@ -80,26 +80,31 @@ async function resolvePerpsSymbolId(symbol: string): Promise<number> {
     throw new Error('Could not fetch SoDEX perps symbol list');
   }
 
-  for (const s of json.data) {
+  const cacheAndReturn = (s: any) => {
     const id = s.id ?? s.symbolID;
-    if (!id) continue;
-    const precision = Number(s.pricePrecision ?? 2);
-    const maxLeverage = Number(s.maxLeverage ?? 20);
+    perpsSymbolIdCache[symbol] = Number(id);
+    perpsPrecisionCache[symbol] = Number(s.pricePrecision ?? 2);
+    perpsMaxLeverageCache[symbol] = Number(s.maxLeverage ?? 20);
+    return Number(id);
+  };
 
+  // Two passes: exact-name match always wins, regardless of array order.
+  // SoDEX testnet has test markets (e.g. TESTBTC-USD) whose baseCoin is also
+  // literally "BTC" — a single-pass loop could match that HALTed test market
+  // via the baseCoin fallback before ever reaching the real, TRADING BTC-USD
+  // entry later in the array (the API doesn't guarantee a stable order).
+  for (const s of json.data) {
+    if (!(s.id ?? s.symbolID)) continue;
     const name = String(s.name ?? s.symbol ?? s.displayName ?? '').toUpperCase();
     if (name === symbol.toUpperCase() || name === `${base.toUpperCase()}-USD`) {
-      perpsSymbolIdCache[symbol] = Number(id);
-      perpsPrecisionCache[symbol] = precision;
-      perpsMaxLeverageCache[symbol] = maxLeverage;
-      return Number(id);
+      return cacheAndReturn(s);
     }
-
+  }
+  for (const s of json.data) {
+    if (!(s.id ?? s.symbolID)) continue;
     const sBase = String(s.baseCoin ?? s.baseAsset ?? '').toUpperCase();
     if (sBase === base.toUpperCase()) {
-      perpsSymbolIdCache[symbol] = Number(id);
-      perpsPrecisionCache[symbol] = precision;
-      perpsMaxLeverageCache[symbol] = maxLeverage;
-      return Number(id);
+      return cacheAndReturn(s);
     }
   }
 
@@ -330,6 +335,8 @@ function friendlyError(msg: string): string {
   const m = msg.toLowerCase();
   if (m.includes('cancel only'))
     return 'This market is temporarily paused on SoDEX testnet. Try BTC-USDC or check back later.';
+  if (m.includes('symbol is not active') || m.includes('not active'))
+    return 'This market is currently halted on SoDEX testnet. Try again shortly.';
   if (m.includes('no liquidity') || m.includes('insufficient liquidity'))
     return 'No liquidity on testnet — order submitted but no counterparty. This is expected on testnet.';
   if (m.includes('insufficient') || m.includes('balance'))
