@@ -1,14 +1,13 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import type { JsonRpcSigner } from 'ethers';
 import {
   X, TrendingUp, Zap, Target, ArrowUp, ArrowDown,
   ArrowUpDown, RefreshCw, ExternalLink, AlertTriangle, Shield,
   ChevronUp, ChevronDown, CheckCircle2, XCircle,
 } from 'lucide-react';
 import type { MarketSignal, OrderSide, TradeOrder } from '../types';
-import { fetchBalances } from '../services/sodex';
+import { fetchBalances, getPerpsMaxLeverage, updatePerpsCollateral } from '../services/sodex';
 import { computePositionSize, computeLeveragedRisk, type LeveragedRiskResult } from '../services/riskManager';
-
-const LEVERAGE_OPTIONS = [2, 5, 10, 20];
 
 function RiskPanel({
   balance, defaultBalance, confidence, tpPct, slPct, entryPrice, slPrice, amountUsd,
@@ -100,6 +99,7 @@ interface TradeModalProps {
   symbol: string;
   walletAddress?: string | null;
   currentPrice?: number;
+  signer?: JsonRpcSigner | null;
   onConfirm: (order: TradeOrder) => Promise<{ orderId: string }>;
   onClose: () => void;
 }
@@ -107,7 +107,7 @@ interface TradeModalProps {
 const PERCENTS = [0, 25, 50, 75, 100];
 
 export function TradeModal({
-  signal, side, symbol, walletAddress, currentPrice, onConfirm, onClose,
+  signal, side, symbol, walletAddress, currentPrice, signer, onConfirm, onClose,
 }: TradeModalProps) {
   const baseAsset   = symbol.split('-')[0]; // BTC or ETH
   const quoteAsset  = symbol.split('-')[1]; // USDC
@@ -127,6 +127,19 @@ export function TradeModal({
   const [submitting,   setSubmitting]   = useState(false);
   const [result,       setResult]       = useState<{ success: boolean; message: string; orderId?: string } | null>(null);
   const [leverage,     setLeverage]     = useState(20);
+  const [maxLeverage,  setMaxLeverage]  = useState(20);
+  const [marginMode,   setMarginMode]   = useState<'ISOLATED' | 'CROSS'>('ISOLATED');
+  const [reduceOnly,   setReduceOnly]   = useState(false);
+  const [slippagePct,  setSlippagePct]  = useState('0.5');
+  const [takeProfitPrice, setTakeProfitPrice] = useState('');
+  const [stopLossPrice,   setStopLossPrice]   = useState('');
+
+  // ── Cross-margin collateral ("Asset Mode") ───────────────────────────────
+  const collateralCoin = baseAsset === 'BTC' ? 'ETH' : 'BTC';
+  const [collateralAmount, setCollateralAmount] = useState('');
+  const [collateralAction, setCollateralAction] = useState<'add' | 'remove'>('add');
+  const [collateralBusy,   setCollateralBusy]   = useState(false);
+  const [collateralMsg,    setCollateralMsg]    = useState<string | null>(null);
 
   // ── Balance state ────────────────────────────────────────────────────────
   const [balances,   setBalances]   = useState<Record<string, string>>({});
@@ -159,6 +172,15 @@ export function TradeModal({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [marketType]);
+
+  // Real per-symbol leverage cap (e.g. 40x for BTC-USD) — was hardcoded to a
+  // 20x picker regardless of what the market actually allows.
+  useEffect(() => {
+    if (marketType !== 'futures') return;
+    getPerpsMaxLeverage(`${baseAsset}-USD`)
+      .then(m => { setMaxLeverage(m); setLeverage(l => Math.min(l, m)); })
+      .catch(() => {});
+  }, [marketType, baseAsset]);
 
   // SoDEX only accepts quote-currency (funds) sizing for MARKET orders — spot
   // restricts it further to BUY only, perps allows either side. LIMIT orders
@@ -221,9 +243,25 @@ export function TradeModal({
   }
 
   // ── Submit ───────────────────────────────────────────────────────────────
+  // MARKET orders can optionally bound their fill price (slippage protection):
+  // exchange caps execution at indexPrice*(1±ratio) either way, this just tightens it.
+  const protectivePrice = useMemo(() => {
+    if (marketType !== 'futures' || orderType !== 'MARKET' || !currentPrice) return undefined;
+    const pct = parseFloat(slippagePct);
+    if (!slippagePct || isNaN(pct) || pct <= 0) return undefined;
+    const bound = side === 'BUY' ? currentPrice * (1 + pct / 100) : currentPrice * (1 - pct / 100);
+    return bound.toFixed(2);
+  }, [marketType, orderType, currentPrice, slippagePct, side]);
+
+  const tpInvalid = Boolean(takeProfitPrice && currentPrice &&
+    (side === 'BUY' ? Number(takeProfitPrice) <= currentPrice : Number(takeProfitPrice) >= currentPrice));
+  const slInvalid = Boolean(stopLossPrice && currentPrice &&
+    (side === 'BUY' ? Number(stopLossPrice) >= currentPrice : Number(stopLossPrice) <= currentPrice));
+
   async function handleSubmit() {
     if (!acknowledged) return;
     if (orderType === 'LIMIT' && !limitPrice) return;
+    if (tpInvalid || slInvalid) return;
     setSubmitting(true);
     try {
       const { orderId } = await onConfirm(
@@ -236,7 +274,13 @@ export function TradeModal({
               currency,            // BTC (quantity) or USDC (funds, MARKET only) — perps allows either side
               marketType: 'futures',
               leverage,
-              ...(orderType === 'LIMIT' ? { price: limitPrice } : {}),
+              marginMode,
+              reduceOnly,
+              ...(takeProfitPrice ? { takeProfitPrice } : {}),
+              ...(stopLossPrice ? { stopLossPrice } : {}),
+              ...(orderType === 'LIMIT'
+                ? { price: limitPrice }
+                : protectivePrice ? { price: protectivePrice } : {}),
             }
           : {
               symbol,
@@ -252,6 +296,22 @@ export function TradeModal({
       setResult({ success: false, message: err.message || 'Order failed' });
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function handleCollateral() {
+    if (!signer || !collateralAmount) return;
+    setCollateralBusy(true);
+    setCollateralMsg(null);
+    try {
+      const signedAmount = collateralAction === 'add' ? collateralAmount : `-${collateralAmount}`;
+      const r = await updatePerpsCollateral(signer, collateralCoin, signedAmount);
+      setCollateralMsg(r.success ? `${collateralAction === 'add' ? 'Added' : 'Removed'} ${collateralAmount} ${collateralCoin}` : r.error ?? 'Failed');
+      if (r.success) setCollateralAmount('');
+    } catch (err: any) {
+      setCollateralMsg(err.message || 'Failed');
+    } finally {
+      setCollateralBusy(false);
     }
   }
 
@@ -308,7 +368,7 @@ export function TradeModal({
                 } {displaySymbol}
               </div>
               <div className="text-xs text-slate-500">
-                SoDEX Testnet · {marketType === 'spot' ? 'Spot' : `Futures · ${leverage}x`} · {orderType === 'MARKET' ? 'Market' : 'Limit'} · {currency}
+                SoDEX Testnet · {marketType === 'spot' ? 'Spot' : `Futures · ${leverage}x ${marginMode}`} · {orderType === 'MARKET' ? 'Market' : 'Limit'} · {currency}
               </div>
             </div>
           </div>
@@ -349,15 +409,18 @@ export function TradeModal({
               </SegmentBtn>
             </div>
 
-            {/* ── Leverage selector (futures only) ────────────────────────── */}
+            {/* ── Leverage + Margin Mode (futures only) ───────────────────── */}
             {marketType === 'futures' && (
               <div className="mb-4">
-                <label className="text-xs text-slate-500 uppercase tracking-wider font-semibold mb-1.5 block">Leverage</label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Leverage</label>
+                  <span className="text-[10px] text-slate-600 font-mono">max {maxLeverage}x</span>
+                </div>
                 <div
                   style={{ background: 'var(--brand-card)', border: '1px solid var(--brand-border)' }}
-                  className="flex rounded-xl p-1 gap-1"
+                  className="flex rounded-xl p-1 gap-1 mb-2"
                 >
-                  {LEVERAGE_OPTIONS.map(lev => (
+                  {[2, 5, 10, 20, maxLeverage].filter((l, i, arr) => l <= maxLeverage && arr.indexOf(l) === i).sort((a, b) => a - b).map(lev => (
                     <button
                       key={lev}
                       onClick={() => setLeverage(lev)}
@@ -371,9 +434,70 @@ export function TradeModal({
                     </button>
                   ))}
                 </div>
+
+                <label className="text-xs text-slate-500 uppercase tracking-wider font-semibold mb-1.5 block">Margin Mode</label>
+                <div
+                  style={{ background: 'var(--brand-card)', border: '1px solid var(--brand-border)' }}
+                  className="flex rounded-xl p-1 gap-1"
+                >
+                  {(['ISOLATED', 'CROSS'] as const).map(mode => (
+                    <button
+                      key={mode}
+                      onClick={() => setMarginMode(mode)}
+                      className="flex-1 py-2 rounded-lg text-sm font-semibold capitalize transition-all"
+                      style={marginMode === mode
+                        ? { background: bgColor, color, border: `1px solid ${borderCol}` }
+                        : { color: '#64748b', border: '1px solid transparent' }
+                      }
+                    >
+                      {mode.charAt(0) + mode.slice(1).toLowerCase()}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Cross-margin collateral ("Asset Mode") — testnet-only endpoint */}
+                {marginMode === 'CROSS' && (
+                  <div
+                    style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--brand-border)' }}
+                    className="rounded-xl p-3 mt-2"
+                  >
+                    <div className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold mb-1.5">
+                      Cross-margin Collateral · {collateralCoin}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={collateralAction}
+                        onChange={e => setCollateralAction(e.target.value as 'add' | 'remove')}
+                        style={{ background: 'var(--brand-card)', border: '1px solid var(--brand-border)', color: 'white' }}
+                        className="px-2 py-2 rounded-lg text-xs font-semibold"
+                      >
+                        <option value="add">Add</option>
+                        <option value="remove">Remove</option>
+                      </select>
+                      <input
+                        type="number"
+                        value={collateralAmount}
+                        onChange={e => setCollateralAmount(e.target.value)}
+                        placeholder={`0.00 ${collateralCoin}`}
+                        style={{ background: 'var(--brand-card)', border: '1px solid var(--brand-border)', color: 'white' }}
+                        className="flex-1 min-w-0 px-3 py-2 rounded-lg font-mono text-xs focus:outline-none"
+                      />
+                      <button
+                        onClick={handleCollateral}
+                        disabled={!signer || !collateralAmount || collateralBusy}
+                        style={{ background: bgColor, color, border: `1px solid ${borderCol}` }}
+                        className="px-3 py-2 rounded-lg text-xs font-semibold disabled:opacity-40 shrink-0"
+                      >
+                        {collateralBusy ? '…' : 'Go'}
+                      </button>
+                    </div>
+                    {collateralMsg && (
+                      <p className="text-[10px] text-slate-400 mt-1.5">{collateralMsg}</p>
+                    )}
+                  </div>
+                )}
               </div>
             )}
-
 
             {/* ── Signal context ────────────────────────────────────────── */}
             <div
@@ -428,6 +552,69 @@ export function TradeModal({
                   />
                   <span className="text-xs text-slate-500 pr-1">{quoteAsset}</span>
                 </div>
+              </div>
+            )}
+
+            {/* ── Slippage Tolerance (futures market orders only) ─────────── */}
+            {marketType === 'futures' && orderType === 'MARKET' && (
+              <div className="mb-3">
+                <label className="text-xs text-slate-500 uppercase tracking-wider font-semibold mb-1.5 block">
+                  Slippage Tolerance
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    value={slippagePct}
+                    onChange={e => setSlippagePct(e.target.value)}
+                    placeholder="0.5"
+                    min="0"
+                    step="0.1"
+                    style={{ background: 'var(--brand-card)', border: '1px solid var(--brand-border)', color: 'white' }}
+                    className="w-24 px-3 py-2 rounded-xl font-mono text-sm focus:outline-none"
+                  />
+                  <span className="text-xs text-slate-500">
+                    % — bounds fill to {protectivePrice ? `$${protectivePrice}` : 'exchange default'}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* ── TP/SL + Reduce Only (futures only) ──────────────────────── */}
+            {marketType === 'futures' && (
+              <div className="mb-3 grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs text-slate-500 uppercase tracking-wider font-semibold mb-1.5 block">Take Profit</label>
+                  <input
+                    type="number"
+                    value={takeProfitPrice}
+                    onChange={e => setTakeProfitPrice(e.target.value)}
+                    placeholder="Optional"
+                    style={{ background: 'var(--brand-card)', border: `1px solid ${tpInvalid ? '#F87171' : 'var(--brand-border)'}`, color: 'white' }}
+                    className="w-full px-3 py-2 rounded-xl font-mono text-sm focus:outline-none"
+                  />
+                  {tpInvalid && <p className="text-[10px] text-red-400 mt-1">Must be {side === 'BUY' ? 'above' : 'below'} entry</p>}
+                </div>
+                <div>
+                  <label className="text-xs text-slate-500 uppercase tracking-wider font-semibold mb-1.5 block">Stop Loss</label>
+                  <input
+                    type="number"
+                    value={stopLossPrice}
+                    onChange={e => setStopLossPrice(e.target.value)}
+                    placeholder="Optional"
+                    style={{ background: 'var(--brand-card)', border: `1px solid ${slInvalid ? '#F87171' : 'var(--brand-border)'}`, color: 'white' }}
+                    className="w-full px-3 py-2 rounded-xl font-mono text-sm focus:outline-none"
+                  />
+                  {slInvalid && <p className="text-[10px] text-red-400 mt-1">Must be {side === 'BUY' ? 'below' : 'above'} entry</p>}
+                </div>
+                <label className="col-span-2 flex items-center gap-2 cursor-pointer mt-1">
+                  <input
+                    type="checkbox"
+                    checked={reduceOnly}
+                    onChange={e => setReduceOnly(e.target.checked)}
+                    className="accent-blue-500"
+                  />
+                  <span className="text-xs text-slate-400">Reduce Only — only close, never increase, position size</span>
+                </label>
               </div>
             )}
 
@@ -637,7 +824,7 @@ export function TradeModal({
             {/* ── Submit button ─────────────────────────────────────────── */}
             <button
               onClick={handleSubmit}
-              disabled={!acknowledged || submitting || (orderType === 'LIMIT' && !limitPrice)}
+              disabled={!acknowledged || submitting || (orderType === 'LIMIT' && !limitPrice) || tpInvalid || slInvalid}
               style={{
                 background: acknowledged
                   ? (isLong

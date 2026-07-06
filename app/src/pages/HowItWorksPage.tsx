@@ -47,7 +47,7 @@ export function HowItWorksPage() {
       num: '06',
       title: 'Execute',
       subtitle: 'On-chain confirmation',
-      desc: 'User reviews the suggested order, acknowledges the risk warning explicitly, then confirms. The order is signed via EIP-712 with their own wallet and submitted to SoDEX testnet — spot (buy/sell) or perps (long/short, 2×–20× leverage) — no funds at risk during the buildathon.',
+      desc: 'User reviews the suggested order, acknowledges the risk warning explicitly, then confirms. The order is signed via EIP-712 with their own wallet and submitted to SoDEX testnet — spot (buy/sell) or perps (long/short, market/limit, adjustable leverage up to each market\'s real max, optional TP/SL bracket order + reduce-only, isolated/cross margin) — no funds at risk during the buildathon.',
       tech: ['SoDEX Testnet API — spot & perps', 'EIP-712 typed signing', 'Risk acknowledgment'],
       color: '#F59E0B',
     },

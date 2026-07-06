@@ -95,6 +95,10 @@ export interface TradeOrder {
   price?: string;         // for LIMIT orders
   marketType?: 'spot' | 'futures'; // futures orders route to perps signing/endpoint
   leverage?: number;               // futures only
+  marginMode?: 'ISOLATED' | 'CROSS'; // futures only, defaults to ISOLATED
+  reduceOnly?: boolean;              // futures only, defaults to false
+  takeProfitPrice?: string;          // futures only — attached TP (bracket order)
+  stopLossPrice?: string;            // futures only — attached SL (bracket order)
 }
 
 export interface TradeConfirmation {

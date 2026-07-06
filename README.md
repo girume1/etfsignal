@@ -37,7 +37,7 @@ Most crypto traders are drowning in noise. BTC/ETH spot ETF flows, institutional
 
 **ETFSignal AI** closes that gap.
 
-It pulls institutional ETF flow data from SoSoValue, streams live BTC/ETH prices from Binance, computes a live sentiment score, synthesizes everything with Claude AI into a structured signal with TP/SL levels and factor weights — then lets you execute directly on SoDEX testnet (spot **and now perps, long or short with leverage**) and receive a personal Telegram alert when your trade executes.
+It pulls institutional ETF flow data from SoSoValue, streams live BTC/ETH prices from Binance, computes a live sentiment score, synthesizes everything with Claude AI into a structured signal with TP/SL levels and factor weights — then lets you execute directly on SoDEX testnet (spot, or perps long/short with market **or limit** orders, adjustable leverage up to each market's real max, TP/SL bracket orders, reduce-only, and isolated/cross margin) and receive a personal Telegram alert when your trade executes.
 
 Every signal is backtested against real hourly price data — hit rate, average P&L, and max drawdown are computed from actual TP/SL outcomes, not simulated numbers. Before you trade, a half-Kelly risk panel recommends a position size and flags risk-reward and liquidation risk; after you trade, the Portfolio page shows what actually happened, including whether a leveraged position was genuinely liquidated (straight from SoDEX's own record, not a guess).
 
@@ -71,7 +71,7 @@ Every signal is backtested against real hourly price data — hit rate, average 
 | **5. Analyze** | Claude AI synthesises everything into a structured signal: direction, confidence, key factors, TP/SL, risk warning, factor weights |
 | **6. Signal** | Dashboard shows BULLISH / BEARISH / NEUTRAL with factor breakdown bars, headline, summary, trade idea, AskAI follow-up chat |
 | **7. Size** | Half-Kelly risk panel recommends a position size from balance + confidence + TP/SL, with risk-reward, ATR, and (for perps) liquidation-price warnings |
-| **8. Execute** | User connects wallet, reviews order, acknowledges risk, signs via EIP-712, submits to SoDEX testnet — spot (buy/sell) or perps (long/short, 2×–20× leverage) |
+| **8. Execute** | User connects wallet, reviews order, acknowledges risk, signs via EIP-712, submits to SoDEX testnet — spot (buy/sell) or perps (long/short, market/limit, up to each market's real max leverage, optional TP/SL bracket order + reduce-only, isolated/cross margin) |
 | **9. Alert** | Telegram bot sends personal trade confirmation with Order ID to linked wallet |
 | **10. Archive** | Signal stored in Upstash Redis with TP/SL; evaluated 24h later against real Binance hourly candles — HIT/MISS/EXPIRED, not a price-delta guess |
 | **11. Track** | Portfolio page shows real trade + perps position history, including SoDEX's own liquidation record for closed leveraged positions |
@@ -230,7 +230,7 @@ etfsignal/
         │   ├── OnboardingTour.tsx     # 4-step first-visit walkthrough with skip
         │   ├── SignalPanel.tsx        # AI signal card with factor weight breakdown bars
         │   ├── SignalHistory.tsx      # Real vs estimated stats (hit rate/P&L/max drawdown), outcome-colored sparkline
-        │   ├── TradeModal.tsx         # Spot + perps trade modal — leverage, risk panel, liquidation estimate
+        │   ├── TradeModal.tsx         # Spot + perps trade modal — leverage, TP/SL, reduce-only, margin mode, risk panel, liquidation estimate
         │   ├── MarketShareDonut.tsx   # Recharts PieChart — top-6 funds + Other, falls back to flow-sizing if AUM is missing
         │   ├── SentimentGauge.tsx     # Animated SVG half-circle gauge
         │   └── ...                   # (12 more components)
@@ -317,6 +317,8 @@ interface RiskResult {
 - **Half-Kelly position sizing** — recommended size from balance, confidence, and TP/SL, with a 10 vUSDC floor and 20%-of-balance ceiling
 - **Risk-reward + ATR warnings** — flagged when r < 1.5 or a stop-loss sits beyond 3× ATR
 - **Liquidation awareness** — estimated liquidation price shown before a leveraged trade; real liquidation status (SoDEX's own record) shown after, in Portfolio
+- **Reduce-only + TP/SL bracket orders** — attach take-profit and stop-loss to any perps entry, or mark an order reduce-only so it can only close, never grow, a position
+- **Isolated/cross margin control** — choose margin mode per position, plus optional non-USDC cross-margin collateral
 - **Minimum order size surfaced** — SoDEX's real per-market floor ($5 spot, $10 perps) shown before you submit, not just after a rejection
 - **Confidence score** — visual bar shows AI certainty (0–100%)
 - **TP/SL levels** — concrete price targets with rationale for every signal
@@ -345,8 +347,11 @@ Wave 2  ✅  Signal archive (Upstash Redis) · Simulated 24h performance trackin
 Wave 3  ✅  Real backtesting — hit rate/avg P&L/max drawdown from actual TP/SL outcomes
             against Binance hourly candles, replacing Wave 2's simulated tracking
             Half-Kelly Risk_Manager — position sizing, risk-reward + ATR warnings
-            SoDEX perps trading — long/short, 2×–20× leverage, liquidation estimate
-            + real liquidation status via SoDEX's position history endpoint
+            SoDEX perps trading — long/short, market + limit orders, adjustable
+            leverage to each market's real max, liquidation estimate + real
+            liquidation status via SoDEX's position history endpoint
+            Perps order controls — TP/SL bracket orders, reduce-only, isolated/cross
+            margin mode, optional non-USDC cross-margin collateral
             14D/30D/90D flow analysis — 30-day SMA, streak analysis, accumulation badge
             Hardened chart infra — Binance→Bybit→Kraken→OKX fallback, X-Source header
             Watchlist, Portfolio, and Settings pages · profile picture + display name

@@ -355,6 +355,10 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
           leverage: order.leverage ?? 20,
           type: order.type,
           price: order.price,
+          marginMode: order.marginMode,
+          reduceOnly: order.reduceOnly,
+          takeProfitPrice: order.takeProfitPrice,
+          stopLossPrice: order.stopLossPrice,
           // funds (USDC) sizing is MARKET-only, same restriction as spot
           ...(order.type === 'LIMIT' || order.currency === order.symbol.split('-')[0]
             ? { quantity: order.quantity }

@@ -28,7 +28,7 @@ const STEPS = [
     icon: ShieldCheck,
     color: '#FF7637',
     title: 'EIP-712 Signed Execution',
-    desc: 'Execute directly on SoDEX testnet. Your orders are signed with your wallet key using EIP-712 — no private keys leave your device, no centralized custody.',
+    desc: 'Execute directly on SoDEX testnet — spot, or leveraged perps with market/limit orders, TP/SL bracket orders, reduce-only, and isolated/cross margin. Every order is signed with your wallet key using EIP-712 — no private keys leave your device, no centralized custody.',
   },
 ];
 

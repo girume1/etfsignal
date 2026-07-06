@@ -462,7 +462,7 @@ export function LandingPage() {
               {
                 icon: ArrowLeftRight,
                 title: 'Perps, Long or Short',
-                desc: 'Leveraged execution (2×–20×) on SoDEX testnet with a liquidation-price estimate up front, and real liquidation status afterward — sourced from SoDEX\'s own record.',
+                desc: 'Leveraged execution up to each market\'s real max on SoDEX testnet, with TP/SL bracket orders, reduce-only, isolated/cross margin, and a liquidation-price estimate up front — real liquidation status shown after, sourced from SoDEX\'s own record.',
               },
             ].map((f, i) => (
               <motion.div

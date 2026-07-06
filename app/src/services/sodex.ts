@@ -64,6 +64,10 @@ async function resolveSymbolId(symbol: string): Promise<number> {
 
 const perpsSymbolIdCache: Record<string, number> = {};
 const perpsPrecisionCache: Record<string, number> = {};
+// Real per-symbol max leverage (BTC-USD is 40x, others vary) — populated
+// alongside the ID/precision caches so the UI can size its leverage slider
+// correctly instead of hardcoding a 20x cap.
+const perpsMaxLeverageCache: Record<string, number> = {};
 
 async function resolvePerpsSymbolId(symbol: string): Promise<number> {
   if (perpsSymbolIdCache[symbol]) return perpsSymbolIdCache[symbol];
@@ -80,11 +84,13 @@ async function resolvePerpsSymbolId(symbol: string): Promise<number> {
     const id = s.id ?? s.symbolID;
     if (!id) continue;
     const precision = Number(s.pricePrecision ?? 2);
+    const maxLeverage = Number(s.maxLeverage ?? 20);
 
     const name = String(s.name ?? s.symbol ?? s.displayName ?? '').toUpperCase();
     if (name === symbol.toUpperCase() || name === `${base.toUpperCase()}-USD`) {
       perpsSymbolIdCache[symbol] = Number(id);
       perpsPrecisionCache[symbol] = precision;
+      perpsMaxLeverageCache[symbol] = maxLeverage;
       return Number(id);
     }
 
@@ -92,12 +98,39 @@ async function resolvePerpsSymbolId(symbol: string): Promise<number> {
     if (sBase === base.toUpperCase()) {
       perpsSymbolIdCache[symbol] = Number(id);
       perpsPrecisionCache[symbol] = precision;
+      perpsMaxLeverageCache[symbol] = maxLeverage;
       return Number(id);
     }
   }
 
   console.error('[sodex] available perps symbols:', json.data.map((s: any) => s.name ?? s.symbol).join(', '));
   throw new Error(`Perps symbol ${symbol} not found on SoDEX testnet`);
+}
+
+// Real per-symbol leverage cap, for the UI slider — falls back to 20x if the
+// symbol hasn't been resolved yet.
+export async function getPerpsMaxLeverage(symbol: string): Promise<number> {
+  await resolvePerpsSymbolId(symbol);
+  return perpsMaxLeverageCache[symbol] ?? 20;
+}
+
+// Coin ID cache for non-USDC collateral (Asset Mode) — from GET /markets/coins
+const perpsCoinIdCache: Record<string, number> = {};
+
+async function resolvePerpsCoinId(coin: string): Promise<number> {
+  if (perpsCoinIdCache[coin]) return perpsCoinIdCache[coin];
+  const res = await fetch(`${PERPS_GW}/markets/coins`);
+  const json: any = await res.json();
+  if (!Array.isArray(json.data)) throw new Error('Could not fetch SoDEX coin list');
+  for (const c of json.data) {
+    const id = c.id ?? c.coinID;
+    const name = String(c.coin ?? c.name ?? '').toUpperCase();
+    if (name === coin.toUpperCase() && id) {
+      perpsCoinIdCache[coin] = Number(id);
+      return Number(id);
+    }
+  }
+  throw new Error(`Coin ${coin} not found on SoDEX testnet`);
 }
 
 // ─── EIP-712 Domain ───────────────────────────────────────────────────────────
@@ -422,28 +455,36 @@ export interface PerpsOrder {
   symbol: string;     // e.g. "BTC-USD"
   side: 'BUY' | 'SELL';
   type?: 'MARKET' | 'LIMIT'; // defaults to MARKET
-  price?: string;     // required for LIMIT
+  price?: string;     // required for LIMIT; optional slippage-protection bound for MARKET
   quantity?: string;  // base-asset amount, e.g. "0.001" BTC — exactly one of quantity/funds
   funds?: string;     // USD-denominated size, e.g. "50" — MARKET only, same restriction as spot
   leverage: number;
+  marginMode?: 'ISOLATED' | 'CROSS'; // defaults to ISOLATED
+  reduceOnly?: boolean;               // defaults to false
+  takeProfitPrice?: string;           // attached TP trigger price (bracket order)
+  stopLossPrice?: string;             // attached SL trigger price (bracket order)
 }
 
 /**
- * Sets leverage before placing an order. Best-effort: SoDEX rejects leverage
+ * Sets leverage/margin mode before placing an order. Best-effort: SoDEX rejects
  * changes while a position/open order exists on that symbol, which is a normal
- * condition (not a failure) once a position is already open at that leverage.
+ * condition (not a failure) once a position is already open.
  */
 async function setPerpsLeverage(
   signer: ethers.Signer,
   symbol: string,
   leverage: number,
+  marginMode: 'ISOLATED' | 'CROSS' = 'ISOLATED',
 ): Promise<void> {
   const address = await signer.getAddress();
   const nonce = Date.now();
   const symbolID = await resolvePerpsSymbolId(symbol);
   const aid = await fetchAccountId(address, PERPS_GW);
 
-  const requestBody = { accountID: aid, symbolID, leverage: Math.round(leverage), isIsolated: true };
+  // MarginModeEnum: 1=ISOLATED, 2=CROSS. Previously sent a made-up `isIsolated`
+  // boolean field that doesn't exist in the schema — margin mode was never
+  // actually being communicated to SoDEX.
+  const requestBody = { accountID: aid, symbolID, leverage: Math.round(leverage), marginMode: marginMode === 'ISOLATED' ? 1 : 2 };
   const signingEnvelope = { type: 'updateLeverage', params: requestBody };
   const typedSig = await signOrder(signer, signingEnvelope, nonce, 'futures');
 
@@ -466,6 +507,50 @@ async function setPerpsLeverage(
   }
 }
 
+// ─── Cross-margin collateral ("Asset Mode") ───────────────────────────────────
+// Testnet-only endpoint: add/remove a non-USDC coin as CROSS-margin collateral.
+// Envelope type follows the same convention as updateLeverage (action name in
+// camelCase) — not shown as a worked example in the docs, so verify on testnet
+// with a small amount before relying on this.
+export async function updatePerpsCollateral(
+  signer: ethers.Signer,
+  coin: string,
+  amount: string, // positive to add, negative to remove
+): Promise<PlaceOrderResult> {
+  try {
+    const address = await signer.getAddress();
+    const nonce = Date.now();
+    const coinID = await resolvePerpsCoinId(coin);
+    const aid = await fetchAccountId(address, PERPS_GW);
+
+    const requestBody = { accountID: aid, coinID, amount };
+    const signingEnvelope = { type: 'updateCollateral', params: requestBody };
+    const typedSig = await signOrder(signer, signingEnvelope, nonce, 'futures');
+
+    const response = await fetch(`${PERPS_GW}/trade/collateral`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept':       'application/json',
+        'X-API-Sign':   typedSig,
+        'X-API-Nonce':  String(nonce),
+        'X-API-Chain':  String(CHAIN_ID),
+      },
+      body: JSON.stringify(requestBody),
+    });
+    const raw = await response.text();
+    let result: any = {};
+    try { result = JSON.parse(raw); } catch { /* non-JSON */ }
+    console.log('[sodex] updatePerpsCollateral response', response.status, raw);
+
+    if (response.ok && result.code === 0) return { success: true };
+    const msg = result.msg || result.message || result.error || `SoDEX error (HTTP ${response.status})`;
+    return { success: false, error: friendlyError(msg) };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Unknown error' };
+  }
+}
+
 export async function placePerpsOrder(
   signer: ethers.Signer,
   order: PerpsOrder,
@@ -480,7 +565,10 @@ export async function placePerpsOrder(
     const aid = await fetchAccountId(address, PERPS_GW);
 
     // Best-effort — SoDEX rejects this if a position is already open on the symbol.
-    await setPerpsLeverage(signer, order.symbol, order.leverage);
+    await setPerpsLeverage(signer, order.symbol, order.leverage, order.marginMode ?? 'ISOLATED');
+
+    const hasBracket = Boolean(order.takeProfitPrice || order.stopLossPrice);
+    const precision = perpsPrecisionCache[order.symbol] ?? 2;
 
     // PerpsOrderItem field order (exact, per SoDEX schema):
     // clOrdID, modifier, side, type, timeInForce, price*, quantity*, funds*,
@@ -489,13 +577,14 @@ export async function placePerpsOrder(
     const isLimit = order.type === 'LIMIT';
     const orderItem: Record<string, unknown> = {
       clOrdID:     `etfsignal-${nonce}`,
-      modifier:    1,
+      modifier:    hasBracket ? 3 : 1,     // BRACKET (entry+TP/SL) : NORMAL
       side:        order.side === 'BUY' ? 1 : 2,
       type:        isLimit ? 1 : 2,       // LIMIT : MARKET
       timeInForce: isLimit ? 1 : 3,       // GTC : IOC
     };
-    if (isLimit && order.price) {
-      const precision = perpsPrecisionCache[order.symbol] ?? 2;
+    // price is required for LIMIT and optional for MARKET (slippage-protection
+    // bound: fill is capped at min/max(price, indexPrice * marketDeviationRatio)).
+    if (order.price) {
       orderItem.price = Number(order.price).toFixed(precision);
     }
     if (order.quantity) {
@@ -503,11 +592,48 @@ export async function placePerpsOrder(
     } else if (order.funds) {
       orderItem.funds = String(order.funds);
     }
-    orderItem.reduceOnly = false;
+    orderItem.reduceOnly = order.reduceOnly ?? false;
     orderItem.positionSide = 1; // BOTH — always 1 for new orders (see note above)
 
+    // Bracket order: entry (modifier BRACKET) + up to 2 attached stop orders
+    // (modifier ATTACHED_STOP, reduceOnly true). Per SoDEX schema, TP/SL orders
+    // omit `quantity` so they close the full resulting position size when
+    // triggered — no risk of a size mismatch against the entry's actual fill.
+    // Attached stops execute as market orders (type MARKET/IOC) once triggered,
+    // so the position is guaranteed to close rather than sitting unfilled.
+    const orders: Record<string, unknown>[] = [orderItem];
+    const closingSide = order.side === 'BUY' ? 2 : 1; // opposite side closes the position
+    if (order.takeProfitPrice) {
+      orders.push({
+        clOrdID:     `etfsignal-${nonce}-tp`,
+        modifier:    4, // ATTACHED_STOP
+        side:        closingSide,
+        type:        2, // MARKET
+        timeInForce: 3, // IOC
+        stopPrice:   Number(order.takeProfitPrice).toFixed(precision),
+        stopType:    2, // TAKE_PROFIT
+        triggerType: 2, // MARK_PRICE — the only supported trigger type
+        reduceOnly:  true,
+        positionSide: 1,
+      });
+    }
+    if (order.stopLossPrice) {
+      orders.push({
+        clOrdID:     `etfsignal-${nonce}-sl`,
+        modifier:    4,
+        side:        closingSide,
+        type:        2,
+        timeInForce: 3,
+        stopPrice:   Number(order.stopLossPrice).toFixed(precision),
+        stopType:    1, // STOP_LOSS
+        triggerType: 2,
+        reduceOnly:  true,
+        positionSide: 1,
+      });
+    }
+
     // PerpsNewOrderRequest: accountID, symbolID, orders
-    const requestBody = { accountID: aid, symbolID, orders: [orderItem] };
+    const requestBody = { accountID: aid, symbolID, orders };
 
     // Signing envelope: { type: 'newOrder', params: requestBody }, domain "futures"
     const signingEnvelope = { type: 'newOrder', params: requestBody };
@@ -536,11 +662,15 @@ export async function placePerpsOrder(
 
     if (response.ok && result.code === 0) {
       const first = result.data?.[0];
-      if (first && first.code !== 0) {
+      // Bracket orders submit 2-3 items — a rejected attached TP/SL (e.g. stop
+      // price on the wrong side of the entry) shouldn't be silently ignored
+      // just because the entry itself succeeded.
+      const rejected = Array.isArray(result.data) ? result.data.find((o: any) => o.code !== 0) : first?.code !== 0 ? first : null;
+      if (rejected) {
         // Show the raw per-order detail (not just a generic fallback) so a
         // rejection reason SoDEX didn't put under msg/message is still visible.
-        const detail = first.msg || first.message || first.error || first.reason
-          || `rejected (code ${first.code}): ${JSON.stringify(first)}`;
+        const detail = rejected.msg || rejected.message || rejected.error || rejected.reason
+          || `rejected (code ${rejected.code}): ${JSON.stringify(rejected)}`;
         return { success: false, error: friendlyError(detail) };
       }
       const orderId = first?.orderID != null ? String(first.orderID) : first?.clOrdID ?? `sodex-${nonce}`;
