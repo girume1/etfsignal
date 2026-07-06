@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { PieChart, RefreshCw, ArrowUp, ArrowDown, ExternalLink, Wallet, Zap } from 'lucide-react';
+import { PieChart, RefreshCw, ArrowUp, ArrowDown, ExternalLink, Wallet, Zap, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useDashboard } from '../../contexts/DashboardContext';
 import { fetchBalances, fetchPerpsPositionHistory, truncateAddress } from '../../services/sodex';
 import { formatUSD } from '../../services/sosovalue';
@@ -26,26 +26,37 @@ const CURRENCY_STYLE: Record<string, { color: string; label: string }> = {
   USDC: { color: '#00FFA7', label: 'USD Coin' },
 };
 
-const PAGE_SIZE = 5;
+const PAGE_SIZE_OPTIONS = [5, 10, 25, 50];
 
-function Pagination({ page, total, onChange }: { page: number; total: number; onChange: (p: number) => void }) {
-  const pageCount = Math.ceil(total / PAGE_SIZE);
-  if (pageCount <= 1) return null;
+function Pagination({
+  page, pageSize, total, onPageChange, onPageSizeChange,
+}: {
+  page: number; pageSize: number; total: number;
+  onPageChange: (p: number) => void; onPageSizeChange: (n: number) => void;
+}) {
+  if (total === 0) return null;
+  const pageCount = Math.max(1, Math.ceil(total / pageSize));
+  const btnStyle = { border: '1px solid var(--brand-border)', color: '#94A3B8' };
   return (
-    <div className="flex items-center justify-center gap-1.5 mt-3 pt-3" style={{ borderTop: '1px solid var(--brand-border)' }}>
-      {Array.from({ length: pageCount }, (_, i) => i + 1).map(n => (
-        <button
-          key={n}
-          onClick={() => onChange(n)}
-          className="w-7 h-7 rounded-lg text-xs font-mono transition-colors"
-          style={n === page
-            ? { background: 'rgba(0,255,167,0.12)', color: '#00FFA7', border: '1px solid rgba(0,255,167,0.3)' }
-            : { color: '#64748b', border: '1px solid transparent' }
-          }
+    <div className="flex items-center justify-between mt-3 pt-3 flex-wrap gap-2" style={{ borderTop: '1px solid var(--brand-border)' }}>
+      <div className="flex items-center gap-2 text-xs text-slate-500">
+        <span>Show rows:</span>
+        <select
+          value={pageSize}
+          onChange={e => onPageSizeChange(Number(e.target.value))}
+          style={{ background: 'var(--brand-card)', border: '1px solid var(--brand-border)', color: 'white' }}
+          className="px-2 py-1 rounded-lg text-xs font-mono focus:outline-none"
         >
-          {n}
-        </button>
-      ))}
+          {PAGE_SIZE_OPTIONS.map(n => <option key={n} value={n}>{n}</option>)}
+        </select>
+      </div>
+      <div className="flex items-center gap-1.5">
+        <button onClick={() => onPageChange(1)} disabled={page === 1} style={btnStyle} className="px-2 py-1 rounded-lg text-xs font-mono disabled:opacity-30 hover:bg-white/5 transition-colors">First</button>
+        <button onClick={() => onPageChange(page - 1)} disabled={page === 1} style={btnStyle} className="w-7 h-7 rounded-lg flex items-center justify-center disabled:opacity-30 hover:bg-white/5 transition-colors"><ChevronLeft size={13} /></button>
+        <span className="text-xs font-mono text-slate-400 px-2">Page {page} of {pageCount}</span>
+        <button onClick={() => onPageChange(page + 1)} disabled={page === pageCount} style={btnStyle} className="w-7 h-7 rounded-lg flex items-center justify-center disabled:opacity-30 hover:bg-white/5 transition-colors"><ChevronRight size={13} /></button>
+        <button onClick={() => onPageChange(pageCount)} disabled={page === pageCount} className="px-2 py-1 rounded-lg text-xs font-mono disabled:opacity-30 hover:opacity-80 transition-colors" style={{ color: '#00FFA7' }}>Last</button>
+      </div>
     </div>
   );
 }
@@ -96,14 +107,16 @@ export default function PortfolioPage() {
   const sells = tradeHistory.filter(t => t.side === 'SELL').length;
 
   const [posPage, setPosPage] = useState(1);
-  const posPageCount = Math.max(1, Math.ceil(positions.length / PAGE_SIZE));
+  const [posPageSize, setPosPageSize] = useState(10);
+  const posPageCount = Math.max(1, Math.ceil(positions.length / posPageSize));
   const safePosPage = Math.min(posPage, posPageCount);
-  const pagedPositions = positions.slice((safePosPage - 1) * PAGE_SIZE, safePosPage * PAGE_SIZE);
+  const pagedPositions = positions.slice((safePosPage - 1) * posPageSize, safePosPage * posPageSize);
 
   const [tradePage, setTradePage] = useState(1);
-  const tradePageCount = Math.max(1, Math.ceil(tradeHistory.length / PAGE_SIZE));
+  const [tradePageSize, setTradePageSize] = useState(10);
+  const tradePageCount = Math.max(1, Math.ceil(tradeHistory.length / tradePageSize));
   const safeTradePage = Math.min(tradePage, tradePageCount);
-  const pagedTrades = tradeHistory.slice((safeTradePage - 1) * PAGE_SIZE, safeTradePage * PAGE_SIZE);
+  const pagedTrades = tradeHistory.slice((safeTradePage - 1) * tradePageSize, safeTradePage * tradePageSize);
 
   return (
     <div>
@@ -250,7 +263,11 @@ export default function PortfolioPage() {
               })}
             </div>
           )}
-          <Pagination page={safePosPage} total={positions.length} onChange={setPosPage} />
+          <Pagination
+            page={safePosPage} pageSize={posPageSize} total={positions.length}
+            onPageChange={setPosPage}
+            onPageSizeChange={n => { setPosPageSize(n); setPosPage(1); }}
+          />
         </div>
 
         {/* Trade history */}
@@ -308,7 +325,11 @@ export default function PortfolioPage() {
               })}
             </div>
           )}
-          <Pagination page={safeTradePage} total={tradeHistory.length} onChange={setTradePage} />
+          <Pagination
+            page={safeTradePage} pageSize={tradePageSize} total={tradeHistory.length}
+            onPageChange={setTradePage}
+            onPageSizeChange={n => { setTradePageSize(n); setTradePage(1); }}
+          />
         </div>
       </div>
     </div>
