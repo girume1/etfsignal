@@ -12,6 +12,10 @@ const symbolIdCache: Record<string, number> = {};
 // pricePrecision differs per market (BTC-USDC is whole dollars, ETH-USDC is $0.10
 // ticks) — populated alongside symbolIdCache from the same /markets/symbols fetch.
 const symbolPrecisionCache: Record<string, number> = {};
+// quantityPrecision (decimal places allowed on the `quantity` field, e.g. 5 for
+// BTC-USDC's 0.00001 stepSize) — needed when we compute a quantity client-side
+// (USDC amount / price) instead of using a value the user typed directly.
+const symbolQuantityPrecisionCache: Record<string, number> = {};
 
 async function resolveSymbolId(symbol: string): Promise<number> {
   if (symbolIdCache[symbol]) return symbolIdCache[symbol];
@@ -28,6 +32,7 @@ async function resolveSymbolId(symbol: string): Promise<number> {
     const id = s.symbolID ?? s.id;
     if (!id) continue;
     const precision = Number(s.pricePrecision ?? 2);
+    const qtyPrecision = Number(s.quantityPrecision ?? 6);
 
     // Match by symbol name — case-insensitive, try multiple name variants
     // SoDEX testnet uses VBTC_VUSDC (all-caps), not vBTC_vUSDC
@@ -41,6 +46,7 @@ async function resolveSymbolId(symbol: string): Promise<number> {
     if (variants.includes(name)) {
       symbolIdCache[symbol] = Number(id);
       symbolPrecisionCache[symbol] = precision;
+      symbolQuantityPrecisionCache[symbol] = qtyPrecision;
       return Number(id);
     }
 
@@ -50,6 +56,7 @@ async function resolveSymbolId(symbol: string): Promise<number> {
     if (sBase === base && sQuote === quote) {
       symbolIdCache[symbol] = Number(id);
       symbolPrecisionCache[symbol] = precision;
+      symbolQuantityPrecisionCache[symbol] = qtyPrecision;
       return Number(id);
     }
   }
@@ -68,6 +75,7 @@ const perpsPrecisionCache: Record<string, number> = {};
 // alongside the ID/precision caches so the UI can size its leverage slider
 // correctly instead of hardcoding a 20x cap.
 const perpsMaxLeverageCache: Record<string, number> = {};
+const perpsQuantityPrecisionCache: Record<string, number> = {};
 
 async function resolvePerpsSymbolId(symbol: string): Promise<number> {
   if (perpsSymbolIdCache[symbol]) return perpsSymbolIdCache[symbol];
@@ -85,6 +93,7 @@ async function resolvePerpsSymbolId(symbol: string): Promise<number> {
     perpsSymbolIdCache[symbol] = Number(id);
     perpsPrecisionCache[symbol] = Number(s.pricePrecision ?? 2);
     perpsMaxLeverageCache[symbol] = Number(s.maxLeverage ?? 20);
+    perpsQuantityPrecisionCache[symbol] = Number(s.quantityPrecision ?? 6);
     return Number(id);
   };
 
@@ -117,6 +126,17 @@ async function resolvePerpsSymbolId(symbol: string): Promise<number> {
 export async function getPerpsMaxLeverage(symbol: string): Promise<number> {
   await resolvePerpsSymbolId(symbol);
   return perpsMaxLeverageCache[symbol] ?? 20;
+}
+
+// Real per-symbol quantity precision — needed to round a client-side-computed
+// quantity (USDC amount / price) to a value SoDEX's lot-size filter accepts.
+export async function getQuantityPrecision(symbol: string, marketType: 'spot' | 'futures'): Promise<number> {
+  if (marketType === 'futures') {
+    await resolvePerpsSymbolId(symbol);
+    return perpsQuantityPrecisionCache[symbol] ?? 6;
+  }
+  await resolveSymbolId(symbol);
+  return symbolQuantityPrecisionCache[symbol] ?? 6;
 }
 
 // Coin ID cache for non-USDC collateral (Asset Mode) — from GET /markets/coins

@@ -6,7 +6,7 @@ import {
   ChevronUp, ChevronDown, CheckCircle2, XCircle,
 } from 'lucide-react';
 import type { MarketSignal, OrderSide, TradeOrder } from '../types';
-import { fetchBalances, getPerpsMaxLeverage, updatePerpsCollateral } from '../services/sodex';
+import { fetchBalances, getPerpsMaxLeverage, getQuantityPrecision, updatePerpsCollateral } from '../services/sodex';
 import { computePositionSize, computeLeveragedRisk, type LeveragedRiskResult } from '../services/riskManager';
 
 function RiskPanel({
@@ -182,17 +182,14 @@ export function TradeModal({
       .catch(() => {});
   }, [marketType, baseAsset]);
 
-  // SoDEX only accepts quote-currency (funds) sizing for MARKET orders — spot
-  // restricts it further to BUY only, perps allows either side. LIMIT orders
-  // never send a `funds` field to SoDEX (the schema forbids it), but since the
-  // limit price is known up front (unlike MARKET), a USDC amount can still be
-  // converted client-side into an exact base-asset `quantity` before submit —
-  // offered for futures limit orders per user request. Picking the "wrong"
-  // currency without this conversion would silently be reinterpreted as a
-  // base-asset quantity server-side (e.g. typing "50" meaning $50 sent as 50 BTC).
+  // Spot MARKET BUY sends SoDEX's native `funds` field (proven working). Every
+  // other quote-currency case — any LIMIT order (schema forbids `funds` on
+  // LIMIT entirely), and perps MARKET (untested/unreliable on this gateway —
+  // saw real "invalid order size" rejections) — is instead converted client-side
+  // into an exact base-asset quantity below, using the best known reference price.
   const fundsAllowed =
     (orderType === 'MARKET' && (marketType === 'futures' || side === 'BUY')) ||
-    (orderType === 'LIMIT' && marketType === 'futures');
+    orderType === 'LIMIT';
   useEffect(() => {
     if (!fundsAllowed && currency !== baseAsset) {
       setCurrency(baseAsset);
@@ -257,10 +254,14 @@ export function TradeModal({
     return bound.toFixed(2);
   }, [marketType, orderType, currentPrice, slippagePct, side]);
 
-  const tpInvalid = Boolean(takeProfitPrice && currentPrice &&
-    (side === 'BUY' ? Number(takeProfitPrice) <= currentPrice : Number(takeProfitPrice) >= currentPrice));
-  const slInvalid = Boolean(stopLossPrice && currentPrice &&
-    (side === 'BUY' ? Number(stopLossPrice) >= currentPrice : Number(stopLossPrice) <= currentPrice));
+  // TP/SL must be validated against the actual entry price — the limit price
+  // for LIMIT orders, not the live market price (which can differ a lot from
+  // where a resting limit order will actually fill).
+  const entryPrice = orderType === 'LIMIT' ? parseFloat(limitPrice || '0') || undefined : currentPrice;
+  const tpInvalid = Boolean(takeProfitPrice && entryPrice &&
+    (side === 'BUY' ? Number(takeProfitPrice) <= entryPrice : Number(takeProfitPrice) >= entryPrice));
+  const slInvalid = Boolean(stopLossPrice && entryPrice &&
+    (side === 'BUY' ? Number(stopLossPrice) >= entryPrice : Number(stopLossPrice) <= entryPrice));
 
   async function handleSubmit() {
     if (!acknowledged) return;
@@ -268,14 +269,30 @@ export function TradeModal({
     if (tpInvalid || slInvalid) return;
     setSubmitting(true);
     try {
+      // Spot MARKET BUY sends SoDEX's native `funds` field (proven working, see
+      // confirmTrade). Every other quote-currency case — LIMIT orders (schema
+      // forbids `funds` entirely) and perps MARKET (unreliable on this gateway) —
+      // is converted here into an exact base-asset quantity instead, using the
+      // best known reference price (limit price if set, else live market price).
+      const isQuoteCurrency = currency !== baseAsset;
+      const needsClientConversion = isQuoteCurrency && (orderType === 'LIMIT' || marketType === 'futures');
+      const referencePrice = orderType === 'LIMIT' ? parseFloat(limitPrice || '0') : (currentPrice ?? 0);
+      let finalQuantity = amount;
+      if (needsClientConversion && referencePrice > 0) {
+        const conversionSymbol = marketType === 'futures' ? `${baseAsset}-USD` : symbol;
+        const qtyPrecision = await getQuantityPrecision(conversionSymbol, marketType).catch(() => 6);
+        finalQuantity = (parseFloat(amount) / referencePrice).toFixed(qtyPrecision);
+      }
+      const finalCurrency = needsClientConversion ? baseAsset : currency;
+
       const { orderId } = await onConfirm(
         marketType === 'futures'
           ? {
               symbol:   `${baseAsset}-USD`, // perps symbol format, distinct from spot's BTC-USDC
               side,
               type:     orderType,
-              quantity: amount,
-              currency,            // BTC (quantity) or USDC (funds, MARKET only) — perps allows either side
+              quantity: finalQuantity,
+              currency: finalCurrency,
               marketType: 'futures',
               leverage,
               marginMode,
@@ -290,8 +307,8 @@ export function TradeModal({
               symbol,
               side,
               type:     orderType,
-              quantity: amount,
-              currency,            // BTC or USDC — determines quantity vs funds on SoDEX
+              quantity: finalQuantity,
+              currency: finalCurrency,   // BTC or USDC — determines quantity vs funds on SoDEX
               ...(orderType === 'LIMIT' ? { price: limitPrice } : {}),
             },
       );
@@ -407,9 +424,6 @@ export function TradeModal({
               <SegmentBtn active={orderType === 'LIMIT'}  onClick={() => {
                 setOrderType('LIMIT');
                 if (!limitPrice && currentPrice) setLimitPrice(currentPrice.toFixed(2));
-                // Spot limit orders always quantity (base asset) — futures limit
-                // orders allow USDC sizing too (converted to quantity on submit).
-                if (marketType !== 'futures') setCurrency(baseAsset);
               }}>
                 <span className="flex items-center justify-center gap-1.5"><Target size={13} /> Limit</span>
               </SegmentBtn>

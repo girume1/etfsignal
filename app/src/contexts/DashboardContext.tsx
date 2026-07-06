@@ -359,15 +359,13 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
           reduceOnly: order.reduceOnly,
           takeProfitPrice: order.takeProfitPrice,
           stopLossPrice: order.stopLossPrice,
-          // `funds` is MARKET-only — SoDEX's schema forbids it on LIMIT orders.
-          // A USDC-denominated LIMIT amount is instead converted here into an
-          // exact base-asset quantity using the known limit price (unlike
-          // MARKET, where the fill price isn't known up front).
+          // TradeModal already converts any quote-currency perps order (MARKET
+          // or LIMIT) into an exact base-asset quantity before calling
+          // confirmTrade, so `order.currency` should always be the base asset
+          // here — `funds` below is just a defensive fallback, not a live path.
           ...(order.currency === order.symbol.split('-')[0]
             ? { quantity: order.quantity }
-            : order.type === 'LIMIT'
-              ? { quantity: (parseFloat(order.quantity) / parseFloat(order.price ?? '0')).toFixed(8) }
-              : { funds: order.quantity }),
+            : { funds: order.quantity }),
         })
       : await placeSpotOrder(signer, 1, order);
     if (!r.success) throw new Error(r.error);
