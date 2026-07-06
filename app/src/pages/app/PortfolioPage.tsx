@@ -26,6 +26,30 @@ const CURRENCY_STYLE: Record<string, { color: string; label: string }> = {
   USDC: { color: '#00FFA7', label: 'USD Coin' },
 };
 
+const PAGE_SIZE = 5;
+
+function Pagination({ page, total, onChange }: { page: number; total: number; onChange: (p: number) => void }) {
+  const pageCount = Math.ceil(total / PAGE_SIZE);
+  if (pageCount <= 1) return null;
+  return (
+    <div className="flex items-center justify-center gap-1.5 mt-3 pt-3" style={{ borderTop: '1px solid var(--brand-border)' }}>
+      {Array.from({ length: pageCount }, (_, i) => i + 1).map(n => (
+        <button
+          key={n}
+          onClick={() => onChange(n)}
+          className="w-7 h-7 rounded-lg text-xs font-mono transition-colors"
+          style={n === page
+            ? { background: 'rgba(0,255,167,0.12)', color: '#00FFA7', border: '1px solid rgba(0,255,167,0.3)' }
+            : { color: '#64748b', border: '1px solid transparent' }
+          }
+        >
+          {n}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export default function PortfolioPage() {
   const { wallet, tradeHistory, liveBtcPx, liveEthPx, latestBtcPx, latestEthPx } = useDashboard();
   const [balances,   setBalances]   = useState<Record<string, string>>({});
@@ -70,6 +94,16 @@ export default function PortfolioPage() {
 
   const buys  = tradeHistory.filter(t => t.side === 'BUY').length;
   const sells = tradeHistory.filter(t => t.side === 'SELL').length;
+
+  const [posPage, setPosPage] = useState(1);
+  const posPageCount = Math.max(1, Math.ceil(positions.length / PAGE_SIZE));
+  const safePosPage = Math.min(posPage, posPageCount);
+  const pagedPositions = positions.slice((safePosPage - 1) * PAGE_SIZE, safePosPage * PAGE_SIZE);
+
+  const [tradePage, setTradePage] = useState(1);
+  const tradePageCount = Math.max(1, Math.ceil(tradeHistory.length / PAGE_SIZE));
+  const safeTradePage = Math.min(tradePage, tradePageCount);
+  const pagedTrades = tradeHistory.slice((safeTradePage - 1) * PAGE_SIZE, safeTradePage * PAGE_SIZE);
 
   return (
     <div>
@@ -173,7 +207,7 @@ export default function PortfolioPage() {
             <p className="text-xs text-slate-600 text-center py-4 font-mono">No perps positions yet — open one from an AI signal (Futures tab)</p>
           ) : (
             <div className="space-y-2">
-              {positions.map(p => {
+              {pagedPositions.map(p => {
                 const isLongPos = parseFloat(p.size) >= 0;
                 const pnl = parseFloat(p.realizedPnL) || 0;
                 const pnlColor = pnl >= 0 ? '#34D399' : '#F87171';
@@ -216,6 +250,7 @@ export default function PortfolioPage() {
               })}
             </div>
           )}
+          <Pagination page={safePosPage} total={positions.length} onChange={setPosPage} />
         </div>
 
         {/* Trade history */}
@@ -235,7 +270,7 @@ export default function PortfolioPage() {
             <p className="text-xs text-slate-600 text-center py-4 font-mono">No trades yet — execute one from an AI signal</p>
           ) : (
             <div className="space-y-2">
-              {tradeHistory.map(t => {
+              {pagedTrades.map(t => {
                 const isBuy = t.side === 'BUY';
                 const color = isBuy ? '#34D399' : '#F87171';
                 return (
@@ -273,6 +308,7 @@ export default function PortfolioPage() {
               })}
             </div>
           )}
+          <Pagination page={safeTradePage} total={tradeHistory.length} onChange={setTradePage} />
         </div>
       </div>
     </div>
