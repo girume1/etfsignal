@@ -623,42 +623,43 @@ export async function placePerpsOrder(
     orderItem.positionSide = 1; // BOTH — always 1 for new orders (see note above)
 
     // Bracket order: entry (modifier BRACKET) + up to 2 attached stop orders
-    // (modifier ATTACHED_STOP, reduceOnly true). The "omit quantity for a
-    // global TP/SL" note in SoDEX's docs is scoped to the *Position with
-    // TP/SL* case (modifier STOP) — NOT this *Order with TP/SL* bracket case.
-    // Omitting quantity here got the whole batch rejected with a top-level
-    // "quantity is invalid" (confirmed live) — so match the entry's quantity.
-    // Attached stops execute as market orders (type MARKET/IOC) once triggered,
-    // so the position is guaranteed to close rather than sitting unfilled.
+    // (modifier ATTACHED_STOP, reduceOnly true). Per SoDEX support (confirmed
+    // live after MARKET/IOC attached stops were rejected with a top-level
+    // "quantity is invalid"): attached TP/SL must be type LIMIT with
+    // timeInForce GTX, and `price` set equal to their own stopPrice.
     const orders: Record<string, unknown>[] = [orderItem];
     const closingSide = order.side === 'BUY' ? 2 : 1; // opposite side closes the position
     const entryQty = order.quantity ?? (typeof orderItem.quantity === 'string' ? orderItem.quantity : undefined);
     if (order.takeProfitPrice) {
+      const stopPrice = Number(order.takeProfitPrice).toFixed(precision);
       orders.push({
         clOrdID:     `etfsignal-${nonce}-tp`,
         modifier:    4, // ATTACHED_STOP
         side:        closingSide,
-        type:        2, // MARKET
-        timeInForce: 3, // IOC
-        stopPrice:   Number(order.takeProfitPrice).toFixed(precision),
+        type:        1, // LIMIT
+        timeInForce: 4, // GTX
+        price:       stopPrice,
+        ...(entryQty ? { quantity: String(entryQty) } : {}),
+        stopPrice,
         stopType:    2, // TAKE_PROFIT
         triggerType: 2, // MARK_PRICE — the only supported trigger type
-        ...(entryQty ? { quantity: String(entryQty) } : {}),
         reduceOnly:  true,
         positionSide: 1,
       });
     }
     if (order.stopLossPrice) {
+      const stopPrice = Number(order.stopLossPrice).toFixed(precision);
       orders.push({
         clOrdID:     `etfsignal-${nonce}-sl`,
         modifier:    4,
         side:        closingSide,
-        type:        2,
-        timeInForce: 3,
-        stopPrice:   Number(order.stopLossPrice).toFixed(precision),
+        type:        1,
+        timeInForce: 4,
+        price:       stopPrice,
+        ...(entryQty ? { quantity: String(entryQty) } : {}),
+        stopPrice,
         stopType:    1, // STOP_LOSS
         triggerType: 2,
-        ...(entryQty ? { quantity: String(entryQty) } : {}),
         reduceOnly:  true,
         positionSide: 1,
       });
