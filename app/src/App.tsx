@@ -22,7 +22,7 @@ export default function App() {
   return (
     <DynamicContextProvider
       settings={{
-        environmentId: import.meta.env.VITE_DYNAMIC_ENVIRONMENT_ID,
+        environmentId: import.meta.env.VITE_DYNAMIC_ENVIRONMENT_ID!,
         walletConnectors: [EthereumWalletConnectors],
       }}
     >
