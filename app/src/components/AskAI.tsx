@@ -26,7 +26,7 @@ const STARTERS: Record<'BTC' | 'ETH', string[]> = {
  * Follow-up chat panel. Lets the user ask free-form questions about the
  * current signal or the underlying data — routed through the same
  * /api/analyze edge function that powers signal synthesis, so the
- * ANTHROPIC_API_KEY never touches the client.
+ * GEMINI_API_KEY never touches the client.
  */
 export function AskAI({ asset, etfData, signal }: AskAIProps) {
   const [history, setHistory] = useState<ChatTurn[]>([]);
@@ -50,7 +50,7 @@ export function AskAI({ asset, etfData, signal }: AskAIProps) {
       const answer = await askFollowUp(asset, etfData, signal, history, q);
       setHistory(h => [...h, { role: 'assistant', content: answer }]);
     } catch (err: any) {
-      setError(err?.message || 'Claude request failed.');
+      setError(err?.message || 'Gemini request failed.');
     } finally {
       setLoading(false);
     }
@@ -68,10 +68,10 @@ export function AskAI({ asset, etfData, signal }: AskAIProps) {
         <div className="flex items-center gap-2">
           <span className="text-xs font-semibold text-slate-300 uppercase tracking-wider">Ask the Analyst</span>
           <span
-            style={{ background: 'rgba(167,139,250,0.15)', color: '#C4B5FD', border: '1px solid rgba(167,139,250,0.3)' }}
+            style={{ background: 'rgba(56,189,248,0.15)', color: '#38BDF8', border: '1px solid rgba(56,189,248,0.3)' }}
             className="text-[10px] px-1.5 py-0.5 rounded font-mono uppercase tracking-widest"
           >
-            Claude
+            Gemini
           </span>
         </div>
         {history.length > 0 && (

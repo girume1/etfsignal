@@ -11,10 +11,14 @@
 // Set SODEX_NETWORK=testnet in your environment to use the testnet gateway.
 // Default (and production) target is mainnet.
 const USE_TESTNET  = process.env.SODEX_NETWORK === 'testnet';
-const MAINNET_GW   = 'https://gw.sodex.com/api/v1/spot';
+const MAINNET_GW   = 'https://mainnet-gw.sodex.dev/api/v1/spot';
 const TESTNET_GW   = 'https://testnet-gw.sodex.dev/api/v1/spot';
 const GATEWAY      = USE_TESTNET ? TESTNET_GW : MAINNET_GW;
 const CHAIN_ID     = USE_TESTNET ? 138565 : 286623;
+
+// Builder integration — attaches builder ID and fee (basis points) to orders
+const BUILDER_ID   = process.env.SODEX_BUILDER_ID ? Number(process.env.SODEX_BUILDER_ID) : undefined;
+const BUILDER_FEE  = process.env.SODEX_BUILDER_FEE ? Number(process.env.SODEX_BUILDER_FEE) : 50; // 50 = 5 bp (0.05%)
 
 // Symbol ID cache — fetched at runtime, not hardcoded
 const symbolIdCache: Record<string, number> = {};
@@ -109,11 +113,14 @@ export default async function handler(req: any, res: any) {
     }
     orderItem.quantity = String(quantity);
 
-    // BatchNewOrderRequest: accountID, orders
-    const requestBody = {
+    // BatchNewOrderRequest: accountID, orders, builder (optional, must be last)
+    const requestBody: Record<string, unknown> = {
       accountID: Number(accountID),
       orders:    [orderItem],
     };
+    if (BUILDER_ID) {
+      requestBody.builder = { id: BUILDER_ID, fee: BUILDER_FEE };
+    }
 
     // Signing envelope: type, params
     const signingEnvelope = { type: 'batchNewOrder', params: requestBody };

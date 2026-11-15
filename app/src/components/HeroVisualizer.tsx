@@ -233,8 +233,8 @@ export function HeroVisualizer() {
                 ))}
                 <circle cx="120" cy="70" r="42" fill="url(#rg-core)" />
                 <circle cx="120" cy="70" r="23" fill="#04101B" stroke="#00FFA7" strokeWidth="1.2" className="signal-glow" />
-                <text x="120" y="67" textAnchor="middle" fontSize="8" fontFamily="JetBrains Mono,monospace" fill="#00FFA7" letterSpacing="1.5">CLAUDE</text>
-                <text x="120" y="78" textAnchor="middle" fontSize="6.5" fontFamily="JetBrains Mono,monospace" fill="#64748B">sonnet-4</text>
+                <text x="120" y="67" textAnchor="middle" fontSize="8" fontFamily="JetBrains Mono,monospace" fill="#00FFA7" letterSpacing="1.5">GEMINI</text>
+                <text x="120" y="78" textAnchor="middle" fontSize="6.5" fontFamily="JetBrains Mono,monospace" fill="#64748B">2.5-flash</text>
                 <path d="M 143 70 C 185 70, 205 70, 240 70" stroke="url(#lg-out)" strokeWidth="2" fill="none" strokeDasharray="6 4" className="flow-dash" />
                 <polygon points="232,66 240,70 232,74" fill="#34D399" className="pulse-dot" />
               </svg>

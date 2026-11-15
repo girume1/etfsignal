@@ -1,10 +1,14 @@
 // Vercel Node.js Serverless Function — SoDEX balance proxy
-// Fetches wallet balance from SoDEX testnet API server-side (avoids CORS).
+// Fetches wallet balance from SoDEX API server-side (avoids CORS).
+// Supports both Mainnet (default) and Testnet.
 // Logs the raw response so we can diagnose format differences.
 //
 // GET /api/sodex-balance?address=0x...
 
-const TESTNET_GW = 'https://testnet-gw.sodex.dev/api/v1/spot';
+const USE_TESTNET  = process.env.SODEX_NETWORK === 'testnet';
+const MAINNET_GW   = 'https://mainnet-gw.sodex.dev/api/v1/spot';
+const TESTNET_GW   = 'https://testnet-gw.sodex.dev/api/v1/spot';
+const GATEWAY      = USE_TESTNET ? TESTNET_GW : MAINNET_GW;
 
 export default async function handler(req: any, res: any) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
@@ -23,7 +27,7 @@ export default async function handler(req: any, res: any) {
 
   for (const path of paths) {
     try {
-      const r = await fetch(`${TESTNET_GW}${path}`, {
+      const r = await fetch(`${GATEWAY}${path}`, {
         headers: { 'Accept': 'application/json' },
       });
       const text = await r.text();

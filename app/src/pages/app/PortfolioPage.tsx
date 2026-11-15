@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { PieChart, RefreshCw, ArrowUp, ArrowDown, ExternalLink, Wallet, Zap, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useDashboard } from '../../contexts/DashboardContext';
-import { fetchBalances, fetchPerpsPositionHistory, truncateAddress } from '../../services/sodex';
+import { fetchBalances, fetchPerpsPositionHistory, truncateAddress, USE_TESTNET } from '../../services/sodex';
 import { formatUSD } from '../../services/sosovalue';
 import type { PerpsPosition } from '../../types';
 
@@ -147,7 +147,7 @@ export default function PortfolioPage() {
             </div>
             {wallet.address && (
               <p className="text-xs text-slate-500 font-mono flex items-center gap-1.5">
-                <Wallet size={11} className="shrink-0" /> {truncateAddress(wallet.address)} · SoDEX Testnet
+                <Wallet size={11} className="shrink-0" /> {truncateAddress(wallet.address)} · SoDEX {USE_TESTNET ? 'Testnet' : 'Mainnet'}
               </p>
             )}
           </div>
@@ -176,7 +176,7 @@ export default function PortfolioPage() {
               {Array(3).fill(0).map((_, i) => <div key={i} className="shimmer h-16 rounded-xl" />)}
             </div>
           ) : Object.keys(balances).length === 0 ? (
-            <p className="text-xs text-slate-600 text-center py-4 font-mono">No balances found on SoDEX Testnet</p>
+            <p className="text-xs text-slate-600 text-center py-4 font-mono">No balances found on SoDEX {USE_TESTNET ? 'Testnet' : 'Mainnet'}</p>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               {Object.entries(balances).map(([currency, amount]) => {
@@ -313,7 +313,7 @@ export default function PortfolioPage() {
                       <div className="text-[10px] text-slate-600">{timeAgo(t.timestamp)}</div>
                     </div>
                     <a
-                      href={`https://testnet.sodex.com/portfolio?address=${wallet.address ?? ''}`}
+                      href={`https://${USE_TESTNET ? 'testnet.' : ''}sodex.com/portfolio?address=${wallet.address ?? ''}`}
                       target="_blank" rel="noopener noreferrer"
                       className="text-slate-600 hover:text-slate-300 transition-colors shrink-0"
                       title="View on SoDEX"

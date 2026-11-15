@@ -1,5 +1,6 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useDashboard } from '../../contexts/DashboardContext';
+import { USE_TESTNET, getBuilderConfig } from '../../services/sodex';
 import { ArrowLeftRight, Zap, TrendingUp, TrendingDown, Sparkles, Droplets, ClockIcon, Send, Copy, Check } from 'lucide-react';
 
 function timeAgo(ms: number): string {
@@ -125,6 +126,8 @@ export default function TradePage() {
     tradeHistory,
   } = useDashboard();
 
+  const builderConfig = useMemo(() => getBuilderConfig(), []);
+
   const assets = [
     {
       id: 'btc' as const,
@@ -132,7 +135,7 @@ export default function TradePage() {
       icon: '₿',
       name: 'Bitcoin',
       price: liveBtcPx ?? latestBtcPx ?? null,
-      pair: 'vBTC / vUSDC',
+      pair: USE_TESTNET ? 'vBTC / vUSDC' : 'BTC / USDC',
     },
     {
       id: 'eth' as const,
@@ -140,7 +143,7 @@ export default function TradePage() {
       icon: 'Ξ',
       name: 'Ethereum',
       price: liveEthPx ?? latestEthPx ?? null,
-      pair: 'vETH / vUSDC',
+      pair: USE_TESTNET ? 'vETH / vUSDC' : 'ETH / USDC',
     },
   ];
 
@@ -156,20 +159,32 @@ export default function TradePage() {
           <h1 className="text-xl font-bold text-white">SoDEX Trade</h1>
         </div>
         <p className="text-sm text-slate-400">
-          Trade BTC &amp; ETH spot pairs on SoDEX testnet · chain 138565
+          Trade BTC &amp; ETH pairs on SoDEX {USE_TESTNET ? 'testnet · chain 138565' : 'mainnet · ValueChain chain 286623'}
         </p>
       </div>
 
-      {/* Testnet notice */}
-      <div
-        style={{ background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.2)' }}
-        className="rounded-xl px-4 py-3 flex items-start gap-2.5"
-      >
-        <span className="text-yellow-400 text-sm shrink-0 mt-0.5">⚠️</span>
-        <p className="text-[11px] text-slate-400 leading-relaxed">
-          <span className="text-yellow-400 font-semibold">Testnet notice:</span> Orders are submitted and signed correctly — SoDEX confirms receipt with a real order ID. Market orders may cancel immediately due to no liquidity on testnet (no active market makers). The full trade pipeline is operational.
-        </p>
-      </div>
+      {/* Network notice */}
+      {USE_TESTNET ? (
+        <div
+          style={{ background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.2)' }}
+          className="rounded-xl px-4 py-3 flex items-start gap-2.5"
+        >
+          <span className="text-yellow-400 text-sm shrink-0 mt-0.5">⚠️</span>
+          <p className="text-[11px] text-slate-400 leading-relaxed">
+            <span className="text-yellow-400 font-semibold">Testnet mode:</span> Orders are submitted and signed correctly via EIP-712.
+          </p>
+        </div>
+      ) : (
+        <div
+          style={{ background: 'rgba(0,255,167,0.06)', border: '1px solid rgba(0,255,167,0.2)' }}
+          className="rounded-xl px-4 py-3 flex items-start gap-2.5"
+        >
+          <Sparkles size={16} style={{ color: '#00FFA7' }} className="shrink-0 mt-0.5" />
+          <div className="text-[11px] text-slate-300 leading-relaxed">
+            <span className="font-semibold text-white">SoDEX Mainnet Trading:</span> Real mainnet order execution on ValueChain (Chain ID 286623). Every order is signed via EIP-712 and routed with integrated <span className="font-mono text-[#00FFA7]">Builder Fee ({builderConfig.fee / 10} bps)</span>{builderConfig.id ? ` · Builder ID #${builderConfig.id}` : ''}.
+          </div>
+        </div>
+      )}
 
       {/* Asset selector */}
       <div
@@ -205,7 +220,7 @@ export default function TradePage() {
         <div>
           <div className="text-xs text-slate-500 font-mono uppercase tracking-wider mb-1">Trading pair</div>
           <div className="text-xl font-bold font-mono text-white">{currentAsset.pair}</div>
-          <div className="text-xs text-slate-500 mt-1">SoDEX Testnet · Spot</div>
+          <div className="text-xs text-slate-500 mt-1">SoDEX {USE_TESTNET ? 'Testnet' : 'Mainnet'} · Spot &amp; Perps</div>
         </div>
         {currentAsset.price && (
           <div className="text-right">
@@ -267,7 +282,7 @@ export default function TradePage() {
           <div>
             <p className="text-sm text-slate-300 font-medium mb-1">Get an AI signal first</p>
             <p className="text-xs text-slate-500 leading-relaxed mb-3">
-              Run Claude's ETF flow analysis to get a BULLISH / BEARISH direction before executing. Signals improve your entry timing.
+              Run Gemini's ETF flow analysis to get a BULLISH / BEARISH direction before executing. Signals improve your entry timing.
             </p>
             <button
               onClick={handleAnalyze}
@@ -328,29 +343,50 @@ export default function TradePage() {
 
       {!wallet.connected && (
         <p className="text-xs text-center text-slate-600 font-mono -mt-2">
-          Connect wallet above to enable trading on SoDEX testnet
+          Connect wallet above to enable trading on SoDEX
         </p>
       )}
 
-      {/* Faucet banner */}
-      <a
-        href={`https://testnet.sodex.com/trade/spot/${currentAsset.id === 'btc' ? 'BTC_USDC' : 'ETH_USDC'}?action=claim`}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="flex items-center justify-between rounded-xl px-4 py-3 transition-all hover:opacity-90 group"
-        style={{ background: 'rgba(0,255,167,0.06)', border: '1px dashed rgba(0,255,167,0.2)' }}
-      >
-        <div className="flex items-center gap-2.5">
-          <Droplets size={15} style={{ color: '#00FFA7' }} className="shrink-0" />
-          <div>
-            <div className="text-xs font-semibold text-slate-200">Need testnet USDC?</div>
-            <div className="text-[11px] text-slate-500">Claim free {currentAsset.label} &amp; USDC from the SoDEX faucet</div>
+      {/* Deposit / Faucet banner */}
+      {USE_TESTNET ? (
+        <a
+          href={`https://testnet.sodex.com/trade/spot/${currentAsset.id === 'btc' ? 'BTC_USDC' : 'ETH_USDC'}?action=claim`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center justify-between rounded-xl px-4 py-3 transition-all hover:opacity-90 group"
+          style={{ background: 'rgba(0,255,167,0.06)', border: '1px dashed rgba(0,255,167,0.2)' }}
+        >
+          <div className="flex items-center gap-2.5">
+            <Droplets size={15} style={{ color: '#00FFA7' }} className="shrink-0" />
+            <div>
+              <div className="text-xs font-semibold text-slate-200">Need testnet USDC?</div>
+              <div className="text-[11px] text-slate-500">Claim free {currentAsset.label} &amp; USDC from the SoDEX faucet</div>
+            </div>
           </div>
-        </div>
-        <span className="text-xs font-semibold px-3 py-1 rounded-lg" style={{ background: 'rgba(0,255,167,0.12)', color: '#00FFA7' }}>
-          Claim →
-        </span>
-      </a>
+          <span className="text-xs font-semibold px-3 py-1 rounded-lg" style={{ background: 'rgba(0,255,167,0.12)', color: '#00FFA7' }}>
+            Claim →
+          </span>
+        </a>
+      ) : (
+        <a
+          href={`https://sodex.com/trade/spot/${currentAsset.id === 'btc' ? 'BTC_USDC' : 'ETH_USDC'}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center justify-between rounded-xl px-4 py-3 transition-all hover:opacity-90 group"
+          style={{ background: 'rgba(0,255,167,0.06)', border: '1px dashed rgba(0,255,167,0.2)' }}
+        >
+          <div className="flex items-center gap-2.5">
+            <Droplets size={15} style={{ color: '#00FFA7' }} className="shrink-0" />
+            <div>
+              <div className="text-xs font-semibold text-slate-200">Deposit on SoDEX Mainnet</div>
+              <div className="text-[11px] text-slate-500">Fund your account with USDC or {currentAsset.label} on ValueChain →</div>
+            </div>
+          </div>
+          <span className="text-xs font-semibold px-3 py-1 rounded-lg" style={{ background: 'rgba(0,255,167,0.12)', color: '#00FFA7' }}>
+            Deposit →
+          </span>
+        </a>
+      )}
 
       {/* Info strip */}
       <div
@@ -358,9 +394,9 @@ export default function TradePage() {
         className="rounded-xl p-4 grid grid-cols-3 gap-4 text-center"
       >
         {[
-          { label: 'Network', value: 'ValueChain' },
-          { label: 'Chain ID', value: '138565' },
-          { label: 'Settlement', value: 'vUSDC' },
+          { label: 'Network', value: USE_TESTNET ? 'ValueChain Testnet' : 'ValueChain Mainnet' },
+          { label: 'Chain ID', value: USE_TESTNET ? '138565' : '286623' },
+          { label: 'Settlement', value: USE_TESTNET ? 'vUSDC' : 'USDC' },
         ].map(item => (
           <div key={item.label}>
             <div className="text-[10px] text-slate-500 uppercase tracking-wider font-mono mb-1">{item.label}</div>

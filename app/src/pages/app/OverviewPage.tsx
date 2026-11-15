@@ -204,11 +204,11 @@ export default function OverviewPage() {
                 style={{ color: '#475569' }} className="hover:text-white transition-colors">SoSoValue</a>
               {' '}·{' '}
               <a href="https://sodex.com" target="_blank" rel="noopener noreferrer"
-                style={{ color: '#475569' }} className="hover:text-white transition-colors">SoDEX Testnet</a>
+                style={{ color: '#475569' }} className="hover:text-white transition-colors">SoDEX</a>
               {' '}·{' '}
-              <span style={{ color: '#475569' }}>Anthropic Claude</span>
+              <span style={{ color: '#475569' }}>Google Gemini</span>
             </p>
-            <p className="text-[10px] text-slate-700">Not financial advice · Testnet only</p>
+            <p className="text-[10px] text-slate-700">Not financial advice · Mainnet trading supported</p>
           </div>
         </div>
 

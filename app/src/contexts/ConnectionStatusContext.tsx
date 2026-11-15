@@ -5,7 +5,7 @@ export type SourceStatus = 'unknown' | 'live' | 'error';
 export interface ConnectionStatus {
   sosovalue: SourceStatus;
   binance: SourceStatus;
-  claude: SourceStatus;
+  gemini: SourceStatus;
 }
 
 export interface ConnectionStatusContextValue {
@@ -18,7 +18,7 @@ const ConnectionStatusContext = createContext<ConnectionStatusContextValue | nul
 const INITIAL_STATUS: ConnectionStatus = {
   sosovalue: 'unknown',
   binance: 'unknown',
-  claude: 'unknown',
+  gemini: 'unknown',
 };
 
 export function ConnectionStatusProvider({ children }: { children: ReactNode }) {

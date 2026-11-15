@@ -66,10 +66,10 @@ export function Footer() {
             style={{ color: 'var(--brand-accent)' }} className="hover:underline">SoSoValue</a>
           {' '}· Trading on{' '}
           <a href="https://sodex.com" target="_blank" rel="noopener noreferrer"
-            style={{ color: 'var(--brand-accent)' }} className="hover:underline">SoDEX Testnet</a>
-          {' '}· AI by Anthropic Claude
+            style={{ color: 'var(--brand-accent)' }} className="hover:underline">SoDEX</a>
+          {' '}· AI by Google Gemini
         </p>
-        <p className="text-xs text-slate-700 mt-2">Not financial advice · Testnet only</p>
+        <p className="text-xs text-slate-700 mt-2">Not financial advice · Mainnet trading supported</p>
       </div>
     </footer>
   );

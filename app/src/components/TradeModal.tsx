@@ -6,7 +6,7 @@ import {
   ChevronUp, ChevronDown, CheckCircle2, XCircle,
 } from 'lucide-react';
 import type { MarketSignal, OrderSide, TradeOrder } from '../types';
-import { fetchBalances, getPerpsMaxLeverage, getQuantityPrecision, updatePerpsCollateral } from '../services/sodex';
+import { fetchBalances, getPerpsMaxLeverage, getQuantityPrecision, updatePerpsCollateral, USE_TESTNET, getBuilderConfig } from '../services/sodex';
 import { computePositionSize, computeLeveragedRisk, type LeveragedRiskResult } from '../services/riskManager';
 
 function RiskPanel({
@@ -39,7 +39,7 @@ function RiskPanel({
   const warnings = [
     risk.riskRewardWarning && 'Risk/reward below 1.5x',
     risk.atrWarning && 'Stop-loss beyond 3x ATR',
-    risk.clamped && 'Clamped to 10 vUSDC minimum',
+    risk.clamped && `Clamped to 10 ${USE_TESTNET ? 'vUSDC' : 'USDC'} minimum`,
     risk.capped && 'Capped to 20% of balance',
     leveraged?.liquidationWarning && 'Liquidation within 15% of entry',
   ].filter((w): w is string => Boolean(w));
@@ -397,7 +397,7 @@ export function TradeModal({
                 } {displaySymbol}
               </div>
               <div className="text-xs text-slate-500">
-                SoDEX · {marketType === 'spot' ? 'Spot' : `Futures · ${leverage}x ${marginMode}`} · {orderType === 'MARKET' ? 'Market' : 'Limit'} · {currency}
+                SoDEX {USE_TESTNET ? 'Testnet' : 'Mainnet'} · {marketType === 'spot' ? 'Spot' : `Futures · ${leverage}x ${marginMode}`} · {orderType === 'MARKET' ? 'Market' : 'Limit'} · {currency}
               </div>
             </div>
           </div>
@@ -834,6 +834,12 @@ export function TradeModal({
                   Leverage amplifies both gains and losses. At {leverage}x, a small adverse price move can liquidate your entire margin.
                 </p>
               )}
+            </div>
+
+            {/* ── Builder fee indicator ─────────────────────────────────── */}
+            <div className="flex items-center justify-between text-[11px] font-mono text-slate-500 mb-3 px-1">
+              <span>Network: {USE_TESTNET ? 'ValueChain Testnet (138565)' : 'ValueChain Mainnet (286623)'}</span>
+              <span style={{ color: '#00FFA7' }}>Builder Fee: {(getBuilderConfig().fee / 10).toFixed(1)} bps{getBuilderConfig().id ? ` (#${getBuilderConfig().id})` : ''}</span>
             </div>
 
             {/* ── Acknowledgment ────────────────────────────────────────── */}

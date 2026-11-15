@@ -168,8 +168,8 @@ export function HowItWorksPage() {
                   ['Google Gemini', 'gemini-2.5-flash via /api/analyze', 'Market signal synthesis'],
                   ['Binance', 'wss://stream.binance.com — miniTicker', 'Live BTC/ETH price, ~1s cadence'],
                   ['Binance', '/api/v3/klines', 'Hourly/daily candles — charts + real 24h backtest evaluation'],
-                  ['SoDEX', 'gw.sodex.com/api/v1/spot', 'EIP-712 signed spot order placement'],
-                  ['SoDEX', 'gw.sodex.com/api/v1/perps', 'EIP-712 signed perps order placement + position history'],
+                  ['SoDEX', 'mainnet-gw.sodex.dev/api/v1/spot', 'EIP-712 signed spot order placement + Builder Fee'],
+                  ['SoDEX', 'mainnet-gw.sodex.dev/api/v1/perps', 'EIP-712 signed perps order placement + Builder Fee + position history'],
                   ['Upstash Redis', 'REST API', 'Signal archive with real evaluated outcomes'],
                 ].map(([src, ep, purpose], i) => (
                   <tr key={i} style={{ borderTop: '1px solid var(--brand-border)' }}>

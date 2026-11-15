@@ -35,7 +35,7 @@ export function WalletGate({ connected, onConnect, children }: WalletGateProps) 
         </h2>
         <p className="text-slate-400 text-sm leading-relaxed mb-8">
           Connect your wallet to access the ETFSignal AI dashboard —
-          live ETF flows, AI signals, and SoDEX testnet trading.
+          live ETF flows, Gemini AI signals, and SoDEX trading.
         </p>
 
         {/* Feature pills */}

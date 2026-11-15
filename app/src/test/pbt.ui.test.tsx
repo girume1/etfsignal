@@ -56,8 +56,14 @@ vi.mock('../services/ai', () => ({
 
 vi.mock('../services/sodex', () => ({
   placeSpotOrder: vi.fn(),
+  placePerpsOrder: vi.fn(),
   truncateAddress: vi.fn((addr: string) => `${addr.slice(0, 6)}...${addr.slice(-4)}`),
   connectWallet: vi.fn(),
+  USE_TESTNET: false,
+  CHAIN_ID: 286623,
+  CHAIN_ID_HEX: '0x45F9F',
+  getBuilderConfig: vi.fn(() => ({ fee: 50 })),
+  setBuilderConfig: vi.fn(),
 }));
 
 // ─── P18: Density mode class mapping ─────────────────────────────────────────

@@ -523,7 +523,7 @@ export function LandingPage() {
                 handle: '@BlessinSum',
                 wave: 2,
                 stars: 5,
-                quote: 'One of the most complete signal-to-execution submissions this wave. The full EIP-712 pipeline on SoDEX testnet is verified — real order IDs returned, signing envelope confirmed, symbolID resolved dynamically at runtime.',
+                quote: 'One of the most complete signal-to-execution submissions this wave. The full EIP-712 pipeline on SoDEX is verified — real order IDs returned, signing envelope confirmed, symbolID resolved dynamically at runtime.',
               },
               {
                 handle: '@0xmiharbi',
@@ -541,7 +541,7 @@ export function LandingPage() {
                 handle: '@SmartCoded',
                 wave: 1,
                 stars: 4,
-                quote: 'Server-side Claude proxy keeping the API key off the browser is exactly right. The sentiment gauge with zone colors makes ETF flow readable to retail.',
+                quote: 'Server-side Gemini proxy keeping the API key off the browser is exactly right. The sentiment gauge with zone colors makes ETF flow readable to retail.',
               },
             ].map((v, i) => (
               <motion.div

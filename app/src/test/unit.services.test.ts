@@ -73,7 +73,7 @@ describe('fetchEtfMetrics', () => {
 // Validates: Requirements 3.4
 
 describe('analyzeMarket', () => {
-  it('returns NEUTRAL signal with confidence 50 when Claude response is not valid JSON', async () => {
+  it('returns NEUTRAL signal with confidence 50 when Gemini response is not valid JSON', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
@@ -88,14 +88,14 @@ describe('analyzeMarket', () => {
     expect(result.headline.length).toBeGreaterThan(0);
   });
 
-  it('returns all required MarketSignal fields when Claude response is valid JSON', async () => {
+  it('returns all required MarketSignal fields when Gemini response is valid JSON', async () => {
     const mockSignal = {
       direction: 'BULLISH',
       confidence: 75,
       headline: 'Strong inflows signal bullish momentum',
       summary: 'BTC ETF inflows hit $500M, breaking 7-day streak.',
       keyFactors: ['IBIT leads with $300M', 'ETH rotation into BTC', 'Macro tailwinds'],
-      tradeIdea: 'Long BTC on SoDEX testnet above $95k.',
+      tradeIdea: 'Long BTC on SoDEX above $95k.',
       riskWarning: 'Fed minutes may reverse momentum.',
       entryZone: { low: 94000, high: 96000 },
       takeProfit: { price: 102000, pct: 7.5, rationale: 'ATH resistance zone' },

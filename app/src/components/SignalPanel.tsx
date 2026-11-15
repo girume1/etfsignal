@@ -137,7 +137,7 @@ export function SignalPanel({
           </div>
           <div className="text-center">
             <p className="text-slate-300 text-sm font-medium">Synthesizing signal…</p>
-            <p className="text-slate-500 text-xs mt-1">Reading ETF flows + news with Claude AI</p>
+            <p className="text-slate-500 text-xs mt-1">Reading ETF flows + news with Gemini AI</p>
           </div>
         </div>
       )}
@@ -383,7 +383,7 @@ export function SignalPanel({
 
             {!walletConnected && (
               <p className="text-[10px] text-center text-slate-600 font-mono">
-                Connect wallet to execute on SoDEX testnet
+                Connect wallet to execute on SoDEX
               </p>
             )}
           </div>

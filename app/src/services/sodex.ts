@@ -1,16 +1,49 @@
 import { ethers } from 'ethers';
 import type { TradeOrder, PerpsPosition } from '../types';
 
-const USE_TESTNET  = import.meta.env.VITE_SODEX_NETWORK === 'testnet';
-const MAINNET_GW   = 'https://gw.sodex.com/api/v1/spot';
-const MAINNET_PERPS_GW = 'https://gw.sodex.com/api/v1/perps';
+export const USE_TESTNET  = import.meta.env.VITE_SODEX_NETWORK === 'testnet';
+const MAINNET_GW   = 'https://mainnet-gw.sodex.dev/api/v1/spot';
+const MAINNET_PERPS_GW = 'https://mainnet-gw.sodex.dev/api/v1/perps';
 const TESTNET_GW_SPOT  = 'https://testnet-gw.sodex.dev/api/v1/spot';
 const TESTNET_GW_PERPS = 'https://testnet-gw.sodex.dev/api/v1/perps';
 
 const TESTNET_GW  = USE_TESTNET ? TESTNET_GW_SPOT  : MAINNET_GW;
 const PERPS_GW    = USE_TESTNET ? TESTNET_GW_PERPS : MAINNET_PERPS_GW;
-const CHAIN_ID     = USE_TESTNET ? 138565  : 286623;   // testnet: ValueChain testnet | mainnet: ValueChain
-const CHAIN_ID_HEX = USE_TESTNET ? '0x21D45' : '0x45F9F'; // hex for wallet_switchEthereumChain
+export const CHAIN_ID     = USE_TESTNET ? 138565  : 286623;   // testnet: ValueChain testnet | mainnet: ValueChain
+export const CHAIN_ID_HEX = USE_TESTNET ? '0x21D45' : '0x45F9F'; // hex for wallet_switchEthereumChain
+
+// ─── Builder Integration ──────────────────────────────────────────────────────
+// SoDEX Builder Race: attach Builder ID & fee (in basis points) to generate builder fees.
+export function getBuilderConfig(): { id?: number; fee: number } {
+  try {
+    const storedId = typeof window !== 'undefined' ? localStorage.getItem('etfsignal.builder_id') : null;
+    const envId = import.meta.env.VITE_SODEX_BUILDER_ID;
+    const rawId = storedId ?? envId;
+    const id = rawId ? Number(rawId) : undefined;
+
+    const storedFee = typeof window !== 'undefined' ? localStorage.getItem('etfsignal.builder_fee') : null;
+    const envFee = import.meta.env.VITE_SODEX_BUILDER_FEE;
+    const rawFee = storedFee ?? envFee;
+    const fee = rawFee ? Number(rawFee) : 50; // default 50 = 5 bp (0.05%)
+
+    return { id: id && !isNaN(id) ? id : undefined, fee: isNaN(fee) ? 50 : fee };
+  } catch {
+    return { fee: 50 };
+  }
+}
+
+export function setBuilderConfig(id?: number | string | null, fee?: number | string | null): void {
+  try {
+    if (id !== undefined && id !== null && String(id).trim() !== '') {
+      localStorage.setItem('etfsignal.builder_id', String(id).trim());
+    } else if (id === null || id === '') {
+      localStorage.removeItem('etfsignal.builder_id');
+    }
+    if (fee !== undefined && fee !== null && String(fee).trim() !== '') {
+      localStorage.setItem('etfsignal.builder_fee', String(fee).trim());
+    }
+  } catch {}
+}
 
 // Symbol ID cache — populated at runtime from GET /markets/symbols
 // Do NOT hardcode these; they may differ between testnet deployments.
@@ -192,7 +225,7 @@ const types = {
 // ─── Network switch ───────────────────────────────────────────────────────────
 
 async function ensureSoDEXNetwork(): Promise<void> {
-  if (!window.ethereum) throw new Error('No wallet found. Please install MetaMask.');
+  if (!window.ethereum) throw new Error('No wallet found. Please install MetaMask or another Web3 wallet.');
 
   const currentChain = await window.ethereum.request({ method: 'eth_chainId' });
   if (parseInt(currentChain, 16) === CHAIN_ID) return;
@@ -203,14 +236,30 @@ async function ensureSoDEXNetwork(): Promise<void> {
       params: [{ chainId: CHAIN_ID_HEX }],
     });
   } catch (switchErr: any) {
-    if (switchErr.code === 4902) {
-      const networkLabel = USE_TESTNET ? 'SoDEX Testnet' : 'SoDEX (ValueChain)';
-      const connectUrl   = USE_TESTNET ? 'https://testnet.sodex.com' : 'https://sodex.com';
-      throw new Error(
-        `${networkLabel} is not in your wallet yet.\n\n` +
-        `1. Go to ${connectUrl} and connect your wallet — it will auto-add the network.\n` +
-        '2. Come back here and try again.'
-      );
+    if (switchErr.code === 4902 || switchErr?.message?.includes('Unrecognized chain')) {
+      const networkLabel = USE_TESTNET ? 'ValueChain Testnet' : 'ValueChain Mainnet';
+      const rpcUrl       = USE_TESTNET ? 'https://testnet.valuechain.xyz' : 'https://mainnet.valuechain.xyz';
+      const explorerUrl  = USE_TESTNET ? 'https://testnet-scan.valuechain.xyz' : 'https://main-scan.valuechain.xyz';
+      try {
+        await window.ethereum.request({
+          method: 'wallet_addEthereumChain',
+          params: [{
+            chainId: CHAIN_ID_HEX,
+            chainName: networkLabel,
+            nativeCurrency: { name: 'SOSO', symbol: 'SOSO', decimals: 18 },
+            rpcUrls: [rpcUrl],
+            blockExplorerUrls: [explorerUrl],
+          }],
+        });
+        return;
+      } catch (addErr: any) {
+        const connectUrl = USE_TESTNET ? 'https://testnet.sodex.com' : 'https://sodex.com';
+        throw new Error(
+          `${networkLabel} is not in your wallet yet.\n\n` +
+          `1. Go to ${connectUrl} and connect your wallet — it will auto-add the network.\n` +
+          '2. Come back here and try again.'
+        );
+      }
     }
     throw new Error(`Could not switch to SoDEX network: ${switchErr.message ?? switchErr}`);
   }
@@ -235,7 +284,7 @@ async function fetchAccountId(address: string, baseUrl: string = TESTNET_GW): Pr
     );
   }
 
-  const aid = json.data?.aid ?? json.data?.accountId ?? json.data?.id ?? json.data?.account_id;
+  const aid = json.data?.aid ?? json.data?.accountId ?? json.data?.id ?? json.data?.account_id ?? json.data?.primaryAccountID;
   if (!aid) {
     const registerUrl = USE_TESTNET ? 'https://testnet.sodex.com' : 'https://sodex.com';
     throw new Error(
@@ -435,7 +484,11 @@ export async function placeSpotOrder(
       orderItem.quantity = String(order.quantity); // limit BUY/SELL or market SELL: X base asset
     }
 
-    const requestBody = { accountID: aid, orders: [orderItem] };
+    const builder = getBuilderConfig();
+    const requestBody: Record<string, unknown> = { accountID: aid, orders: [orderItem] };
+    if (builder.id) {
+      requestBody.builder = { id: builder.id, fee: builder.fee };
+    }
 
     // 5. Sign the envelope: { type: 'batchNewOrder', params: requestBody }
     // Per SoDEX support: use wrapper with type "batchNewOrder" (not "newOrder").
@@ -675,8 +728,12 @@ export async function placePerpsOrder(
       });
     }
 
-    // PerpsNewOrderRequest: accountID, symbolID, orders
-    const requestBody = { accountID: aid, symbolID, orders };
+    // PerpsNewOrderRequest: accountID, symbolID, orders, builder (optional)
+    const builder = getBuilderConfig();
+    const requestBody: Record<string, unknown> = { accountID: aid, symbolID, orders };
+    if (builder.id) {
+      requestBody.builder = { id: builder.id, fee: builder.fee };
+    }
 
     // Signing envelope: { type: 'newOrder', params: requestBody }, domain "futures"
     const signingEnvelope = { type: 'newOrder', params: requestBody };

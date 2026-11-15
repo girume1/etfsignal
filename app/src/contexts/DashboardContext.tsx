@@ -16,7 +16,7 @@ import { deriveAlerts } from '../services/alerts';
 import type { HistoricalInflow, PricePoint } from '../types';
 import { computeSentiment } from '../services/sentiment';
 import { analyzeMarket } from '../services/ai';
-import { placeSpotOrder, placePerpsOrder } from '../services/sodex';
+import { placeSpotOrder, placePerpsOrder, USE_TESTNET } from '../services/sodex';
 import { notifyTelegramSubscribers, notifyTelegramTrade } from '../services/telegram';
 import { saveTrade, getTradeHistory } from '../services/tradeHistory';
 import { useLivePrices } from '../hooks/useLivePrices';
@@ -119,7 +119,7 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
   // Sync wallet state + ethers signer whenever Dynamic's primary wallet changes
   useEffect(() => {
     const address = primaryWallet?.address ?? null;
-    setWallet({ connected: !!address, address, network: address ? 'testnet' : null });
+    setWallet({ connected: !!address, address, network: address ? (USE_TESTNET ? 'testnet' : 'mainnet') : null });
 
     if (primaryWallet) {
       getSigner(primaryWallet)
@@ -327,12 +327,12 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
       // Fire-and-forget: notify Telegram subscribers (never blocks the UI)
       notifyTelegramSubscribers(r, activeLabel).catch(() => {});
       setHistory(await fetchSignalHistory());
-      setSourceStatus('claude', 'live');
+      setSourceStatus('gemini', 'live');
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Claude analysis failed.';
+      const msg = err instanceof Error ? err.message : 'Gemini analysis failed.';
       console.error(err);
       setSignalError(msg);
-      setSourceStatus('claude', 'error');
+      setSourceStatus('gemini', 'error');
     } finally {
       setSignalLoading(false);
     }

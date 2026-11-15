@@ -20,13 +20,13 @@ const STEPS = [
   {
     icon: Zap,
     title: 'AI Signals',
-    body: 'Claude analyzes flows, news, and momentum to produce directional signals with real backtested performance.',
+    body: 'Gemini analyzes flows, news, and momentum to produce directional signals with real backtested performance.',
     path: '/app/signals',
   },
   {
     icon: ArrowLeftRight,
     title: 'SoDEX Trade',
-    body: 'Execute signals directly on SoDEX testnet, with half-Kelly position sizing and risk/reward guardrails.',
+    body: 'Execute signals directly on SoDEX, with half-Kelly position sizing and risk/reward guardrails.',
     path: '/app/trade',
   },
 ];

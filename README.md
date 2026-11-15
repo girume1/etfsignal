@@ -154,10 +154,14 @@ UPSTASH_REDIS_REST_URL=...
 UPSTASH_REDIS_REST_TOKEN=...
 CHARTIMG_API_KEY=...          # chart-img.com (free tier: 50/day)
 SODEX_PRIVATE_KEY=0x...       # mainnet wallet private key (server-side order signing)
+SODEX_BUILDER_ID=123456       # SoDEX Builder Account ID for Builder Fee attribution
+SODEX_BUILDER_FEE=50          # Builder fee in 0.1 bps (50 = 5 bps = 0.05%)
 # SODEX_NETWORK=testnet       # uncomment to route to testnet instead
 
 # CLIENT-SIDE (VITE_ prefix = bundled into browser)
 VITE_DYNAMIC_ENVIRONMENT_ID=your_dynamic_environment_id_here
+VITE_SODEX_BUILDER_ID=123456  # SoDEX Builder Account ID attached to EIP-712 signed orders
+VITE_SODEX_BUILDER_FEE=50     # Builder fee in 0.1 bps (50 = 5 bps = 0.05%)
 # VITE_SODEX_NETWORK=testnet  # must match SODEX_NETWORK if set
 ```
 
@@ -180,10 +184,14 @@ Open [http://localhost:5173](http://localhost:5173) 🎉
 | `GEMINI_API_KEY` | ✅ | Gemini AI signal generation |
 | `SOSO_API_KEY` | ✅ | Live ETF flow data |
 | `VITE_DYNAMIC_ENVIRONMENT_ID` | ✅ | Wallet connection (Dynamic) |
+| `VITE_SODEX_BUILDER_ID` | ✅ | SoDEX Builder Account ID (client EIP-712 order builder fee attribution) |
+| `VITE_SODEX_BUILDER_FEE` | Optional | Builder fee in 0.1 bps (default `50` = 5 bps = 0.05%) |
+| `SODEX_BUILDER_ID` | Optional | SoDEX Builder Account ID (server-side order signing) |
+| `SODEX_BUILDER_FEE` | Optional | Server-side builder fee in 0.1 bps (default `50`) |
 | `TELEGRAM_BOT_TOKEN` | ✅ | Telegram bot |
 | `UPSTASH_REDIS_REST_URL` | ✅ | Signal archive + subscriber persistence |
 | `UPSTASH_REDIS_REST_TOKEN` | ✅ | Upstash Redis auth |
-| `SODEX_PRIVATE_KEY` | ✅ | Mainnet wallet private key (server-side order signing) |
+| `SODEX_PRIVATE_KEY` | Optional | Mainnet wallet private key (server-side order signing) |
 | `CHARTIMG_API_KEY` | Optional | TradingView-style chart images in bot |
 | `SODEX_NETWORK` | Optional | Set to `testnet` to use testnet gateway instead |
 
@@ -259,8 +267,8 @@ etfsignal/
 | **Binance** | `wss://stream.binance.com:9443/stream` | Live BTC/ETH price — `miniTicker` ~1s updates |
 | **Binance** | `GET /api/v3/klines` | Daily/hourly candles — chart price history + backtest evaluation |
 | **Gemini AI** | `gemini-2.5-flash` via `/api/analyze` | Signal synthesis + AskAI follow-up |
-| **SoDEX** | `POST gw.sodex.com/api/v1/spot/trade/orders/batch` | EIP-712 signed spot order placement (domain `spot`, envelope `batchNewOrder`) |
-| **SoDEX** | `POST gw.sodex.com/api/v1/perps/trade/orders` | EIP-712 signed perps order placement (domain `futures`, envelope `newOrder`) |
+| **SoDEX** | `POST mainnet-gw.sodex.dev/api/v1/spot/trade/orders/batch` | EIP-712 signed spot order placement (domain `spot`, envelope `batchNewOrder`, Builder Fee attribution) |
+| **SoDEX** | `POST mainnet-gw.sodex.dev/api/v1/perps/trade/orders` | EIP-712 signed perps order placement (domain `futures`, envelope `newOrder`, Builder Fee attribution) |
 | **SoDEX** | `GET .../perps/accounts/{addr}/positions/history` | Real liquidation status (`isTakenOver`/`takeOverPrice`) for closed perps positions |
 | **Upstash Redis** | REST API | Signal archive (100 signals, incl. outcome/evaluatedAt) + Telegram subscribers + wallet links |
 | **chart-img.com** | `GET /v1/tradingview/advanced-chart` | TradingView-style chart images for bot (primary) |

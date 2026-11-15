@@ -1,10 +1,11 @@
 import { useState, useRef, useEffect } from 'react';
 import { Copy, ExternalLink, LogOut, ChevronUp, ChevronDown } from 'lucide-react';
 import type { WalletState } from '../types';
-import { truncateAddress } from '../services/sodex';
+import { truncateAddress, USE_TESTNET, CHAIN_ID } from '../services/sodex';
 import { useDashboard } from '../contexts/DashboardContext';
 
-const EXPLORER = 'https://testnet.sodex.com/portfolio?address=';
+const EXPLORER = `https://${USE_TESTNET ? 'testnet.' : ''}sodex.com/portfolio?address=`;
+const EXPLORER_HOST = `${USE_TESTNET ? 'testnet.' : ''}sodex.com`;
 
 interface WalletMenuProps {
   wallet: WalletState;
@@ -112,13 +113,13 @@ export function WalletMenu({ wallet, onConnect, onDisconnect }: WalletMenuProps)
                 className="text-[10px] px-2 py-0.5 rounded-full font-mono uppercase tracking-wider flex items-center gap-1"
               >
                 <span className="w-1.5 h-1.5 rounded-full bg-green-400 inline-block shrink-0" />
-                SoDEX Testnet
+                SoDEX {USE_TESTNET ? 'Testnet' : 'Mainnet'}
               </span>
               <span
                 style={{ color: '#64748B' }}
                 className="text-[10px] font-mono"
               >
-                chain 138565
+                chain {CHAIN_ID}
               </span>
             </div>
           </div>
@@ -145,7 +146,7 @@ export function WalletMenu({ wallet, onConnect, onDisconnect }: WalletMenuProps)
               </span>
               <div className="flex-1 min-w-0">
                 <div className="text-sm text-slate-200">View on Explorer</div>
-                <div className="text-[10px] text-slate-500 truncate">testnet.sodex.com</div>
+                <div className="text-[10px] text-slate-500 truncate">{EXPLORER_HOST}</div>
               </div>
             </a>
             <div style={{ borderTop: '1px solid var(--brand-border)' }} className="mt-1 pt-1">

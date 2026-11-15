@@ -19,7 +19,7 @@ function makeSignal(direction: SignalDirection): MarketSignal {
     headline: 'Test headline for unit test',
     summary: 'Test summary with specific numbers like $500M inflows.',
     keyFactors: ['Factor one', 'Factor two', 'Factor three'],
-    tradeIdea: 'Long BTC on SoDEX testnet above $95k.',
+    tradeIdea: 'Long BTC on SoDEX above $95k.',
     riskWarning: 'Fed policy may reverse this thesis.',
     entryZone: { low: 94000, high: 96000 },
     takeProfit: { price: 102000, pct: 7.5, rationale: 'ATH resistance zone' },
@@ -110,13 +110,12 @@ describe('TradeModal', () => {
     expect(confirmBtn).toBeDisabled();
   });
 
-  it('displays "Testnet" text prominently (Requirement 9.7)', () => {
+  it('displays network text prominently (Requirement 9.7)', () => {
     render(<TradeModal {...defaultProps} />);
 
-    // "Testnet" appears in multiple places: the header subtitle, the risk paragraph,
-    // and the acknowledgment text. Use getAllByText since multiple matches are expected.
-    const testnetElements = screen.getAllByText(/testnet/i);
-    expect(testnetElements.length).toBeGreaterThan(0);
+    // "Mainnet" or "Testnet" appears in multiple places: the header subtitle and network indicator.
+    const networkElements = screen.getAllByText(/mainnet|testnet/i);
+    expect(networkElements.length).toBeGreaterThan(0);
   });
 
   it('works correctly for a SELL (Short) order', () => {
@@ -166,15 +165,15 @@ describe('SignalPanel', () => {
       <SignalPanel
         {...defaultProps}
         signal={null}
-        error="Claude API error: 500"
+        error="Gemini API error: 500"
       />,
     );
 
-    expect(screen.getByText('Claude API error: 500')).toBeInTheDocument();
+    expect(screen.getByText('Gemini API error: 500')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /retry/i })).toBeInTheDocument();
   });
 
-  it('renders "Connect wallet to execute on SoDEX testnet" when wallet is not connected', () => {
+  it('renders "Connect wallet to execute on SoDEX" when wallet is not connected', () => {
     render(
       <SignalPanel {...defaultProps} signal={makeSignal('BULLISH')} walletConnected={false} />,
     );

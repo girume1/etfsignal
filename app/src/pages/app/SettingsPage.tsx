@@ -2,7 +2,7 @@ import { Settings as SettingsIcon, LogOut, Copy, ExternalLink, Trash2, Camera } 
 import { useState, useRef, useEffect } from 'react';
 import { useDashboard } from '../../contexts/DashboardContext';
 import { DensityToggle } from '../../components/DensityToggle';
-import { truncateAddress } from '../../services/sodex';
+import { truncateAddress, USE_TESTNET, CHAIN_ID, getBuilderConfig, setBuilderConfig } from '../../services/sodex';
 import { clearTradeHistory } from '../../services/tradeHistory';
 import { setProfile, resizeImageToDataUrl } from '../../services/profile';
 
@@ -26,6 +26,17 @@ export default function SettingsPage() {
   const [nameSaved, setNameSaved] = useState(false);
   const [avatarError, setAvatarError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const initialBuilder = getBuilderConfig();
+  const [builderId, setBuilderId] = useState(initialBuilder.id ? String(initialBuilder.id) : '');
+  const [builderFee, setBuilderFee] = useState(String(initialBuilder.fee));
+  const [builderSaved, setBuilderSaved] = useState(false);
+
+  function saveBuilder() {
+    setBuilderConfig(builderId, builderFee);
+    setBuilderSaved(true);
+    setTimeout(() => setBuilderSaved(false), 1500);
+  }
 
   // Sync local field when the underlying profile changes (e.g. wallet switch)
   useEffect(() => setName(profile.name), [profile.name]);
@@ -138,7 +149,7 @@ export default function SettingsPage() {
             <div className="flex items-center justify-between gap-3 flex-wrap">
               <div>
                 <div className="text-sm font-mono text-white">{truncateAddress(wallet.address)}</div>
-                <div className="text-[10px] text-slate-500 font-mono mt-0.5">SoDEX Testnet · chain 138565</div>
+                <div className="text-[10px] text-slate-500 font-mono mt-0.5">SoDEX {USE_TESTNET ? 'Testnet' : 'Mainnet'} · chain {CHAIN_ID}</div>
               </div>
               <div className="flex items-center gap-2">
                 <button
@@ -149,7 +160,7 @@ export default function SettingsPage() {
                   <Copy size={12} className="shrink-0" /> {copied ? 'Copied!' : 'Copy Address'}
                 </button>
                 <a
-                  href={`https://testnet.sodex.com/portfolio?address=${wallet.address}`}
+                  href={`https://${USE_TESTNET ? 'testnet.' : ''}sodex.com/portfolio?address=${wallet.address}`}
                   target="_blank" rel="noopener noreferrer"
                   className="text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors"
                   style={{ background: 'rgba(255,255,255,0.05)', color: '#94A3B8' }}
@@ -170,6 +181,50 @@ export default function SettingsPage() {
           )}
         </SettingsCard>
 
+        <SettingsCard title="SoDEX Builder Integration">
+          <p className="text-xs text-slate-500 mb-3">
+            Configure your SoDEX Builder Account ID and fee (in tenths of basis points, e.g. 50 = 5 bps / 0.05%) to earn Builder Fees on mainnet orders.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-2">
+            <div>
+              <label className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold mb-1 block">Builder Account ID</label>
+              <input
+                type="number"
+                value={builderId}
+                onChange={e => setBuilderId(e.target.value)}
+                placeholder="e.g. 456 (or set VITE_SODEX_BUILDER_ID)"
+                style={{ background: 'var(--brand-card)', border: '1px solid var(--brand-border)', color: 'white' }}
+                className="w-full px-3 py-1.5 rounded-lg text-sm font-mono focus:outline-none focus:border-blue-500 transition-colors"
+              />
+            </div>
+            <div>
+              <label className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold mb-1 block">Builder Fee (tenths of bps)</label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  value={builderFee}
+                  onChange={e => setBuilderFee(e.target.value)}
+                  placeholder="50"
+                  min={0}
+                  max={200}
+                  style={{ background: 'var(--brand-card)', border: '1px solid var(--brand-border)', color: 'white' }}
+                  className="flex-1 px-3 py-1.5 rounded-lg text-sm font-mono focus:outline-none focus:border-blue-500 transition-colors"
+                />
+                <button
+                  onClick={saveBuilder}
+                  className="text-xs px-3 py-1.5 rounded-lg font-semibold transition-colors shrink-0"
+                  style={{ background: 'rgba(0,255,167,0.12)', color: builderSaved ? '#34D399' : '#00FFA7' }}
+                >
+                  {builderSaved ? 'Saved!' : 'Save'}
+                </button>
+              </div>
+            </div>
+          </div>
+          <p className="text-[10px] text-slate-600 font-mono">
+            When Builder ID is set, every signed Spot &amp; Perps order appends <code className="text-slate-400">{`{"builder":{"id":${builderId || 'ID'},"fee":${builderFee || '50'}}}`}</code> before EIP-712 hashing.
+          </p>
+        </SettingsCard>
+
         <SettingsCard title="Data">
           <div className="flex items-center justify-between">
             <p className="text-xs text-slate-500">Clear your locally stored trade history (does not affect on-chain data).</p>
@@ -183,7 +238,7 @@ export default function SettingsPage() {
           </div>
         </SettingsCard>
 
-        <p className="text-[10px] text-slate-700 text-center font-mono">ETFSignalAI · Testnet only · Not financial advice</p>
+        <p className="text-[10px] text-slate-700 text-center font-mono">ETFSignalAI · Mainnet trading supported · Not financial advice</p>
       </div>
     </div>
   );

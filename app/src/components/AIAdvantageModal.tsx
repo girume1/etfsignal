@@ -14,9 +14,9 @@ const STEPS = [
   },
   {
     icon: Bot,
-    color: '#A78BFA',
-    title: 'Claude AI Analysis',
-    desc: 'Anthropic\'s Claude synthesizes ETF flows, live news sentiment, and macro context into a structured BULLISH / BEARISH / NEUTRAL signal with confidence score, key factors, TP & SL levels.',
+    color: '#00FFA7',
+    title: 'Gemini AI Analysis',
+    desc: 'Google Gemini synthesizes ETF flows, live news sentiment, and macro context into a structured BULLISH / BEARISH / NEUTRAL signal with confidence score, key factors, TP & SL levels.',
   },
   {
     icon: TrendingUp,
@@ -28,14 +28,14 @@ const STEPS = [
     icon: ShieldCheck,
     color: '#FF7637',
     title: 'EIP-712 Signed Execution',
-    desc: 'Execute directly on SoDEX testnet — spot, or leveraged perps with market/limit orders, TP/SL bracket orders, reduce-only, and isolated/cross margin. Every order is signed with your wallet key using EIP-712 — no private keys leave your device, no centralized custody.',
+    desc: 'Execute directly on SoDEX — spot, or leveraged perps with market/limit orders, TP/SL bracket orders, reduce-only, and isolated/cross margin. Every order is signed with your wallet key using EIP-712 — no private keys leave your device, no centralized custody.',
   },
 ];
 
 const STATS = [
   { value: '12+', label: 'ETF funds tracked' },
   { value: 'Real-time', label: 'Binance price feed' },
-  { value: 'Claude AI', label: 'Anthropic Sonnet' },
+  { value: 'Gemini AI', label: 'Google 2.5 Flash' },
   { value: 'EIP-712', label: 'On-chain signed' },
 ];
 
@@ -150,7 +150,7 @@ export function AIAdvantageModal({ onClose }: AIAdvantageModalProps) {
         {/* Disclaimer */}
         <p className="text-[10px] text-slate-600 text-center leading-relaxed">
           ETFSignal AI is a research tool. AI signals are not financial advice.
-          All trading is on SoDEX testnet — no real funds at risk.
+          All trading is non-custodial and cryptographically signed on SoDEX.
         </p>
       </div>
     </div>
