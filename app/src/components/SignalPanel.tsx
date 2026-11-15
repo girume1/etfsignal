@@ -94,7 +94,7 @@ export function SignalPanel({
             </div>
             <p className="text-slate-300 text-sm font-medium">No signal yet</p>
             <p className="text-slate-500 text-xs mt-1">
-              Claude will synthesize live {label} ETF flows and news into a structured signal
+              Gemini AI will synthesize live {label} ETF flows and news into a structured signal
             </p>
           </div>
 
