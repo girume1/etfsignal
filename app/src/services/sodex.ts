@@ -1,10 +1,16 @@
 import { ethers } from 'ethers';
 import type { TradeOrder, PerpsPosition } from '../types';
 
-const TESTNET_GW  = 'https://testnet-gw.sodex.dev/api/v1/spot';
-const PERPS_GW    = 'https://testnet-gw.sodex.dev/api/v1/perps';
-const CHAIN_ID     = 138565;         // SoDEX testnet (ValueChain)
-const CHAIN_ID_HEX = '0x21D45';     // hex for wallet_switchEthereumChain
+const USE_TESTNET  = import.meta.env.VITE_SODEX_NETWORK === 'testnet';
+const MAINNET_GW   = 'https://gw.sodex.com/api/v1/spot';
+const MAINNET_PERPS_GW = 'https://gw.sodex.com/api/v1/perps';
+const TESTNET_GW_SPOT  = 'https://testnet-gw.sodex.dev/api/v1/spot';
+const TESTNET_GW_PERPS = 'https://testnet-gw.sodex.dev/api/v1/perps';
+
+const TESTNET_GW  = USE_TESTNET ? TESTNET_GW_SPOT  : MAINNET_GW;
+const PERPS_GW    = USE_TESTNET ? TESTNET_GW_PERPS : MAINNET_PERPS_GW;
+const CHAIN_ID     = USE_TESTNET ? 138565  : 286623;   // testnet: ValueChain testnet | mainnet: ValueChain
+const CHAIN_ID_HEX = USE_TESTNET ? '0x21D45' : '0x45F9F'; // hex for wallet_switchEthereumChain
 
 // Symbol ID cache — populated at runtime from GET /markets/symbols
 // Do NOT hardcode these; they may differ between testnet deployments.
@@ -63,7 +69,7 @@ async function resolveSymbolId(symbol: string): Promise<number> {
 
   // Debug: log what symbols are actually available
   console.error('[sodex] available symbols:', json.data.map((s: any) => s.name ?? s.symbol).join(', '));
-  throw new Error(`Symbol ${symbol} not found on SoDEX testnet`);
+  throw new Error(`Symbol ${symbol} not found on SoDEX`);
 }
 
 // ─── Perps symbol resolution ──────────────────────────────────────────────────
@@ -118,7 +124,7 @@ async function resolvePerpsSymbolId(symbol: string): Promise<number> {
   }
 
   console.error('[sodex] available perps symbols:', json.data.map((s: any) => s.name ?? s.symbol).join(', '));
-  throw new Error(`Perps symbol ${symbol} not found on SoDEX testnet`);
+  throw new Error(`Perps symbol ${symbol} not found on SoDEX`);
 }
 
 // Real per-symbol leverage cap, for the UI slider — falls back to 20x if the
@@ -155,7 +161,7 @@ async function resolvePerpsCoinId(coin: string): Promise<number> {
       return Number(id);
     }
   }
-  throw new Error(`Coin ${coin} not found on SoDEX testnet`);
+  throw new Error(`Coin ${coin} not found on SoDEX`);
 }
 
 // ─── EIP-712 Domain ───────────────────────────────────────────────────────────
@@ -198,13 +204,15 @@ async function ensureSoDEXNetwork(): Promise<void> {
     });
   } catch (switchErr: any) {
     if (switchErr.code === 4902) {
+      const networkLabel = USE_TESTNET ? 'SoDEX Testnet' : 'SoDEX (ValueChain)';
+      const connectUrl   = USE_TESTNET ? 'https://testnet.sodex.com' : 'https://sodex.com';
       throw new Error(
-        'SoDEX Testnet is not in your wallet yet.\n\n' +
-        '1. Go to https://testnet.sodex.com and connect your wallet — it will auto-add the network.\n' +
+        `${networkLabel} is not in your wallet yet.\n\n` +
+        `1. Go to ${connectUrl} and connect your wallet — it will auto-add the network.\n` +
         '2. Come back here and try again.'
       );
     }
-    throw new Error(`Could not switch to SoDEX Testnet: ${switchErr.message ?? switchErr}`);
+    throw new Error(`Could not switch to SoDEX network: ${switchErr.message ?? switchErr}`);
   }
 }
 
@@ -220,17 +228,19 @@ async function fetchAccountId(address: string, baseUrl: string = TESTNET_GW): Pr
 
   if (!res.ok || json.code !== 0) {
     const msg = json.msg || json.message || json.error || `HTTP ${res.status}`;
+    const registerUrl = USE_TESTNET ? 'https://testnet.sodex.com' : 'https://sodex.com';
     throw new Error(
       `SoDEX account not found (${msg}).\n` +
-      'Please connect your wallet at https://testnet.sodex.com first to register your account.'
+      `Please connect your wallet at ${registerUrl} first to register your account.`
     );
   }
 
   const aid = json.data?.aid ?? json.data?.accountId ?? json.data?.id ?? json.data?.account_id;
   if (!aid) {
+    const registerUrl = USE_TESTNET ? 'https://testnet.sodex.com' : 'https://sodex.com';
     throw new Error(
       'Could not read account ID from SoDEX.\n' +
-      'Please connect your wallet at https://testnet.sodex.com first.'
+      `Please connect your wallet at ${registerUrl} first.`
     );
   }
   return Number(aid);
@@ -319,12 +329,12 @@ export async function signOrder(
       message,
     );
   } catch (err: any) {
-    // Viem validates chainId on signTypedData — wallet must be on SoDEX testnet
+    // Viem validates chainId on signTypedData — wallet must be on the correct SoDEX network
     const msg: string = err?.message ?? String(err);
     if (msg.includes('chainId') || msg.includes('chain')) {
       throw new Error(
-        `Wrong network. Switch your wallet to SoDEX Testnet (chain 138565).\n\n` +
-        `Visit testnet.sodex.com and connect your wallet — it will add the network automatically.`
+        `Wrong network. Switch your wallet to SoDEX (chain ${CHAIN_ID}).\n\n` +
+        `Visit ${USE_TESTNET ? 'testnet.' : ''}sodex.com and connect your wallet — it will add the network automatically.`
       );
     }
     throw err;
@@ -354,17 +364,17 @@ export async function signOrder(
 function friendlyError(msg: string): string {
   const m = msg.toLowerCase();
   if (m.includes('cancel only'))
-    return 'This market is temporarily paused on SoDEX testnet. Try BTC-USDC or check back later.';
+    return 'This market is temporarily paused on SoDEX. Try BTC-USDC or check back later.';
   if (m.includes('symbol is not active') || m.includes('not active'))
-    return 'This market is currently halted on SoDEX testnet. Try again shortly.';
+    return 'This market is currently halted on SoDEX. Try again shortly.';
   if (m.includes('no liquidity') || m.includes('insufficient liquidity'))
-    return 'No liquidity on testnet — order submitted but no counterparty. This is expected on testnet.';
+    return 'No liquidity available — order submitted but no counterparty matched.';
   if (m.includes('insufficient') || m.includes('balance'))
-    return 'Insufficient balance. Claim testnet funds from the SoDEX faucet first.';
+    return 'Insufficient balance. Please deposit funds to your SoDEX account first.';
   if (m.includes('api key not found') || m.includes('unauthorized'))
-    return 'Signing error — wallet may not be registered on SoDEX testnet. Visit testnet.sodex.com to register.';
+    return 'Signing error — wallet may not be registered on SoDEX. Visit sodex.com to register.';
   if (m.includes('notional is invalid'))
-    return 'Order value is too small — below SoDEX testnet\'s minimum order size for this market ($5 spot, $10 perps).';
+    return 'Order value is too small — below SoDEX\'s minimum order size for this market ($5 spot, $10 perps).';
   if (m.includes('invalid payload') || m.includes('quantity is invalid'))
     return 'Invalid order size. Try a different amount.';
   return msg;
@@ -384,7 +394,7 @@ export async function placeSpotOrder(
   order: TradeOrder,
 ): Promise<PlaceOrderResult> {
   try {
-    // 1. Switch to SoDEX testnet chain
+    // 1. Switch to the correct SoDEX network chain
     await ensureSoDEXNetwork();
 
     const address = await signer.getAddress();

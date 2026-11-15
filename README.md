@@ -19,13 +19,13 @@
 
 [![Live Demo](https://img.shields.io/badge/🚀%20Live%20Demo-etfsignal.vercel.app-0057FF?style=for-the-badge)](https://etfsignal.vercel.app)
 [![Telegram Bot](https://img.shields.io/badge/🤖%20Telegram-ETFSignalAIBot-26A5E4?style=for-the-badge)](https://t.me/ETFSignalAIBot)
-[![Testnet](https://img.shields.io/badge/⛓%20SoDEX-Testnet-00C2FF?style=for-the-badge)](https://sodex.com)
+[![Mainnet](https://img.shields.io/badge/⛓%20SoDEX-Mainnet-00C2FF?style=for-the-badge)](https://sodex.com)
 [![Buildathon](https://img.shields.io/badge/🏆%20SoSoValue-Buildathon%202026-purple?style=for-the-badge)](https://sosovalue.com)
 [![License](https://img.shields.io/badge/license-MIT-green?style=for-the-badge)](LICENSE)
 
 <br/>
 
-> **⚠️ Testnet Only** · Not financial advice · Built for SoSoValue Buildathon 2026
+> **⚠️ Mainnet Trading** · Not financial advice · Built for SoSoValue Buildathon 2026
 
 </div>
 
@@ -37,14 +37,14 @@ Most crypto traders are drowning in noise. BTC/ETH spot ETF flows, institutional
 
 **ETFSignal AI** closes that gap.
 
-It pulls institutional ETF flow data from SoSoValue, streams live BTC/ETH prices from Binance, computes a live sentiment score, synthesizes everything with Claude AI into a structured signal with TP/SL levels and factor weights — then lets you execute directly on SoDEX testnet (spot, or perps long/short with market **or limit** orders, adjustable leverage up to each market's real max, TP/SL bracket orders, reduce-only, and isolated/cross margin) and receive a personal Telegram alert when your trade executes.
+It pulls institutional ETF flow data from SoSoValue, streams live BTC/ETH prices from Binance, computes a live sentiment score, synthesizes everything with Gemini AI into a structured signal with TP/SL levels and factor weights — then lets you execute directly on SoDEX (spot, or perps long/short with market **or limit** orders, adjustable leverage up to each market's real max, TP/SL bracket orders, reduce-only, and isolated/cross margin) and receive a personal Telegram alert when your trade executes.
 
 Every signal is backtested against real hourly price data — hit rate, average P&L, and max drawdown are computed from actual TP/SL outcomes, not simulated numbers. Before you trade, a half-Kelly risk panel recommends a position size and flags risk-reward and liquidation risk; after you trade, the Portfolio page shows what actually happened, including whether a leveraged position was genuinely liquidated (straight from SoDEX's own record, not a guess).
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │                                                                     │
-│   SoSoValue API          Claude AI           SoDEX Testnet         │
+│   SoSoValue API          Gemini AI           SoDEX Mainnet        │
 │   ─────────────    →    ───────────    →    ─────────────────────  │
 │   ETF Flows             Synthesize           Place Order           │
 │   News Feed             Signal + TP/SL       EIP-712 Sign          │
@@ -68,10 +68,10 @@ Every signal is backtested against real hourly price data — hit rate, average 
 | **2. Live Price** | Streams real-time BTC/ETH price from Binance WebSocket (~1s cadence); auto-reconnects |
 | **3. Sentiment** | Computes a 0–100 flow sentiment score from 14-day momentum + inflow breadth |
 | **4. Enrich** | Pulls categorised news: on-chain events, institutional reports, price alerts, research |
-| **5. Analyze** | Claude AI synthesises everything into a structured signal: direction, confidence, key factors, TP/SL, risk warning, factor weights |
+| **5. Analyze** | Gemini AI synthesises everything into a structured signal: direction, confidence, key factors, TP/SL, risk warning, factor weights |
 | **6. Signal** | Dashboard shows BULLISH / BEARISH / NEUTRAL with factor breakdown bars, headline, summary, trade idea, AskAI follow-up chat |
 | **7. Size** | Half-Kelly risk panel recommends a position size from balance + confidence + TP/SL, with risk-reward, ATR, and (for perps) liquidation-price warnings |
-| **8. Execute** | User connects wallet, reviews order, acknowledges risk, signs via EIP-712, submits to SoDEX testnet — spot (buy/sell) or perps (long/short, market/limit, up to each market's real max leverage, optional TP/SL bracket order + reduce-only, isolated/cross margin) |
+| **8. Execute** | User connects wallet, reviews order, acknowledges risk, signs via EIP-712, submits to SoDEX — spot (buy/sell) or perps (long/short, market/limit, up to each market's real max leverage, optional TP/SL bracket order + reduce-only, isolated/cross margin) |
 | **9. Alert** | Telegram bot sends personal trade confirmation with Order ID to linked wallet |
 | **10. Archive** | Signal stored in Upstash Redis with TP/SL; evaluated 24h later against real Binance hourly candles — HIT/MISS/EXPIRED, not a price-delta guess |
 | **11. Track** | Portfolio page shows real trade + perps position history, including SoDEX's own liquidation record for closed leveraged positions |
@@ -104,7 +104,7 @@ A full-featured companion bot at [@ETFSignalAIBot](https://t.me/ETFSignalAIBot):
 
 | Command | Description |
 |---------|------------|
-| `/signal` or `/btc` | Live BTC AI signal (Claude + SoSoValue data) |
+| `/signal` or `/btc` | Live BTC AI signal (Gemini + SoSoValue data) |
 | `/eth` | Live ETH AI signal |
 | `/status` | BTC & ETH ETF market snapshot |
 | `/ch` | BTC/USDT 1m candlestick chart |
@@ -129,7 +129,7 @@ A full-featured companion bot at [@ETFSignalAIBot](https://t.me/ETFSignalAIBot):
 - Node.js 18+
 - Any EVM wallet (MetaMask or Rabby)
 - SoSoValue API key ([apply here](https://sosovalue.com/developer/dashboard))
-- Anthropic API key ([get here](https://console.anthropic.com))
+- Google Gemini API key ([get here](https://aistudio.google.com/apikey))
 
 ### 1. Clone & Install
 
@@ -146,16 +146,19 @@ cp .env.example .env
 ```
 
 ```env
-# SERVER-SIDE — consumed by Vercel Edge Functions only, never sent to browser
-ANTHROPIC_API_KEY=sk-ant-...
-SOSOVALUE_API_KEY=SOSO-...
+# SERVER-SIDE — consumed by Vercel serverless functions only, never sent to browser
+GEMINI_API_KEY=AIza...
+SOSO_API_KEY=SOSO-...
 TELEGRAM_BOT_TOKEN=...
 UPSTASH_REDIS_REST_URL=...
 UPSTASH_REDIS_REST_TOKEN=...
 CHARTIMG_API_KEY=...          # chart-img.com (free tier: 50/day)
+SODEX_PRIVATE_KEY=0x...       # mainnet wallet private key (server-side order signing)
+# SODEX_NETWORK=testnet       # uncomment to route to testnet instead
 
 # CLIENT-SIDE (VITE_ prefix = bundled into browser)
 VITE_DYNAMIC_ENVIRONMENT_ID=your_dynamic_environment_id_here
+# VITE_SODEX_NETWORK=testnet  # must match SODEX_NETWORK if set
 ```
 
 > **Security note:** All API keys have **no** `VITE_` prefix — they are server-only variables consumed by Vercel Edge Functions. They are never bundled into the browser build.
@@ -174,13 +177,15 @@ Open [http://localhost:5173](http://localhost:5173) 🎉
 
 | Key | Required | Purpose |
 |-----|----------|---------|
-| `ANTHROPIC_API_KEY` | ✅ | Claude AI signal generation |
-| `SOSOVALUE_API_KEY` | ✅ | Live ETF flow data |
+| `GEMINI_API_KEY` | ✅ | Gemini AI signal generation |
+| `SOSO_API_KEY` | ✅ | Live ETF flow data |
 | `VITE_DYNAMIC_ENVIRONMENT_ID` | ✅ | Wallet connection (Dynamic) |
 | `TELEGRAM_BOT_TOKEN` | ✅ | Telegram bot |
 | `UPSTASH_REDIS_REST_URL` | ✅ | Signal archive + subscriber persistence |
 | `UPSTASH_REDIS_REST_TOKEN` | ✅ | Upstash Redis auth |
+| `SODEX_PRIVATE_KEY` | ✅ | Mainnet wallet private key (server-side order signing) |
 | `CHARTIMG_API_KEY` | Optional | TradingView-style chart images in bot |
+| `SODEX_NETWORK` | Optional | Set to `testnet` to use testnet gateway instead |
 
 ---
 
@@ -189,7 +194,7 @@ Open [http://localhost:5173](http://localhost:5173) 🎉
 ```
 etfsignal/
 ├── api/                          # Vercel serverless / Edge Functions
-│   ├── analyze.ts                # Claude proxy (ANTHROPIC_API_KEY server-side)
+│   ├── analyze.ts                # Gemini AI proxy (GEMINI_API_KEY server-side)
 │   ├── sosovalue.ts              # SoSoValue data proxy
 │   ├── chart.ts                  # Chart image generator (chart-img.com + QuickChart fallback)
 │   ├── signal-archive.ts         # Signal archive — GET/POST/PATCH via Upstash Redis
@@ -212,7 +217,7 @@ etfsignal/
         │
         ├── services/
         │   ├── sosovalue.ts          # SoSoValue API client — normalizes stringified API numbers to real numbers
-        │   ├── ai.ts                 # Claude signal synthesis + AskAI follow-up + backtest/flow context
+        │   ├── ai.ts                 # Gemini signal synthesis + AskAI follow-up + backtest/flow context
         │   ├── sodex.ts              # EIP-712 signing + SoDEX spot & perps order placement
         │   ├── backtester.ts         # Pure: replays signals against real hourly candles → HIT/MISS/EXPIRED
         │   ├── riskManager.ts        # Pure: half-Kelly sizing, ATR/R:R warnings, leveraged margin + liquidation estimate
@@ -253,10 +258,10 @@ etfsignal/
 | **SoSoValue** | `GET /api/v1/news/featured` | Categorised crypto news feed |
 | **Binance** | `wss://stream.binance.com:9443/stream` | Live BTC/ETH price — `miniTicker` ~1s updates |
 | **Binance** | `GET /api/v3/klines` | Daily/hourly candles — chart price history + backtest evaluation |
-| **Claude AI** | `claude-sonnet-4-6` via `/api/analyze` | Signal synthesis + AskAI follow-up |
-| **SoDEX Testnet** | `POST testnet-gw.sodex.dev/api/v1/spot/trade/orders/batch` | EIP-712 signed spot order placement (domain `spot`, envelope `batchNewOrder`) |
-| **SoDEX Testnet** | `POST testnet-gw.sodex.dev/api/v1/perps/trade/orders` | EIP-712 signed perps order placement (domain `futures`, envelope `newOrder`) |
-| **SoDEX Testnet** | `GET .../perps/accounts/{addr}/positions/history` | Real liquidation status (`isTakenOver`/`takeOverPrice`) for closed perps positions |
+| **Gemini AI** | `gemini-2.5-flash` via `/api/analyze` | Signal synthesis + AskAI follow-up |
+| **SoDEX** | `POST gw.sodex.com/api/v1/spot/trade/orders/batch` | EIP-712 signed spot order placement (domain `spot`, envelope `batchNewOrder`) |
+| **SoDEX** | `POST gw.sodex.com/api/v1/perps/trade/orders` | EIP-712 signed perps order placement (domain `futures`, envelope `newOrder`) |
+| **SoDEX** | `GET .../perps/accounts/{addr}/positions/history` | Real liquidation status (`isTakenOver`/`takeOverPrice`) for closed perps positions |
 | **Upstash Redis** | REST API | Signal archive (100 signals, incl. outcome/evaluatedAt) + Telegram subscribers + wallet links |
 | **chart-img.com** | `GET /v1/tradingview/advanced-chart` | TradingView-style chart images for bot (primary) |
 | **Bybit / Kraken / OKX** | kline REST endpoints | Fallback chain if chart-img.com or Binance is unreachable |
@@ -313,7 +318,7 @@ interface RiskResult {
 ## 🛡️ Safety & Risk Controls
 
 - **Explicit risk acknowledgment** — checkbox required before any trade executes
-- **Risk warning displayed** — Claude's risk thesis shown before confirmation, plus a leverage-specific warning for perps
+- **Risk warning displayed** — Gemini's risk thesis shown before confirmation, plus a leverage-specific warning for perps
 - **Half-Kelly position sizing** — recommended size from balance, confidence, and TP/SL, with a 10 vUSDC floor and 20%-of-balance ceiling
 - **Risk-reward + ATR warnings** — flagged when r < 1.5 or a stop-loss sits beyond 3× ATR
 - **Liquidation awareness** — estimated liquidation price shown before a leveraged trade; real liquidation status (SoDEX's own record) shown after, in Portfolio
@@ -322,7 +327,7 @@ interface RiskResult {
 - **Minimum order size surfaced** — SoDEX's real per-market floor ($5 spot, $10 perps) shown before you submit, not just after a rejection
 - **Confidence score** — visual bar shows AI certainty (0–100%)
 - **TP/SL levels** — concrete price targets with rationale for every signal
-- **Testnet-only** — all trades go to SoDEX testnet (`chainId: 138565`), no real funds
+- **Live mainnet trading** — all trades go to SoDEX mainnet (`chainId: 286623`) on ValueChain
 - **"Not financial advice"** — displayed on every signal card and trade modal
 - **Order proof** — Order ID + status shown after every successful submission
 - **API key isolation** — All server keys live only in Vercel Edge Functions, never in the browser
@@ -332,7 +337,7 @@ interface RiskResult {
 ## 🗺️ Buildathon Roadmap
 
 ```
-Wave 1  ✅  Full scaffold · SoSoValue live data · Claude AI signals · SoDEX EIP-712 trades
+Wave 1  ✅  Full scaffold · SoSoValue live data · Gemini AI signals · SoDEX EIP-712 trades
             5-page app shell · Bloomberg ticker · Binance live price stream (● LIVE indicator)
             Recharts interactive charts · Sentiment gauge · AskAI chat · Alerts feed
             Dynamic multi-wallet · Wallet-gated dashboard · Density toggle
@@ -367,7 +372,7 @@ Wave 3  ✅  Real backtesting — hit rate/avg P&L/max drawdown from actual TP/S
 | User Value & Practical Impact | **30%** | Real backtested hit rate/P&L, half-Kelly position sizing, and liquidation-aware perps trading turn ETF flow data into risk-managed, actionable trades |
 | Functionality & Working Demo | **25%** | Live at etfsignal.vercel.app — full pipeline: live data → AI signal → risk-sized EIP-712 trade (spot or perps) → Telegram alert → real 24h evaluation |
 | Logic, Workflow & Product Design | **20%** | 9-page app, shared data context, real backtester + risk manager as pure testable modules, signal archive with genuine TP/SL outcomes, perps position tracking |
-| Data / API Integration | **15%** | SoSoValue + Binance (WS + REST) + Claude AI + SoDEX spot & perps testnet + Upstash Redis + chart-img.com/Bybit/Kraken/OKX fallback + Ethereum RPC |
+| Data / API Integration | **15%** | SoSoValue + Binance (WS + REST) + Gemini AI + SoDEX spot & perps mainnet + Upstash Redis + chart-img.com/Bybit/Kraken/OKX fallback + Ethereum RPC |
 | UX & Clarity | **10%** | Bloomberg cockpit, recharts, live ticker, Dynamic wallet, onboarding tour, factor breakdown bars, real vs estimated stats clearly labeled |
 
 ---
@@ -384,9 +389,9 @@ Wave 3  ✅  Real backtesting — hit rate/avg P&L/max drawdown from actual TP/S
 | Wallet | Dynamic (`@dynamic-labs/sdk-react-core`) — MetaMask, Rabby, WalletConnect + 300 more |
 | Web3 | ethers.js v6 (EIP-712 signing via Dynamic signer) |
 | Live Data | Binance WebSocket `miniTicker` stream (BTC + ETH, ~1s cadence) |
-| AI | Anthropic Claude `claude-sonnet-4-6` (Vercel Node.js Function) |
+| AI | Google Gemini `gemini-2.5-flash` (Vercel Node.js Function) |
 | Data | SoSoValue REST API |
-| Trading | SoDEX Testnet REST — spot (`batchNewOrder`, domain `spot`) + perps (`newOrder`, domain `futures`), symbolID-based, EIP-712 signed by the connected wallet |
+| Trading | SoDEX Mainnet REST — spot (`batchNewOrder`, domain `spot`) + perps (`newOrder`, domain `futures`), symbolID-based, EIP-712 signed by the connected wallet |
 | Backtesting | Pure TS module replaying signals against Binance hourly candles — no I/O, fully unit-tested |
 | Persistence | Upstash Redis (REST API — signal archive, subscribers, wallet links) |
 | Bot | Telegram Bot API (Vercel Edge Function webhook) |
@@ -427,6 +432,6 @@ TELEGRAM_BOT_TOKEN=your_token node scripts/setup-telegram-webhook.js
 
 **ETFSignal AI** · SoSoValue Buildathon 2026 · Wave 3
 
-*Data by [SoSoValue](https://sosovalue.com) · Live prices by [Binance](https://binance.com) · Trading on [SoDEX Testnet](https://sodex.com) · AI by [Anthropic Claude](https://anthropic.com) · Wallet by [Dynamic](https://dynamic.xyz) · Bot on [Telegram](https://t.me/ETFSignalAIBot)*
+*Data by [SoSoValue](https://sosovalue.com) · Live prices by [Binance](https://binance.com) · Trading on [SoDEX](https://sodex.com) · AI by [Google Gemini](https://deepmind.google/gemini) · Wallet by [Dynamic](https://dynamic.xyz) · Bot on [Telegram](https://t.me/ETFSignalAIBot)*
 
 </div>

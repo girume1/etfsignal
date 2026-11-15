@@ -54,7 +54,7 @@ async function main() {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       commands: [
-        { command: 'signal',      description: 'Live BTC ETF signal (Claude AI)' },
+        { command: 'signal',      description: 'Live BTC ETF signal (Gemini AI)' },
         { command: 'btc',         description: 'BTC-specific AI signal' },
         { command: 'eth',         description: 'ETH-specific AI signal' },
         { command: 'status',      description: 'Live BTC & ETH ETF market snapshot' },
@@ -83,8 +83,8 @@ async function main() {
 
 Required Vercel env vars:
   TELEGRAM_BOT_TOKEN        ✓ (already set)
-  ANTHROPIC_API_KEY         — needed for /signal, /btc, /eth
-  SOSOVALUE_API_KEY         — needed for live ETF data
+  GEMINI_API_KEY            — needed for /signal, /btc, /eth
+  SOSO_API_KEY              — needed for live ETF data
 
 Optional (for subscriber persistence):
   UPSTASH_REDIS_REST_URL    — Upstash Redis endpoint

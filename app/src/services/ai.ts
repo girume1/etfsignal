@@ -67,7 +67,7 @@ Return ONLY valid JSON (no markdown, no backticks) in this exact format:
   "headline": "<one punchy sentence, max 12 words>",
   "summary": "<2-3 sentences explaining the signal with specific numbers>",
   "keyFactors": ["<factor 1>", "<factor 2>", "<factor 3>"],
-  "tradeIdea": "<specific, actionable suggestion referencing SoDEX testnet>",
+  "tradeIdea": "<specific, actionable suggestion referencing SoDEX>",
   "riskWarning": "<one sentence about the main risk to this thesis>",
   "entryZone": {
     "low": <number — lower bound of optimal entry price in USD>,
@@ -140,7 +140,6 @@ Answer the user's question concisely (2-4 sentences max). Reference specific num
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      model: 'claude-sonnet-4-6',
       max_tokens: 400,
       system: systemContext,
       messages,
@@ -161,13 +160,12 @@ export async function analyzeMarket(
 ): Promise<MarketSignal> {
   const prompt = buildPrompt(etfType, etfData, news, currentPrice ?? null, context);
 
-  // Calls our serverless function — NOT Anthropic directly
+  // Calls our serverless function — NOT Google directly
   // API key stays safe on the server
   const response = await fetch('/api/analyze', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      model: 'claude-sonnet-4-6',
       max_tokens: 1000,
       messages: [{ role: 'user', content: prompt }],
     }),

@@ -397,7 +397,7 @@ export function TradeModal({
                 } {displaySymbol}
               </div>
               <div className="text-xs text-slate-500">
-                SoDEX Testnet · {marketType === 'spot' ? 'Spot' : `Futures · ${leverage}x ${marginMode}`} · {orderType === 'MARKET' ? 'Market' : 'Limit'} · {currency}
+                SoDEX · {marketType === 'spot' ? 'Spot' : `Futures · ${leverage}x ${marginMode}`} · {orderType === 'MARKET' ? 'Market' : 'Limit'} · {currency}
               </div>
             </div>
           </div>
@@ -694,20 +694,20 @@ export function TradeModal({
                   className="rounded-xl px-3 py-3 mb-2"
                 >
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-semibold text-slate-300">No {quoteAsset} found on SoDEX Testnet</span>
+                    <span className="text-xs font-semibold text-slate-300">No {quoteAsset} found on SoDEX</span>
                     <a
-                      href={`https://testnet.sodex.com/trade/spot/${baseAsset}_USDC?action=claim`}
+                      href={`https://sodex.com/trade/spot/${baseAsset}_USDC`}
                       target="_blank" rel="noopener noreferrer"
                       className="text-xs font-bold hover:opacity-80 transition-opacity inline-flex items-center gap-1"
                       style={{ color: '#00FFA7' }}
                     >
-                      Claim from Faucet
+                      Deposit on SoDEX
                       <ExternalLink size={10} className="shrink-0" />
                     </a>
                   </div>
                   <ol className="text-[10px] text-slate-500 space-y-0.5 list-none">
-                    <li>1. Connect your wallet at <a href="https://testnet.sodex.com" target="_blank" rel="noopener noreferrer" className="text-slate-400 underline">testnet.sodex.com</a> (registers your account)</li>
-                    <li>2. Click "Claim from Faucet" above to get free testnet {baseAsset} &amp; USDC</li>
+                    <li>1. Connect your wallet at <a href="https://sodex.com" target="_blank" rel="noopener noreferrer" className="text-slate-400 underline">sodex.com</a> (registers your account)</li>
+                    <li>2. Deposit {quoteAsset} to your SoDEX account</li>
                     <li>3. Return here and click the refresh icon ↻ to reload your balance</li>
                   </ol>
                 </div>
@@ -831,7 +831,7 @@ export function TradeModal({
               <p className="text-xs text-slate-400 leading-relaxed">{signal.riskWarning}</p>
               {marketType === 'futures' && (
                 <p className="text-xs text-slate-400 leading-relaxed mt-1.5 pt-1.5" style={{ borderTop: '1px solid rgba(251,191,36,0.15)' }}>
-                  Leverage amplifies both gains and losses. At {leverage}x, a small adverse price move can liquidate your entire margin — this is testnet, but the mechanics mirror mainnet risk.
+                  Leverage amplifies both gains and losses. At {leverage}x, a small adverse price move can liquidate your entire margin.
                 </p>
               )}
             </div>
@@ -845,7 +845,7 @@ export function TradeModal({
                 className="mt-1 accent-blue-500"
               />
               <span className="text-xs text-slate-400">
-                I understand this is a testnet trade, I am responsible for my own decisions, and this is not financial advice.
+                I understand this is a live trade, I am responsible for my own decisions, and this is not financial advice.
               </span>
             </label>
 
@@ -893,7 +893,7 @@ export function TradeModal({
             {result.success ? (
               <>
                 <p className="text-sm text-slate-400 mb-4">
-                  Your {marketType === 'spot' ? (isLong ? 'buy' : 'sell') : (isLong ? 'long' : 'short')} {orderType === 'LIMIT' ? 'limit' : 'market'} order was submitted to SoDEX Testnet.
+                  Your {marketType === 'spot' ? (isLong ? 'buy' : 'sell') : (isLong ? 'long' : 'short')} {orderType === 'LIMIT' ? 'limit' : 'market'} order was submitted to SoDEX.
                 </p>
 
                 {/* Order proof card */}
@@ -916,7 +916,7 @@ export function TradeModal({
                 </div>
 
                 <a
-                  href={`https://testnet.sodex.com/trade/${marketType}/${sodexSymbol}`}
+                  href={`https://sodex.com/trade/${marketType}/${sodexSymbol}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   style={{ background: 'linear-gradient(135deg,#00FFA7,#A78BFA)', color: '#06080B' }}

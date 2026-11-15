@@ -23,8 +23,8 @@ export function HowItWorksPage() {
       num: '03',
       title: 'Analyze',
       subtitle: 'AI synthesis',
-      desc: 'Claude AI receives a structured payload of ETF flow data + recent news headlines. It analyzes the institutional money movement patterns, cross-references news context, and synthesizes everything into a directional signal.',
-      tech: ['Claude Sonnet 4', 'Structured JSON output', 'Hidden via serverless'],
+      desc: 'Gemini AI receives a structured payload of ETF flow data + recent news headlines. It analyzes the institutional money movement patterns, cross-references news context, and synthesizes everything into a directional signal.',
+      tech: ['Gemini 2.5 Flash', 'Structured JSON output', 'Hidden via serverless'],
       color: '#00FFA7',
     },
     {
@@ -47,8 +47,8 @@ export function HowItWorksPage() {
       num: '06',
       title: 'Execute',
       subtitle: 'On-chain confirmation',
-      desc: 'User reviews the suggested order, acknowledges the risk warning explicitly, then confirms. The order is signed via EIP-712 with their own wallet and submitted to SoDEX testnet — spot (buy/sell) or perps (long/short, market/limit, adjustable leverage up to each market\'s real max, optional TP/SL bracket order + reduce-only, isolated/cross margin) — no funds at risk during the buildathon.',
-      tech: ['SoDEX Testnet API — spot & perps', 'EIP-712 typed signing', 'Risk acknowledgment'],
+      desc: 'User reviews the suggested order, acknowledges the risk warning explicitly, then confirms. The order is signed via EIP-712 with their own wallet and submitted to SoDEX — spot (buy/sell) or perps (long/short, market/limit, adjustable leverage up to each market\'s real max, optional TP/SL bracket order + reduce-only, isolated/cross margin).',
+      tech: ['SoDEX Mainnet API — spot & perps', 'EIP-712 typed signing', 'Risk acknowledgment'],
       color: '#F59E0B',
     },
     {
@@ -165,11 +165,11 @@ export function HowItWorksPage() {
                 {[
                   ['SoSoValue', '/openapi/v2/etf/currentEtfDataMetrics', 'Live BTC/ETH ETF flow metrics'],
                   ['SoSoValue', '/api/v1/news/featured', 'Categorized crypto news feed'],
-                  ['Anthropic', 'claude-sonnet-4-20250514', 'Market signal synthesis'],
+                  ['Google Gemini', 'gemini-2.5-flash via /api/analyze', 'Market signal synthesis'],
                   ['Binance', 'wss://stream.binance.com — miniTicker', 'Live BTC/ETH price, ~1s cadence'],
                   ['Binance', '/api/v3/klines', 'Hourly/daily candles — charts + real 24h backtest evaluation'],
-                  ['SoDEX Testnet', 'testnet-gw.sodex.dev/api/v1/spot', 'EIP-712 signed spot order placement'],
-                  ['SoDEX Testnet', 'testnet-gw.sodex.dev/api/v1/perps', 'EIP-712 signed perps order placement + position history'],
+                  ['SoDEX', 'gw.sodex.com/api/v1/spot', 'EIP-712 signed spot order placement'],
+                  ['SoDEX', 'gw.sodex.com/api/v1/perps', 'EIP-712 signed perps order placement + position history'],
                   ['Upstash Redis', 'REST API', 'Signal archive with real evaluated outcomes'],
                 ].map(([src, ep, purpose], i) => (
                   <tr key={i} style={{ borderTop: '1px solid var(--brand-border)' }}>

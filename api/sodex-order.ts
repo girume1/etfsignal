@@ -7,8 +7,14 @@
 // Body: { accountID, symbol, side, type, quantity, price? }
 
 // ethers is installed at the root level (root package.json) so it's available to all api/ functions
-const TESTNET_GW = 'https://testnet-gw.sodex.dev/api/v1/spot';
-const CHAIN_ID   = 138565;
+
+// Set SODEX_NETWORK=testnet in your environment to use the testnet gateway.
+// Default (and production) target is mainnet.
+const USE_TESTNET  = process.env.SODEX_NETWORK === 'testnet';
+const MAINNET_GW   = 'https://gw.sodex.com/api/v1/spot';
+const TESTNET_GW   = 'https://testnet-gw.sodex.dev/api/v1/spot';
+const GATEWAY      = USE_TESTNET ? TESTNET_GW : MAINNET_GW;
+const CHAIN_ID     = USE_TESTNET ? 138565 : 286623;
 
 // Symbol ID cache — fetched at runtime, not hardcoded
 const symbolIdCache: Record<string, number> = {};
@@ -18,7 +24,7 @@ async function resolveSymbolId(symbol: string): Promise<number> {
 
   const [base, quote] = symbol.split('-');  // e.g. BTC, USDC
 
-  const res = await fetch(`${TESTNET_GW}/markets/symbols`);
+  const res = await fetch(`${GATEWAY}/markets/symbols`);
   const json: any = await res.json();
   if (!Array.isArray(json.data)) {
     throw new Error('Could not fetch SoDEX symbol list');
@@ -28,7 +34,7 @@ async function resolveSymbolId(symbol: string): Promise<number> {
     const id = s.symbolID ?? s.id;
     if (!id) continue;
 
-    // Case-insensitive match — SoDEX testnet uses VBTC_VUSDC (all-caps)
+    // Case-insensitive match — try multiple name variants across mainnet/testnet
     const name = String(s.name ?? s.symbol ?? s.displayName ?? '').toUpperCase();
     const variants = [`V${base}_V${quote}`, `${base}-${quote}`, `${base}_${quote}`, `${base}${quote}`];
     if (variants.includes(name)) {
@@ -45,7 +51,7 @@ async function resolveSymbolId(symbol: string): Promise<number> {
     }
   }
 
-  throw new Error(`Symbol ${symbol} not found on SoDEX testnet`);
+  throw new Error(`Symbol ${symbol} not found on SoDEX`);
 }
 
 /** Compact JSON preserving insertion order (matches Go's json.Marshal struct field order). */
@@ -156,7 +162,7 @@ export default async function handler(req: any, res: any) {
     };
     if (apiKeyName) submitHeaders['X-API-Key'] = apiKeyName; // only if named API key is registered
 
-    const response = await fetch(`${TESTNET_GW}/trade/orders/batch`, {
+    const response = await fetch(`${GATEWAY}/trade/orders/batch`, {
       method: 'POST',
       headers: submitHeaders,
       body: JSON.stringify(requestBody),

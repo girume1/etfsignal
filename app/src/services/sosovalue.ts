@@ -25,7 +25,17 @@ async function sosoProxy<T>(opts: ProxyOpts): Promise<T> {
   });
   const json: any = await res.json();
 
-  if (!res.ok) throw new Error(json.error || json.msg || `SoSoValue error ${res.status}`);
+  if (!res.ok) {
+    // 500 means SOSOVALUE_API_KEY is not set in Vercel env vars
+    if (res.status === 500 && json.error?.includes('not configured')) {
+      throw new Error('SoSoValue API key not configured — add SOSO_API_KEY to your Vercel environment variables.');
+    }
+    // 403 means the key is invalid or expired
+    if (res.status === 403) {
+      throw new Error('SoSoValue API returned 403 — check that SOSOVALUE_API_KEY is correct and has not expired.');
+    }
+    throw new Error(json.error || json.msg || `SoSoValue error ${res.status}`);
+  }
   return json as T;
 }
 

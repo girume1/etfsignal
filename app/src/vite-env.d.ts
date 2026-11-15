@@ -1,8 +1,8 @@
 /// <reference types="vite/client" />
 
 interface ImportMetaEnv {
-  readonly VITE_SOSOVALUE_API_KEY?: string;
-  readonly VITE_ANTHROPIC_API_KEY?: string;
+  readonly VITE_DYNAMIC_ENVIRONMENT_ID?: string;
+  readonly VITE_SODEX_NETWORK?: string;
 }
 
 interface ImportMeta {

@@ -3,8 +3,8 @@
 //
 // Env vars required:
 //   TELEGRAM_BOT_TOKEN        — Telegram bot HTTP API token
-//   ANTHROPIC_API_KEY         — Claude AI key (for /signal)
-//   SOSOVALUE_API_KEY         — SoSoValue ETF data key (for /status & /signal)
+//   GEMINI_API_KEY            — Google Gemini AI key (for /signal)
+//   SOSO_API_KEY              — SoSoValue ETF data key (for /status & /signal)
 //   UPSTASH_REDIS_REST_URL    — Upstash Redis endpoint (for subscriber persistence)
 //   UPSTASH_REDIS_REST_TOKEN  — Upstash Redis bearer token
 //   ETHERSCAN_API_KEY         — (optional) Etherscan key for higher gas API rate limits
@@ -243,7 +243,7 @@ interface EtfSnapshot {
 }
 
 async function fetchEtfSnapshot(type: 'us-btc-spot' | 'us-eth-spot'): Promise<EtfSnapshot | null> {
-  const apiKey = process.env.SOSOVALUE_API_KEY;
+  const apiKey = process.env.SOSO_API_KEY ?? process.env.SOSOVALUE_API_KEY;
   if (!apiKey) return null;
 
   for (const base of [SOSO_PRIMARY, SOSO_FALLBACK]) {
@@ -316,9 +316,8 @@ function confBar(pct: number): string {
   return `[${'▓'.repeat(filled)}${'░'.repeat(10 - filled)}] ${pct}%`;
 }
 
-// ─── Signal generation (Claude AI + live SoSoValue data) ──────────────────────
-// Routes through /api/analyze (Node.js proxy) — same path the web dashboard uses,
-// avoids Edge-runtime network restrictions when calling api.anthropic.com directly.
+// ─── Signal generation (Gemini AI + live SoSoValue data) ─────────────────────
+// Routes through /api/analyze (Node.js proxy) — same path the web dashboard uses.
 
 async function generateSignal(asset: 'BTC' | 'ETH', baseUrl: string): Promise<string> {
   const etfType = asset === 'BTC' ? 'us-btc-spot' : 'us-eth-spot';
@@ -364,20 +363,19 @@ Respond with ONLY a JSON object (no markdown, no extra text):
     method:  'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      model:      'claude-sonnet-4-6',
       max_tokens: 512,
       messages:   [{ role: 'user', content: prompt }],
     }),
   });
 
-  if (!aiRes.ok) throw new Error(`Claude API error: ${aiRes.status}`);
+  if (!aiRes.ok) throw new Error(`Gemini API error: ${aiRes.status}`);
 
   const aiData: any  = await aiRes.json();
   const raw: string  = aiData?.content?.[0]?.text?.trim() ?? '';
 
   let sig: any;
   try { sig = JSON.parse(raw); }
-  catch { throw new Error('Failed to parse signal JSON from Claude'); }
+  catch { throw new Error('Failed to parse signal JSON from Gemini'); }
 
   const dirEmoji: Record<string, string> = { LONG: '🟢', SHORT: '🔴', NEUTRAL: '🟡' };
   const emoji = dirEmoji[sig.direction] ?? '⚪';
@@ -397,7 +395,7 @@ Respond with ONLY a JSON object (no markdown, no extra text):
     ``,
     `💡 *Analysis:* ${sig.thesis}`,
     ``,
-    snap ? `_SoSoValue ETF flows · Claude AI · SoDEX testnet_` : `_Claude AI · SoDEX testnet_`,
+    snap ? `_SoSoValue ETF flows · Gemini AI · SoDEX_` : `_Gemini AI · SoDEX_`,
     `[View Dashboard](${DASHBOARD_URL})`,
   ].join('\n');
 }
@@ -461,7 +459,7 @@ async function handleStart(token: string, chatId: number, firstName: string) {
   await sendMessage(token, chatId, [
     `👋 *Welcome to ETFSignal AI, ${firstName}!*`,
     ``,
-    `I analyze Bitcoin & Ethereum ETF flows in real-time using SoSoValue institutional data and Claude AI to generate actionable trading signals.`,
+    `I analyze Bitcoin & Ethereum ETF flows in real-time using SoSoValue institutional data and Gemini AI to generate actionable trading signals.`,
     ``,
     `*AI Signals:*`,
     `• /signal or /btc — Live BTC ETF signal`,
@@ -480,8 +478,8 @@ async function handleStart(token: string, chatId: number, firstName: string) {
     `• /link — Link your wallet for trade alerts`,
     ``,
     `📊 *Data:* SoSoValue + Binance + Etherscan`,
-    `🤖 *AI:* Claude AI`,
-    `⛓ *Exchange:* SoDEX testnet · chain 138565`,
+    `🤖 *AI:* Gemini AI`,
+    `⛓ *Exchange:* SoDEX · chain 286623`,
   ].join('\n'));
 }
 
@@ -490,7 +488,7 @@ async function handleHelp(token: string, chatId: number) {
     `🤖 *ETFSignal AI — Commands*`,
     ``,
     `*AI Signals:*`,
-    `*/signal* or */btc* — Live BTC signal (Claude AI + ETF flows)`,
+    `*/signal* or */btc* — Live BTC signal (Gemini AI + ETF flows)`,
     `*/eth* — Live ETH signal`,
     `*/status* — Live BTC & ETH ETF market snapshot`,
     ``,
@@ -600,7 +598,7 @@ async function handleSubscribe(token: string, chatId: number) {
     ``,
     `You will receive automatic notifications when:`,
     `• A new high-confidence signal is generated`,
-    `• A trade is executed on SoDEX testnet`,
+    `• A trade is executed on SoDEX from your wallet`,
     ``,
     `*Your Chat ID:* \`${chatId}\``,
     kv ? `` : `\n⚠️ _Persistence not configured — contact admin to enable auto-alerts._`,
@@ -661,7 +659,6 @@ async function handleLink(token: string, chatId: number, rawCode: string) {
     ``,
     `You will now receive *personal alerts* when:`,
     `• A trade executes on SoDEX from your wallet`,
-    `• Your order ID and status are confirmed`,
     ``,
     `_Use /unlink to disconnect your wallet_`,
     `[Open Dashboard →](${DASHBOARD_URL}/app)`,
@@ -703,7 +700,7 @@ async function handleSignal(
   await sendMessage(
     token,
     chatId,
-    `⚙️ *Analyzing ${asset} ETF flows with Claude AI...*\n_Fetching live SoSoValue data — this takes a few seconds_`,
+    `⚙️ *Analyzing ${asset} ETF flows with Gemini AI...*\n_Fetching live SoSoValue data — this takes a few seconds_`,
   );
 
   try {

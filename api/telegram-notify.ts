@@ -114,7 +114,7 @@ function formatSignalMessage(sig: SignalNotification): string {
     ``,
     `💡 ${sig.thesis}`,
     ``,
-    `_Signal via SoSoValue ETF flows + Claude AI_`,
+    `_Signal via SoSoValue ETF flows + Gemini AI_`,
     `[View Dashboard →](${DASHBOARD_URL})`,
   ]
     .filter(Boolean)
@@ -141,8 +141,7 @@ function formatTradeMessage(body: SignalNotification): string {
   ].filter(Boolean).join(' · ');
 
   return [
-    `✅ *SoDEX Trade Executed*`,
-    ``,
+    `✅ *SoDEX Trade Executed*`,    ``,
     `${emoji} *${dirLabel} ${asset}* · ${marketTag} · ${body.orderType ?? 'MARKET'}`,
     `Pair: \`${body.pair ?? `${asset}-${isFutures ? 'USD' : 'USDC'}`}\``,
     `Size: \`${body.size ?? '—'} ${body.currency ?? asset}${body.price ? ` @ $${body.price}` : ''}\``,

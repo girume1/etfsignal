@@ -29,7 +29,7 @@ const FEATURES = [
   {
     num: '02',
     icon: Sparkles,
-    title: 'Claude AI Signals',
+    title: 'Gemini AI Signals',
     desc: 'Synthesizes ETF flows + breaking news into directional signals with confidence scores, factor weights, TP/SL levels, and risk warnings.',
     color: '#00FFA7',
     glow: 'rgba(0,255,167,0.12)',
@@ -38,7 +38,7 @@ const FEATURES = [
     num: '03',
     icon: Zap,
     title: 'Risk-Managed Execution',
-    desc: 'Half-Kelly position sizing recommends your size before you trade. Sign and submit spot or leveraged perps orders on SoDEX testnet via EIP-712 — testnet-only, zero real capital at risk.',
+    desc: 'Half-Kelly position sizing recommends your size before you trade. Sign and submit spot or leveraged perps orders on SoDEX via EIP-712.',
     color: '#34D399',
     glow: 'rgba(52,211,153,0.15)',
   },
@@ -48,15 +48,15 @@ const STATS = [
   { value: '$53B+', label: 'BTC ETF Net Assets' },
   { value: '12',    label: 'Funds Tracked' },
   { value: '<2s',   label: 'Signal Generation' },
-  { value: '100%',  label: 'Testnet Safe' },
+  { value: 'Live',  label: 'Mainnet Trading' },
 ];
 
 const TECH = [
-  { name: 'SoSoValue',  sub: 'ETF Data API',     color: '#7C3AED' },
-  { name: 'Claude AI',  sub: 'Signal Engine',     color: '#00FFA7' },
-  { name: 'SoDEX',      sub: 'Testnet Exchange',  color: '#34D399' },
-  { name: 'ValueChain', sub: 'L1 Network',        color: '#F59E0B' },
-  { name: 'EIP-712',    sub: 'Typed Signing',     color: '#94A3B8' },
+  { name: 'SoSoValue',  sub: 'ETF Data API',    color: '#7C3AED' },
+  { name: 'Gemini AI',  sub: 'Signal Engine',   color: '#00FFA7' },
+  { name: 'SoDEX',      sub: 'DEX Exchange',    color: '#34D399' },
+  { name: 'ValueChain', sub: 'L1 Network',      color: '#F59E0B' },
+  { name: 'EIP-712',    sub: 'Typed Signing',   color: '#94A3B8' },
 ];
 
 export function LandingPage() {
@@ -150,7 +150,7 @@ export function LandingPage() {
               ETFSignal AI turns institutional Bitcoin & Ethereum ETF flows into{' '}
               <span className="text-white font-medium">plain-English signals with factor weights</span>{' '}
               — then lets you execute directly on{' '}
-              <span style={{ color: 'var(--brand-accent)' }}>SoDEX testnet</span>.
+              <span style={{ color: 'var(--brand-accent)' }}>SoDEX</span>.
             </p>
 
             {/* CTAs */}
@@ -185,9 +185,9 @@ export function LandingPage() {
             >
               {[
                 { dot: '#10B981', label: 'SoSoValue ETF data' },
-                { dot: '#00FFA7', label: 'Claude AI powered' },
+              { dot: '#00FFA7', label: 'Gemini AI powered' },
                 { dot: '#00FFA7', label: 'EIP-712 signed orders' },
-                { dot: '#F59E0B', label: 'Testnet only' },
+                { dot: '#10B981', label: 'SoDEX mainnet' },
               ].map(b => (
                 <div
                   key={b.label}
@@ -377,8 +377,7 @@ export function LandingPage() {
               <div className="text-[10px] font-mono uppercase tracking-widest text-slate-500 mb-4 flex items-center gap-1">
                 <Sparkles size={10} className="shrink-0" />
                 Signal Breakdown — Example
-              </div>
-              {[
+              </div>              {[
                 { factor: 'ETF Daily Inflow',      weight: 38, signal: 'positive' as const, color: '#34D399' },
                 { factor: 'Cumulative Flow Trend', weight: 28, signal: 'positive' as const, color: '#34D399' },
                 { factor: 'News Sentiment',        weight: 22, signal: 'neutral'  as const, color: '#94A3B8' },
@@ -417,7 +416,7 @@ export function LandingPage() {
                 </div>
               ))}
               <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-between">
-                <div className="text-[10px] font-mono text-slate-600">Powered by Claude AI</div>
+                <div className="text-[10px] font-mono text-slate-600">Powered by Gemini AI</div>
                 <div
                   className="text-[11px] font-mono font-bold px-2 py-1 rounded-lg flex items-center gap-1"
                   style={{ background: 'rgba(52,211,153,0.1)', color: '#34D399', border: '1px solid rgba(52,211,153,0.25)' }}
@@ -462,7 +461,7 @@ export function LandingPage() {
               {
                 icon: ArrowLeftRight,
                 title: 'Perps, Long or Short',
-                desc: 'Leveraged execution up to each market\'s real max on SoDEX testnet, with TP/SL bracket orders, reduce-only, isolated/cross margin, and a liquidation-price estimate up front — real liquidation status shown after, sourced from SoDEX\'s own record.',
+                desc: 'Leveraged execution up to each market\'s real max on SoDEX, with TP/SL bracket orders, reduce-only, isolated/cross margin, and a liquidation-price estimate up front — real liquidation status shown after, sourced from SoDEX\'s own record.',
               },
             ].map((f, i) => (
               <motion.div
@@ -610,7 +609,7 @@ export function LandingPage() {
             <ArrowRight size={22} className="shrink-0" />
           </Link>
           <p className="mt-6 text-xs text-slate-600 font-mono">
-            Testnet only · No real funds required · SoDEX demo environment
+            Live mainnet trading · Real funds · SoDEX on ValueChain
           </p>
         </div>
       </section>
