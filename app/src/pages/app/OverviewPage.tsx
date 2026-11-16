@@ -65,7 +65,7 @@ export default function OverviewPage() {
             <p className="text-[10px] font-mono uppercase tracking-widest mb-1.5 flex items-center gap-2"
                style={{ color: '#00FFA7' }}>
               <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse inline-block" />
-              AI Market Analysis
+              The Agent · AI Market Intelligence
             </p>
             <h1 className="font-display text-white text-2xl md:text-3xl leading-tight mb-1">
               Smart Signals.{' '}
@@ -79,7 +79,7 @@ export default function OverviewPage() {
               </span>
             </h1>
             <p className="text-slate-400 text-sm">
-              ETF flows. News sentiment. On-chain data. AI turns noise into actionable signals.
+              ETF flows. News sentiment. On-chain data. The Agent turns noise into actionable signals.
             </p>
           </div>
 
@@ -141,7 +141,7 @@ export default function OverviewPage() {
 
         {/* ── CENTER · AI signal ────────────────────────────────── */}
         <div className={`${mobile ? 'col-span-12' : 'col-span-12 lg:col-span-4'} flex flex-col gap-4`}>
-          <SectionLabel>AI Intelligence</SectionLabel>
+          <SectionLabel>The Agent · AI Market Intelligence</SectionLabel>
 
           {/* Prompt to analyze — subtle, hero button is now in the top bar */}
           {!signal && !signalLoading && (
@@ -206,7 +206,7 @@ export default function OverviewPage() {
               <a href="https://sodex.com" target="_blank" rel="noopener noreferrer"
                 style={{ color: '#475569' }} className="hover:text-white transition-colors">SoDEX</a>
               {' '}·{' '}
-              <span style={{ color: '#475569' }}>Google Gemini</span>
+              <span style={{ color: '#475569' }}>The Agent</span>
             </p>
             <p className="text-[10px] text-slate-700">Not financial advice · Mainnet trading supported</p>
           </div>

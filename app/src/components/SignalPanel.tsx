@@ -4,6 +4,7 @@ import {
   TrendingUp, TrendingDown, AlertTriangle, RefreshCw, Settings2,
 } from 'lucide-react';
 import type { MarketSignal, ActiveTab, SignalWeight } from '../types';
+import { AGENT_BRANDING } from '../config/agentBranding';
 
 interface SignalPanelProps {
   signal: MarketSignal | null;
@@ -94,7 +95,7 @@ export function SignalPanel({
             </div>
             <p className="text-slate-300 text-sm font-medium">No signal yet</p>
             <p className="text-slate-500 text-xs mt-1">
-              Gemini AI will synthesize live {label} ETF flows and news into a structured signal
+              {AGENT_BRANDING.name} will synthesize live {label} ETF flows and news into a structured signal
             </p>
           </div>
 
@@ -137,7 +138,7 @@ export function SignalPanel({
           </div>
           <div className="text-center">
             <p className="text-slate-300 text-sm font-medium">Synthesizing signal…</p>
-            <p className="text-slate-500 text-xs mt-1">Reading ETF flows + news with Gemini AI</p>
+            <p className="text-slate-500 text-xs mt-1">Reading ETF flows + news with {AGENT_BRANDING.name}</p>
           </div>
         </div>
       )}
@@ -152,6 +153,19 @@ export function SignalPanel({
           }}
           className="rounded-xl p-5 flex flex-col gap-4 slide-up"
         >
+          {/* Agent intelligence badge */}
+          <div className="flex items-center justify-between text-[10px] font-mono text-slate-400">
+            <span className="flex items-center gap-1.5">
+              <Sparkles size={11} style={{ color: '#00FFA7' }} className="shrink-0" />
+              <span className="text-slate-200 font-semibold">{AGENT_BRANDING.name}</span>
+              <span className="text-slate-500">· {AGENT_BRANDING.subtitle}</span>
+            </span>
+            <span className="flex items-center gap-1 text-emerald-400">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              ACTIVE
+            </span>
+          </div>
+
           {/* Direction + confidence */}
           <div className="flex items-center justify-between flex-wrap gap-2">
             <span

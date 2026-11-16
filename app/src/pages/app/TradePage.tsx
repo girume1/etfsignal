@@ -252,7 +252,7 @@ export default function TradePage() {
           <div className="flex items-center gap-2 mb-2">
             <Zap size={13} style={{ color: '#00FFA7' }} />
             <span className="text-xs font-semibold uppercase tracking-wider font-mono" style={{ color: '#00FFA7' }}>
-              AI Signal · {currentAsset.label}
+              The Agent Signal · {currentAsset.label}
             </span>
             <span
               className="text-xs font-mono px-2 py-0.5 rounded-full"
@@ -280,9 +280,9 @@ export default function TradePage() {
         >
           <Zap size={16} style={{ color: '#00FFA7', marginTop: 2 }} className="shrink-0" />
           <div>
-            <p className="text-sm text-slate-300 font-medium mb-1">Get an AI signal first</p>
+            <p className="text-sm text-slate-300 font-medium mb-1">Get an Agent signal first</p>
             <p className="text-xs text-slate-500 leading-relaxed mb-3">
-              Run Gemini's ETF flow analysis to get a BULLISH / BEARISH direction before executing. Signals improve your entry timing.
+              Run The Agent's ETF flow analysis to get a BULLISH / BEARISH direction before executing. Signals improve your entry timing.
             </p>
             <button
               onClick={handleAnalyze}

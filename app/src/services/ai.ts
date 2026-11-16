@@ -116,7 +116,7 @@ export async function askFollowUp(
     .slice(0, 5)
     .map(f => `${f.ticker}: ${formatUSD(f.dailyNetInflow.value)}`).join(', ');
 
-  const systemContext = `You are the ETFSignal AI analyst assistant. You just produced this signal for ${etfType}:
+  const systemContext = `You are The Agent, ETFSignalAI's market intelligence assistant. You just produced this signal for ${etfType}:
 ${signal ? `Direction: ${signal.direction} · Confidence: ${signal.confidence}%
 Headline: ${signal.headline}
 Summary: ${signal.summary}` : 'No prior signal yet — answer from the data below.'}

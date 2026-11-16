@@ -329,7 +329,7 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
       setHistory(await fetchSignalHistory());
       setSourceStatus('gemini', 'live');
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Gemini analysis failed.';
+      const msg = err instanceof Error ? err.message : 'Agent analysis failed.';
       console.error(err);
       setSignalError(msg);
       setSourceStatus('gemini', 'error');

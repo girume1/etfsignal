@@ -1,5 +1,6 @@
 import { ReactNode } from 'react';
-import { BarChart2, Bot, Zap, Newspaper } from 'lucide-react';
+import { BarChart2, Sparkles, Zap, Newspaper } from 'lucide-react';
+import { AGENT_BRANDING } from '../config/agentBranding';
 
 interface WalletGateProps {
   connected: boolean;
@@ -35,14 +36,14 @@ export function WalletGate({ connected, onConnect, children }: WalletGateProps) 
         </h2>
         <p className="text-slate-400 text-sm leading-relaxed mb-8">
           Connect your wallet to access the ETFSignal AI dashboard —
-          live ETF flows, Gemini AI signals, and SoDEX trading.
+          live ETF flows, {AGENT_BRANDING.name} signals, and SoDEX trading.
         </p>
 
         {/* Feature pills */}
         <div className="flex flex-wrap justify-center gap-2 mb-8">
           {[
             { Icon: BarChart2, label: 'Live ETF Flows' },
-            { Icon: Bot,       label: 'AI Signals' },
+            { Icon: Sparkles,  label: AGENT_BRANDING.signalsLabel },
             { Icon: Zap,       label: 'SoDEX Trading' },
             { Icon: Newspaper, label: 'News Feed' },
           ].map(({ Icon, label }) => (

@@ -85,7 +85,7 @@ describe('TradeModal', () => {
   it('confirm button is disabled before the acknowledgment checkbox is checked', () => {
     render(<TradeModal {...defaultProps} />);
 
-    const confirmBtn = screen.getByRole('button', { name: /confirm/i });
+    const confirmBtn = screen.getByRole('button', { name: /^(buy|sell|confirm)/i });
     expect(confirmBtn).toBeDisabled();
   });
 
@@ -95,7 +95,7 @@ describe('TradeModal', () => {
     const checkbox = screen.getByRole('checkbox');
     fireEvent.click(checkbox);
 
-    const confirmBtn = screen.getByRole('button', { name: /confirm/i });
+    const confirmBtn = screen.getByRole('button', { name: /^(buy|sell|confirm)/i });
     expect(confirmBtn).not.toBeDisabled();
   });
 
@@ -106,7 +106,7 @@ describe('TradeModal', () => {
     fireEvent.click(checkbox); // check
     fireEvent.click(checkbox); // uncheck
 
-    const confirmBtn = screen.getByRole('button', { name: /confirm/i });
+    const confirmBtn = screen.getByRole('button', { name: /^(buy|sell|confirm)/i });
     expect(confirmBtn).toBeDisabled();
   });
 
@@ -121,8 +121,8 @@ describe('TradeModal', () => {
   it('works correctly for a SELL (Short) order', () => {
     render(<TradeModal {...defaultProps} side="SELL" signal={makeSignal('BEARISH')} />);
 
-    expect(screen.getByText(/short/i, { selector: 'div.font-semibold' })).toBeInTheDocument();
-    const confirmBtn = screen.getByRole('button', { name: /confirm/i });
+    expect(screen.getByText(/sell|short/i, { selector: 'div.font-semibold' })).toBeInTheDocument();
+    const confirmBtn = screen.getByRole('button', { name: /^(buy|sell|confirm)/i });
     expect(confirmBtn).toBeDisabled();
   });
 });

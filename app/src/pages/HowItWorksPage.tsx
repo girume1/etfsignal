@@ -22,9 +22,9 @@ export function HowItWorksPage() {
     {
       num: '03',
       title: 'Analyze',
-      subtitle: 'AI synthesis',
-      desc: 'Gemini AI receives a structured payload of ETF flow data + recent news headlines. It analyzes the institutional money movement patterns, cross-references news context, and synthesizes everything into a directional signal.',
-      tech: ['Gemini 2.5 Flash', 'Structured JSON output', 'Hidden via serverless'],
+      subtitle: 'Agent Market Intelligence',
+      desc: 'The Agent receives a structured payload of ETF flow data + recent news headlines. It analyzes the institutional money movement patterns, cross-references news context, and synthesizes everything into a directional signal.',
+      tech: ['The Agent · AI Market Intelligence', 'Structured JSON output', 'Hidden via serverless'],
       color: '#00FFA7',
     },
     {
@@ -165,7 +165,7 @@ export function HowItWorksPage() {
                 {[
                   ['SoSoValue', '/openapi/v2/etf/currentEtfDataMetrics', 'Live BTC/ETH ETF flow metrics'],
                   ['SoSoValue', '/api/v1/news/featured', 'Categorized crypto news feed'],
-                  ['Google Gemini', 'gemini-2.5-flash via /api/analyze', 'Market signal synthesis'],
+                  ['The Agent (Google Gemini)', 'gemini-2.5-flash via /api/analyze', 'AI Market Intelligence & signal synthesis'],
                   ['Binance', 'wss://stream.binance.com — miniTicker', 'Live BTC/ETH price, ~1s cadence'],
                   ['Binance', '/api/v3/klines', 'Hourly/daily candles — charts + real 24h backtest evaluation'],
                   ['SoDEX', 'mainnet-gw.sodex.dev/api/v1/spot', 'EIP-712 signed spot order placement + Builder Fee'],

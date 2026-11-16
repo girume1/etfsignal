@@ -20,7 +20,7 @@ const STEPS = [
   {
     icon: Zap,
     title: 'AI Signals',
-    body: 'Gemini analyzes flows, news, and momentum to produce directional signals with real backtested performance.',
+    body: 'The Agent analyzes flows, news, and momentum to produce directional signals with real backtested performance.',
     path: '/app/signals',
   },
   {

@@ -224,8 +224,13 @@ const types = {
 
 // ─── Network switch ───────────────────────────────────────────────────────────
 
-async function ensureSoDEXNetwork(): Promise<void> {
-  if (!window.ethereum) throw new Error('No wallet found. Please install MetaMask or another Web3 wallet.');
+async function ensureSoDEXNetwork(requireInjected = false): Promise<void> {
+  if (typeof window === 'undefined' || !window.ethereum) {
+    if (requireInjected) {
+      throw new Error('No wallet found. Please install MetaMask or another Web3 wallet.');
+    }
+    return;
+  }
 
   const currentChain = await window.ethereum.request({ method: 'eth_chainId' });
   if (parseInt(currentChain, 16) === CHAIN_ID) return;

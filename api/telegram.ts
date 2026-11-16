@@ -368,20 +368,20 @@ Respond with ONLY a JSON object (no markdown, no extra text):
     }),
   });
 
-  if (!aiRes.ok) throw new Error(`Gemini API error: ${aiRes.status}`);
+  if (!aiRes.ok) throw new Error(`Agent API error: ${aiRes.status}`);
 
   const aiData: any  = await aiRes.json();
   const raw: string  = aiData?.content?.[0]?.text?.trim() ?? '';
 
   let sig: any;
   try { sig = JSON.parse(raw); }
-  catch { throw new Error('Failed to parse signal JSON from Gemini'); }
+  catch { throw new Error('Failed to parse signal JSON from The Agent'); }
 
   const dirEmoji: Record<string, string> = { LONG: '🟢', SHORT: '🔴', NEUTRAL: '🟡' };
   const emoji = dirEmoji[sig.direction] ?? '⚪';
 
   return [
-    `📡 *ETFSignal AI — ${asset} Signal*`,
+    `📡 *The Agent — ${asset} Market Intelligence*`,
     ``,
     `${emoji} *${sig.direction}* | Confidence: ${sig.confidence}%`,
     confBar(sig.confidence),
@@ -393,9 +393,9 @@ Respond with ONLY a JSON object (no markdown, no extra text):
     ``,
     `📊 *Key Driver:* ${sig.topDriver}`,
     ``,
-    `💡 *Analysis:* ${sig.thesis}`,
+    `💡 *Agent Analysis:* ${sig.thesis}`,
     ``,
-    snap ? `_SoSoValue ETF flows · Gemini AI · SoDEX_` : `_Gemini AI · SoDEX_`,
+    snap ? `_SoSoValue ETF flows · The Agent · SoDEX_` : `_The Agent · SoDEX_`,
     `[View Dashboard](${DASHBOARD_URL})`,
   ].join('\n');
 }
@@ -455,13 +455,11 @@ async function handleChart(
   }
 }
 
-async function handleStart(token: string, chatId: number, firstName: string) {
+async function handleStart(token: string, chatId: number, _firstName: string) {
   await sendMessage(token, chatId, [
-    `👋 *Welcome to ETFSignal AI, ${firstName}!*`,
+    `Hi! I'm *The Agent*, ETFSignalAI's market intelligence assistant. I analyze institutional ETF flows, market trends, and trading signals to help you make more informed decisions.`,
     ``,
-    `I analyze Bitcoin & Ethereum ETF flows in real-time using SoSoValue institutional data and Gemini AI to generate actionable trading signals.`,
-    ``,
-    `*AI Signals:*`,
+    `*Agent Market Intelligence:*`,
     `• /signal or /btc — Live BTC ETF signal`,
     `• /eth — Live ETH ETF signal`,
     `• /status — ETF market snapshot`,
@@ -478,17 +476,17 @@ async function handleStart(token: string, chatId: number, firstName: string) {
     `• /link — Link your wallet for trade alerts`,
     ``,
     `📊 *Data:* SoSoValue + Binance + Etherscan`,
-    `🤖 *AI:* Gemini AI`,
+    `⚡ *Intelligence:* The Agent · AI Market Intelligence`,
     `⛓ *Exchange:* SoDEX · chain 286623`,
   ].join('\n'));
 }
 
 async function handleHelp(token: string, chatId: number) {
   await sendMessage(token, chatId, [
-    `🤖 *ETFSignal AI — Commands*`,
+    `⚡ *The Agent — ETFSignalAI Commands*`,
     ``,
-    `*AI Signals:*`,
-    `*/signal* or */btc* — Live BTC signal (Gemini AI + ETF flows)`,
+    `*Agent Market Intelligence:*`,
+    `*/signal* or */btc* — Live BTC signal (The Agent + ETF flows)`,
     `*/eth* — Live ETH signal`,
     `*/status* — Live BTC & ETH ETF market snapshot`,
     ``,
@@ -570,7 +568,7 @@ async function handleStatus(token: string, chatId: number) {
     );
   }
 
-  lines.push(``, `_Use /signal for AI-powered trade analysis_`);
+  lines.push(``, `_Use /signal for Agent market intelligence analysis_`);
 
   await sendMessage(token, chatId, lines.join('\n'));
 }
@@ -700,7 +698,7 @@ async function handleSignal(
   await sendMessage(
     token,
     chatId,
-    `⚙️ *Analyzing ${asset} ETF flows with Gemini AI...*\n_Fetching live SoSoValue data — this takes a few seconds_`,
+    `⚙️ *The Agent is analyzing ${asset} ETF flows...*\n_Fetching live SoSoValue data — this takes a few seconds_`,
   );
 
   try {

@@ -241,32 +241,59 @@ export async function fetchSignalHistory(): Promise<HistoricalSignal[]> {
 
 // ─── News Feed ────────────────────────────────────────────────────────────────
 
-const BENCHMARK_NEWS: NewsItem[] = [
-  {
-    id: 'n1',
-    category: 1,
-    multilanguageContent: [{ language: 'en', title: 'Bitcoin Spot ETFs Cross $120B in Net Assets as Institutional Demand Surges' }],
-    createTime: new Date(Date.now() - 3600000).toISOString(),
-  },
-  {
-    id: 'n2',
-    category: 2,
-    multilanguageContent: [{ language: 'en', title: 'BlackRock IBIT Leads Daily Inflows With Over $280M Allocated' }],
-    createTime: new Date(Date.now() - 7200000).toISOString(),
-  },
-  {
-    id: 'n3',
-    category: 3,
-    multilanguageContent: [{ language: 'en', title: 'Ethereum Spot ETFs Record Sustained Net Inflows Ahead of Network Upgrades' }],
-    createTime: new Date(Date.now() - 14400000).toISOString(),
-  },
-  {
-    id: 'n4',
-    category: 4,
-    multilanguageContent: [{ language: 'en', title: 'Macro Liquidity Inflows Bolster Institutional Crypto Allocations' }],
-    createTime: new Date(Date.now() - 28800000).toISOString(),
-  },
-];
+interface RawMultilanguageContent {
+  language?: unknown;
+  title?: unknown;
+  content?: unknown;
+}
+
+interface RawMatchedCurrency {
+  id?: unknown;
+  fullName?: unknown;
+  name?: unknown;
+}
+
+interface RawNewsItem {
+  id?: unknown;
+  sourceLink?: unknown;
+  releaseTime?: unknown;
+  author?: unknown;
+  category?: unknown;
+  featureImage?: unknown;
+  matchedCurrencies?: unknown;
+  tags?: unknown;
+  multilanguageContent?: unknown;
+}
+
+function normalizeNewsItem(raw: RawNewsItem): NewsItem {
+  const rawContent = Array.isArray(raw.multilanguageContent)
+    ? (raw.multilanguageContent as RawMultilanguageContent[])
+    : [];
+  const rawCurrencies = Array.isArray(raw.matchedCurrencies)
+    ? (raw.matchedCurrencies as RawMatchedCurrency[])
+    : [];
+  const rawTags = Array.isArray(raw.tags) ? raw.tags : [];
+
+  return {
+    id:           String(raw.id ?? ''),
+    sourceLink:   typeof raw.sourceLink === 'string' ? raw.sourceLink : '',
+    releaseTime:  typeof raw.releaseTime === 'number' ? raw.releaseTime : Number(raw.releaseTime ?? Date.now()),
+    author:       typeof raw.author === 'string' ? raw.author : '',
+    category:     typeof raw.category === 'number' ? raw.category : Number(raw.category ?? 1),
+    featureImage: typeof raw.featureImage === 'string' ? raw.featureImage : '',
+    matchedCurrencies: rawCurrencies.map((mc) => ({
+      id:       String(mc?.id ?? ''),
+      fullName: String(mc?.fullName ?? ''),
+      name:     String(mc?.name ?? ''),
+    })),
+    tags: rawTags.map((t) => String(t)),
+    multilanguageContent: rawContent.map((entry) => ({
+      language: typeof entry?.language === 'string' ? entry.language : 'en',
+      title:    typeof entry?.title === 'string' ? entry.title : '',
+      content:  typeof entry?.content === 'string' ? entry.content : '',
+    })),
+  };
+}
 
 export async function fetchNews(params: {
   pageNum?: number;
@@ -274,28 +301,37 @@ export async function fetchNews(params: {
   categoryList?: number[];
 }): Promise<{ list: NewsItem[]; total: string }> {
   const { pageNum = 1, pageSize = 20, categoryList = [1, 2, 3, 4, 5, 6, 7, 9, 10] } = params;
-  try {
-    const json: any = await sosoProxy({
-      method: 'GET',
-      url: `${BASE_URL}/api/v1/news/featured`,
-      params: {
-        pageNum,
-        pageSize,
-        categoryList: categoryList.join(','),
-      },
-    });
-    // SoSoValue news API returns code:200 for success (unlike ETF API which uses code:0)
-    const ok = json.code === 0 || json.code === 200;
-    if (!ok) throw new Error(json.msg || json.message || `News API error (code ${json.code})`);
-    // Response may be { data: { list, total } } or { data: [...] } or { list: [...] }
-    const payload = json.data ?? json;
-    const list: NewsItem[] = Array.isArray(payload) ? payload : (payload.list ?? payload.records ?? []);
-    const total: string = String(payload.total ?? list.length);
-    return { list, total };
-  } catch (err) {
-    console.warn('[SoSoValue] fetchNews failed, using benchmark news feed:', err);
-    return { list: BENCHMARK_NEWS, total: String(BENCHMARK_NEWS.length) };
-  }
+  const json: {
+    code?: number;
+    msg?: string;
+    message?: string;
+    data?: RawNewsItem[] | { list?: RawNewsItem[]; records?: RawNewsItem[]; total?: string | number };
+    list?: RawNewsItem[];
+    records?: RawNewsItem[];
+    total?: string | number;
+  } = await sosoProxy({
+    method: 'GET',
+    url: `${BASE_URL}/api/v1/news/featured`,
+    params: {
+      pageNum,
+      pageSize,
+      categoryList: categoryList.join(','),
+    },
+  });
+  // SoSoValue news API returns code:200 for success (unlike ETF API which uses code:0)
+  const ok = json.code === 0 || json.code === 200;
+  if (!ok) throw new Error(json.msg || json.message || `News API error (code ${json.code})`);
+  // Response may be { data: { list, total } } or { data: [...] } or { list: [...] }
+  const payload = json.data ?? json;
+  const rawList: RawNewsItem[] = Array.isArray(payload)
+    ? payload
+    : (payload.list ?? payload.records ?? []);
+  const list: NewsItem[] = rawList.map(normalizeNewsItem);
+  const totalValue = !Array.isArray(payload) && payload.total !== undefined
+    ? payload.total
+    : list.length;
+  const total: string = String(totalValue);
+  return { list, total };
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

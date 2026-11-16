@@ -29,8 +29,8 @@ const FEATURES = [
   {
     num: '02',
     icon: Sparkles,
-    title: 'Gemini AI Signals',
-    desc: 'Synthesizes ETF flows + breaking news into directional signals with confidence scores, factor weights, TP/SL levels, and risk warnings.',
+    title: 'The Agent Signals',
+    desc: 'The Agent synthesizes ETF flows + breaking news into directional signals with confidence scores, factor weights, TP/SL levels, and risk warnings.',
     color: '#00FFA7',
     glow: 'rgba(0,255,167,0.12)',
   },
@@ -52,11 +52,11 @@ const STATS = [
 ];
 
 const TECH = [
-  { name: 'SoSoValue',  sub: 'ETF Data API',    color: '#7C3AED' },
-  { name: 'Gemini AI',  sub: 'Signal Engine',   color: '#00FFA7' },
-  { name: 'SoDEX',      sub: 'DEX Exchange',    color: '#34D399' },
-  { name: 'ValueChain', sub: 'L1 Network',      color: '#F59E0B' },
-  { name: 'EIP-712',    sub: 'Typed Signing',   color: '#94A3B8' },
+  { name: 'SoSoValue',  sub: 'ETF Data API',           color: '#7C3AED' },
+  { name: 'The Agent',  sub: 'AI Market Intelligence', color: '#00FFA7' },
+  { name: 'SoDEX',      sub: 'DEX Exchange',           color: '#34D399' },
+  { name: 'ValueChain', sub: 'L1 Network',             color: '#F59E0B' },
+  { name: 'EIP-712',    sub: 'Typed Signing',          color: '#94A3B8' },
 ];
 
 export function LandingPage() {
@@ -185,7 +185,7 @@ export function LandingPage() {
             >
               {[
                 { dot: '#10B981', label: 'SoSoValue ETF data' },
-              { dot: '#00FFA7', label: 'Gemini AI powered' },
+                { dot: '#00FFA7', label: 'Powered by The Agent' },
                 { dot: '#00FFA7', label: 'EIP-712 signed orders' },
                 { dot: '#10B981', label: 'SoDEX mainnet' },
               ].map(b => (
@@ -416,7 +416,7 @@ export function LandingPage() {
                 </div>
               ))}
               <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-between">
-                <div className="text-[10px] font-mono text-slate-600">Powered by Gemini AI</div>
+                <div className="text-[10px] font-mono text-slate-600">Powered by The Agent · AI Market Intelligence</div>
                 <div
                   className="text-[11px] font-mono font-bold px-2 py-1 rounded-lg flex items-center gap-1"
                   style={{ background: 'rgba(52,211,153,0.1)', color: '#34D399', border: '1px solid rgba(52,211,153,0.25)' }}
@@ -541,7 +541,7 @@ export function LandingPage() {
                 handle: '@SmartCoded',
                 wave: 1,
                 stars: 4,
-                quote: 'Server-side Gemini proxy keeping the API key off the browser is exactly right. The sentiment gauge with zone colors makes ETF flow readable to retail.',
+                quote: 'Server-side AI proxy keeping the API key off the browser is exactly right. The sentiment gauge with zone colors makes ETF flow readable to retail.',
               },
             ].map((v, i) => (
               <motion.div

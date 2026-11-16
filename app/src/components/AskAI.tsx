@@ -1,7 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
+import { Sparkles } from 'lucide-react';
 import type { EtfData, MarketSignal } from '../types';
 import { askFollowUp } from '../services/ai';
 import type { ChatTurn } from '../services/ai';
+import { AGENT_BRANDING } from '../config/agentBranding';
 
 interface AskAIProps {
   asset: 'BTC' | 'ETH';
@@ -50,7 +52,7 @@ export function AskAI({ asset, etfData, signal }: AskAIProps) {
       const answer = await askFollowUp(asset, etfData, signal, history, q);
       setHistory(h => [...h, { role: 'assistant', content: answer }]);
     } catch (err: any) {
-      setError(err?.message || 'Gemini request failed.');
+      setError(err?.message || 'The Agent request failed.');
     } finally {
       setLoading(false);
     }
@@ -65,14 +67,23 @@ export function AskAI({ asset, etfData, signal }: AskAIProps) {
         style={{ borderBottom: '1px solid var(--brand-border)' }}
         className="px-4 py-3 flex items-center justify-between"
       >
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-semibold text-slate-300 uppercase tracking-wider">Ask the Analyst</span>
-          <span
-            style={{ background: 'rgba(56,189,248,0.15)', color: '#38BDF8', border: '1px solid rgba(56,189,248,0.3)' }}
-            className="text-[10px] px-1.5 py-0.5 rounded font-mono uppercase tracking-widest"
+        <div className="flex items-center gap-2.5">
+          <div
+            style={{ background: 'rgba(0,255,167,0.1)', border: '1px solid rgba(0,255,167,0.25)' }}
+            className="w-6 h-6 rounded-lg flex items-center justify-center shrink-0"
           >
-            Gemini
-          </span>
+            <Sparkles size={12} style={{ color: '#00FFA7' }} />
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs font-semibold text-white tracking-wide">{AGENT_BRANDING.askTitle}</span>
+            <span
+              style={{ background: 'rgba(0,255,167,0.1)', color: '#00FFA7', border: '1px solid rgba(0,255,167,0.25)' }}
+              className="text-[10px] px-2 py-0.5 rounded-full font-mono flex items-center gap-1.5"
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              {AGENT_BRANDING.subtitle}
+            </span>
+          </div>
         </div>
         {history.length > 0 && (
           <button
@@ -88,8 +99,8 @@ export function AskAI({ asset, etfData, signal }: AskAIProps) {
       <div ref={scrollRef} className="max-h-64 overflow-y-auto px-4 py-3 space-y-3">
         {history.length === 0 && !loading && (
           <>
-            <p className="text-xs text-slate-500 leading-relaxed">
-              Ask anything about the {asset} ETF flow data or the signal above.
+            <p className="text-xs text-slate-400 leading-relaxed">
+              {AGENT_BRANDING.welcomeMessage}
             </p>
             <div className="flex flex-wrap gap-1.5 mt-2">
               {STARTERS[asset].map(s => (
@@ -121,11 +132,14 @@ export function AskAI({ asset, etfData, signal }: AskAIProps) {
           <div className="flex justify-start">
             <div
               style={{ background: 'rgba(167,139,250,0.08)', border: '1px solid rgba(167,139,250,0.25)' }}
-              className="rounded-xl px-3 py-2 flex items-center gap-1.5"
+              className="rounded-xl px-3 py-2 flex items-center gap-2"
             >
-              <span className="w-1.5 h-1.5 rounded-full bg-purple-300 animate-pulse" />
-              <span className="w-1.5 h-1.5 rounded-full bg-purple-300 animate-pulse" style={{ animationDelay: '0.2s' }} />
-              <span className="w-1.5 h-1.5 rounded-full bg-purple-300 animate-pulse" style={{ animationDelay: '0.4s' }} />
+              <div className="flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-purple-300 animate-pulse" />
+                <span className="w-1.5 h-1.5 rounded-full bg-purple-300 animate-pulse" style={{ animationDelay: '0.2s' }} />
+                <span className="w-1.5 h-1.5 rounded-full bg-purple-300 animate-pulse" style={{ animationDelay: '0.4s' }} />
+              </div>
+              <span className="text-[10px] font-mono text-slate-400">The Agent is analyzing…</span>
             </div>
           </div>
         )}
@@ -149,7 +163,7 @@ export function AskAI({ asset, etfData, signal }: AskAIProps) {
           type="text"
           value={input}
           onChange={e => setInput(e.target.value)}
-          placeholder={`Ask about ${asset} flows…`}
+          placeholder={`Ask The Agent about ${asset} flows…`}
           disabled={loading || !etfData}
           style={{ background: 'var(--brand-dark)', border: '1px solid var(--brand-border)' }}
           className="flex-1 px-3 py-2 rounded-lg text-xs text-white placeholder:text-slate-600 focus:outline-none focus:border-cyan-500/60 transition-colors"

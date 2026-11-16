@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
-import { X, Zap, BarChart2, Bot, TrendingUp, ShieldCheck } from 'lucide-react';
+import { X, Zap, BarChart2, Sparkles, TrendingUp, ShieldCheck } from 'lucide-react';
+import { AGENT_BRANDING } from '../config/agentBranding';
 
 interface AIAdvantageModalProps {
   onClose: () => void;
@@ -13,10 +14,10 @@ const STEPS = [
     desc: 'We pull real-time institutional ETF inflow & outflow data from SoSoValue — tracking IBIT, FBTC, ARKB and 12+ funds daily. Big money moves markets before retail notices.',
   },
   {
-    icon: Bot,
+    icon: Sparkles,
     color: '#00FFA7',
-    title: 'Gemini AI Analysis',
-    desc: 'Google Gemini synthesizes ETF flows, live news sentiment, and macro context into a structured BULLISH / BEARISH / NEUTRAL signal with confidence score, key factors, TP & SL levels.',
+    title: AGENT_BRANDING.analysisLabel,
+    desc: 'The Agent synthesizes ETF flows, live news sentiment, and macro context into a structured BULLISH / BEARISH / NEUTRAL signal with confidence score, key factors, TP & SL levels.',
   },
   {
     icon: TrendingUp,
@@ -35,7 +36,7 @@ const STEPS = [
 const STATS = [
   { value: '12+', label: 'ETF funds tracked' },
   { value: 'Real-time', label: 'Binance price feed' },
-  { value: 'Gemini AI', label: 'Google 2.5 Flash' },
+  { value: AGENT_BRANDING.name, label: AGENT_BRANDING.subtitle },
   { value: 'EIP-712', label: 'On-chain signed' },
 ];
 
@@ -85,7 +86,7 @@ export function AIAdvantageModal({ onClose }: AIAdvantageModalProps) {
             <Zap size={18} style={{ color: '#00FFA7' }} />
           </div>
           <div>
-            <h2 className="text-lg font-bold text-white">AI Advantage</h2>
+            <h2 className="text-lg font-bold text-white">{AGENT_BRANDING.name} · {AGENT_BRANDING.subtitle}</h2>
             <p className="text-xs text-slate-400">How ETFSignal AI finds high-probability trades</p>
           </div>
         </div>

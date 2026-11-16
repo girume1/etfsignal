@@ -114,7 +114,7 @@ function formatSignalMessage(sig: SignalNotification): string {
     ``,
     `💡 ${sig.thesis}`,
     ``,
-    `_Signal via SoSoValue ETF flows + Gemini AI_`,
+    `_Signal via SoSoValue ETF flows + The Agent_`,
     `[View Dashboard →](${DASHBOARD_URL})`,
   ]
     .filter(Boolean)

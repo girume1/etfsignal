@@ -3,10 +3,11 @@ import { useState } from 'react';
 import {
   LayoutDashboard, BarChart2, TrendingUp, Zap,
   Newspaper, ArrowLeftRight, Star, PieChart,
-  Settings, Bot, ExternalLink, Send,
+  Settings, Sparkles, ExternalLink, Send,
 } from 'lucide-react';
 import { useDashboard } from '../contexts/DashboardContext';
 import { AIAdvantageModal } from './AIAdvantageModal';
+import { AGENT_BRANDING } from '../config/agentBranding';
 
 const NAV_MAIN = [
   { path: '/app',         icon: LayoutDashboard,  label: 'Dashboard',      exact: true  },
@@ -175,12 +176,15 @@ export function AppSidebar({ open, onClose }: AppSidebarProps) {
               border: '1px solid rgba(0,255,167,0.15)',
             }}
           >
-            <div className="flex items-center gap-2 mb-2">
-              <Bot size={14} style={{ color: '#00FFA7' }} />
-              <span className="text-xs font-semibold text-white">AI Advantage</span>
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <Sparkles size={14} style={{ color: '#00FFA7' }} />
+                <span className="text-xs font-semibold text-white">{AGENT_BRANDING.name}</span>
+              </div>
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" title="Online" />
             </div>
             <p className="text-[10px] text-slate-400 leading-relaxed mb-3">
-              Our AI analyzes ETF flows, news sentiment &amp; market data to find high-probability trades.
+              {AGENT_BRANDING.subtitle} — analyzes ETF flows, news sentiment &amp; market data to find high-probability trades.
             </p>
             <button
               onClick={() => setShowAIModal(true)}

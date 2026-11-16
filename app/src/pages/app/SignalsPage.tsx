@@ -12,7 +12,7 @@ import { SignalHistory } from '../../components/SignalHistory';
 const HOW_STEPS = [
   { color: '#00FFA7', text: 'ETF flow data is fetched from SoSoValue across all 10–12 funds per asset.' },
   { color: '#00FFA7', text: 'A flow sentiment score (0–100) is computed from inflow momentum and breadth.' },
-  { color: '#00FFA7', text: 'Gemini AI synthesizes flows + market news into a directional signal.' },
+  { color: '#00FFA7', text: 'The Agent synthesizes flows + market news into a directional signal.' },
   { color: '#34D399', text: 'You review the signal and optionally execute on SoDEX.' },
 ];
 
@@ -106,10 +106,10 @@ export default function SignalsPage() {
             </div>
             <div>
               <h2 className="font-display text-white text-xl font-bold mb-1">
-                Generate {activeLabel} AI Signal
+                Generate {activeLabel} Agent Signal
               </h2>
               <p className="text-slate-400 text-sm max-w-md">
-                Gemini reads live ETF flow data, inflow momentum, and recent news to synthesize
+                The Agent reads live ETF flow data, inflow momentum, and recent news to synthesize
                 a structured directional signal with trade idea.
               </p>
             </div>
@@ -175,7 +175,7 @@ export default function SignalsPage() {
           >
             <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3 font-mono flex items-center gap-2">
               <Settings size={13} className="shrink-0" />
-              How AI Signals Work
+              How The Agent Works
             </div>
             <div className="space-y-3">
               {HOW_STEPS.map((s, i) => (

@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { fetchEtfMetrics } from '../services/sosovalue';
+import { fetchEtfMetrics, fetchNews } from '../services/sosovalue';
 import { analyzeMarket } from '../services/ai';
 import { placeSpotOrder, truncateAddress } from '../services/sodex';
 import type { EtfData } from '../types';
@@ -66,6 +66,45 @@ describe('fetchEtfMetrics', () => {
 
     const result = await fetchEtfMetrics('us-btc-spot');
     expect(result).toEqual(mockData);
+  });
+});
+
+describe('fetchNews', () => {
+  it('normalizes raw SoSoValue news items and populates missing content/tags safely', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        code: 200,
+        data: {
+          list: [
+            {
+              id: 'news-101',
+              category: 1,
+              releaseTime: 1700000000000,
+              author: 'SoSoValue Research',
+              sourceLink: 'https://sosovalue.com/news/101',
+              multilanguageContent: [
+                { language: 'en', title: 'BTC ETF inflows surge' },
+              ],
+            },
+          ],
+          total: '1',
+        },
+      }),
+    }));
+
+    const res = await fetchNews({ pageNum: 1, pageSize: 10 });
+    expect(res.total).toBe('1');
+    expect(res.list).toHaveLength(1);
+    expect(res.list[0].id).toBe('news-101');
+    expect(res.list[0].tags).toEqual([]);
+    expect(res.list[0].matchedCurrencies).toEqual([]);
+    expect(res.list[0].multilanguageContent[0]).toEqual({
+      language: 'en',
+      title: 'BTC ETF inflows surge',
+      content: '',
+    });
   });
 });
 
@@ -135,17 +174,42 @@ describe('analyzeMarket', () => {
 // Validates: Requirements 9.3
 
 describe('placeSpotOrder', () => {
+  const validSig = `0x${'11'.repeat(64)}1b`;
+
+  const mockMarketsResponse = {
+    ok: true,
+    json: async () => ({
+      code: 0,
+      data: [
+        { symbolID: 1, name: 'BTC-USDT', baseCoin: 'BTC', quoteCoin: 'USDT', pricePrecision: 2, quantityPrecision: 6 },
+        { symbolID: 2, name: 'ETH-USDT', baseCoin: 'ETH', quoteCoin: 'USDT', pricePrecision: 2, quantityPrecision: 6 },
+      ],
+    }),
+  };
+
+  const mockAccountStateResponse = {
+    ok: true,
+    text: async () => JSON.stringify({ code: 0, data: { accountId: 1 } }),
+    json: async () => ({ code: 0, data: { accountId: 1 } }),
+  };
+
   it('sends symbolID=1 and side=1 for a BTC-USDT BUY order', async () => {
     let capturedBody: Record<string, unknown> | null = null;
 
     const mockSigner = {
-      signTypedData: vi.fn().mockResolvedValue('0xdeadbeef12345678'),
+      getAddress: vi.fn().mockResolvedValue('0x1234567890abcdef1234567890abcdef12345678'),
+      signTypedData: vi.fn().mockResolvedValue(validSig),
     };
 
-    vi.stubGlobal('fetch', vi.fn().mockImplementation((_url: string, init: RequestInit) => {
-      capturedBody = JSON.parse(init.body as string) as Record<string, unknown>;
+    vi.stubGlobal('fetch', vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      if (url.includes('/markets/symbols')) return Promise.resolve(mockMarketsResponse);
+      if (url.includes('/accounts/')) return Promise.resolve(mockAccountStateResponse);
+      capturedBody = JSON.parse(init?.body as string) as Record<string, unknown>;
+      const payload = { code: 0, data: { orders: [{ ordId: 'order-btc-001' }] } };
       return Promise.resolve({
-        json: async () => ({ code: 0, data: { orderId: 'order-btc-001' } }),
+        ok: true,
+        text: async () => JSON.stringify(payload),
+        json: async () => payload,
       });
     }));
 
@@ -154,11 +218,12 @@ describe('placeSpotOrder', () => {
       side: 'BUY',
       type: 'MARKET',
       quantity: '0.01',
+      currency: 'BTC',
     });
 
     expect(capturedBody).not.toBeNull();
-    expect(capturedBody!.symbolID).toBe(1);
-    const orders = capturedBody!.orders as Array<{ side: number }>;
+    const orders = capturedBody!.orders as Array<{ symbolID: number; side: number }>;
+    expect(orders[0].symbolID).toBe(1);
     expect(orders[0].side).toBe(1);
   });
 
@@ -166,13 +231,19 @@ describe('placeSpotOrder', () => {
     let capturedBody: Record<string, unknown> | null = null;
 
     const mockSigner = {
-      signTypedData: vi.fn().mockResolvedValue('0xdeadbeef12345678'),
+      getAddress: vi.fn().mockResolvedValue('0x1234567890abcdef1234567890abcdef12345678'),
+      signTypedData: vi.fn().mockResolvedValue(validSig),
     };
 
-    vi.stubGlobal('fetch', vi.fn().mockImplementation((_url: string, init: RequestInit) => {
-      capturedBody = JSON.parse(init.body as string) as Record<string, unknown>;
+    vi.stubGlobal('fetch', vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      if (url.includes('/markets/symbols')) return Promise.resolve(mockMarketsResponse);
+      if (url.includes('/accounts/')) return Promise.resolve(mockAccountStateResponse);
+      capturedBody = JSON.parse(init?.body as string) as Record<string, unknown>;
+      const payload = { code: 0, data: { orders: [{ ordId: 'order-eth-001' }] } };
       return Promise.resolve({
-        json: async () => ({ code: 0, data: { orderId: 'order-eth-001' } }),
+        ok: true,
+        text: async () => JSON.stringify(payload),
+        json: async () => payload,
       });
     }));
 
@@ -181,21 +252,30 @@ describe('placeSpotOrder', () => {
       side: 'SELL',
       type: 'MARKET',
       quantity: '0.1',
+      currency: 'ETH',
     });
 
     expect(capturedBody).not.toBeNull();
-    expect(capturedBody!.symbolID).toBe(2);
-    const orders = capturedBody!.orders as Array<{ side: number }>;
+    const orders = capturedBody!.orders as Array<{ symbolID: number; side: number }>;
+    expect(orders[0].symbolID).toBe(2);
     expect(orders[0].side).toBe(2);
   });
 
   it('returns success:false with error message when the API returns code !== 0', async () => {
     const mockSigner = {
-      signTypedData: vi.fn().mockResolvedValue('0xdeadbeef12345678'),
+      getAddress: vi.fn().mockResolvedValue('0x1234567890abcdef1234567890abcdef12345678'),
+      signTypedData: vi.fn().mockResolvedValue(validSig),
     };
 
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-      json: async () => ({ code: 1, msg: 'Insufficient balance' }),
+    vi.stubGlobal('fetch', vi.fn().mockImplementation((url: string) => {
+      if (url.includes('/markets/symbols')) return Promise.resolve(mockMarketsResponse);
+      if (url.includes('/accounts/')) return Promise.resolve(mockAccountStateResponse);
+      const errPayload = { code: 1, msg: 'Insufficient balance' };
+      return Promise.resolve({
+        ok: true,
+        text: async () => JSON.stringify(errPayload),
+        json: async () => errPayload,
+      });
     }));
 
     const result = await placeSpotOrder(mockSigner as never, 1, {
@@ -203,10 +283,11 @@ describe('placeSpotOrder', () => {
       side: 'BUY',
       type: 'MARKET',
       quantity: '100',
+      currency: 'BTC',
     });
 
     expect(result.success).toBe(false);
-    expect(result.error).toBe('Insufficient balance');
+    expect(result.error).toContain('Insufficient balance');
   });
 });
 
