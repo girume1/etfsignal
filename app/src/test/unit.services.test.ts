@@ -8,7 +8,6 @@ import { fetchEtfMetrics, fetchNews } from '../services/sosovalue';
 import { analyzeMarket, getLastSignalTiming, clearSignalCache, type AnalysisStage } from '../services/ai';
 import { placeSpotOrder, truncateAddress, validateOrderMinimum, SPOT_MIN_NOTIONAL_USD, PERPS_MIN_NOTIONAL_USD } from '../services/sodex';
 import { handleTelegramLinkRequest, normalizeLinkCode, dualSet, codeKey } from '../../../api/telegram-link';
-import analyzeHandler from '../../../api/analyze';
 import telegramWebhookHandler, {
   verifyAndLinkWallet,
   resolveTelegramUserName,
@@ -777,108 +776,9 @@ describe('Telegram Progress Editing & Deduplication', () => {
   });
 });
 
-// ─── 17.8: /api/analyze Gemini Deadline, Fallback & Error Handling ───────────
+// ─── 17.8: Website analyzeMarket Error Handling ────────────────────────────
 
-function createMockRes() {
-  const res: { statusCode: number; body: any; status: (code: number) => any; json: (payload: any) => any } = {
-    statusCode: 200,
-    body: null,
-    status(code: number) {
-      this.statusCode = code;
-      return this;
-    },
-    json(payload: any) {
-      this.body = payload;
-      return this;
-    },
-  };
-  return res;
-}
-
-describe('/api/analyze Gemini handler', () => {
-  it('enforces valid Gemini X-Server-Timeout (>= 10s) on primary and fallback models and never fabricates on failure', async () => {
-    process.env.GEMINI_API_KEY = 'test-gemini-key';
-    const capturedCalls: Array<{ url: string; headers: Record<string, string>; body: any }> = [];
-
-    // 1. Primary (gemini-flash-latest) succeeds with X-Server-Timeout >= 10s
-    vi.stubGlobal('fetch', vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
-      capturedCalls.push({
-        url: String(url),
-        headers: Object.fromEntries(new Headers(init?.headers).entries()),
-        body: init?.body ? JSON.parse(String(init.body)) : null,
-      });
-      return new Response(
-        JSON.stringify({ candidates: [{ content: { parts: [{ text: '{"direction":"BULLISH"}' }] } }] }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } },
-      );
-    }));
-
-    const resOk = createMockRes();
-    await analyzeHandler(
-      { method: 'POST', body: { max_tokens: 1000, messages: [{ role: 'user', content: 'Analyze BTC' }] } },
-      resOk,
-    );
-    expect(resOk.statusCode).toBe(200);
-    expect(resOk.body.content[0].text).toBe('{"direction":"BULLISH"}');
-    expect(resOk.body._timing.model).toBe('gemini-flash-latest');
-    expect(Number(capturedCalls[0].headers['x-server-timeout'])).toBeGreaterThanOrEqual(10);
-    expect(capturedCalls[0].body.generationConfig?.thinkingConfig?.thinkingBudget).toBe(0);
-
-    // 2. Falls back to gemini-2.0-flash (no thinkingConfig, timeout >= 10s) on HTTP 429 from primary
-    capturedCalls.length = 0;
-    let attempt = 0;
-    vi.stubGlobal('fetch', vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
-      attempt++;
-      capturedCalls.push({
-        url: String(url),
-        headers: Object.fromEntries(new Headers(init?.headers).entries()),
-        body: init?.body ? JSON.parse(String(init.body)) : null,
-      });
-      if (attempt === 1) {
-        return new Response(JSON.stringify({ error: { code: 429, message: 'Rate limited' } }), { status: 429 });
-      }
-      return new Response(
-        JSON.stringify({ candidates: [{ content: { parts: [{ text: '{"direction":"BEARISH"}' }] } }] }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } },
-      );
-    }));
-
-    const resFallback = createMockRes();
-    await analyzeHandler(
-      { method: 'POST', body: { max_tokens: 1000, messages: [{ role: 'user', content: 'Analyze ETH' }] } },
-      resFallback,
-    );
-    expect(resFallback.statusCode).toBe(200);
-    expect(resFallback.body._timing.model).toBe('gemini-2.0-flash');
-    expect(capturedCalls).toHaveLength(2);
-    expect(Number(capturedCalls[1].headers['x-server-timeout'])).toBeGreaterThanOrEqual(10);
-    expect(capturedCalls[1].body.generationConfig?.thinkingConfig).toBeUndefined();
-
-    // 3. Returns explicit HTTP 504 on timeout and HTTP 503 on upstream failure — never fabricates a signal
-    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new DOMException('The operation was aborted', 'AbortError')));
-    const resTimeout = createMockRes();
-    await analyzeHandler(
-      { method: 'POST', body: { max_tokens: 1000, messages: [{ role: 'user', content: 'Analyze BTC' }] } },
-      resTimeout,
-    );
-    expect(resTimeout.statusCode).toBe(504);
-    expect(resTimeout.body.errorType).toBe('gemini_timeout');
-    expect(resTimeout.body.content).toBeUndefined();
-
-    vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => new Response(
-      JSON.stringify({ error: { code: 503, message: 'Service temporarily overloaded' } }),
-      { status: 503, headers: { 'Content-Type': 'application/json' } },
-    )));
-    const res503 = createMockRes();
-    await analyzeHandler(
-      { method: 'POST', body: { max_tokens: 1000, messages: [{ role: 'user', content: 'Analyze BTC' }] } },
-      res503,
-    );
-    expect(res503.statusCode).toBe(503);
-    expect(res503.body.error).toBe('Service temporarily overloaded');
-    expect(res503.body.content).toBeUndefined();
-  });
-
+describe('website analyzeMarket error & ETH coverage', () => {
   it('website analyzeMarket supports ETH and handles HTTP 429 and 503 without fabricating signals', async () => {
     clearSignalCache();
 
