@@ -4,6 +4,8 @@
   "outputDirectory": "app/dist",
   "framework": null,
   "rewrites": [
+    { "source": "/api/telegram-link", "destination": "/api/telegram?_route=link" },
+    { "source": "/api/telegram-notify", "destination": "/api/telegram?_route=notify" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]
 }

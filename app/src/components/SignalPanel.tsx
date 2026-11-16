@@ -1,7 +1,8 @@
+import { useState, useEffect } from 'react';
 import {
   ArrowUp, ArrowDown, ArrowRight, ArrowUpDown,
   Diamond, Zap, Target, Sparkles,
-  TrendingUp, TrendingDown, AlertTriangle, RefreshCw, Settings2,
+  TrendingUp, TrendingDown, AlertTriangle, RefreshCw, Settings2, CheckCircle2,
 } from 'lucide-react';
 import type { MarketSignal, ActiveTab, SignalWeight } from '../types';
 import { AGENT_BRANDING } from '../config/agentBranding';
@@ -50,12 +51,30 @@ const PREVIEW_FEATURES = [
   { icon: Target,       label: 'AI-generated TP & SL price levels' },
 ];
 
+const LOADING_STEPS = [
+  'Ingesting SoSoValue ETF flows & market data',
+  'Computing 30D/90D institutional momentum',
+  'Synthesizing directional signal with The Agent',
+];
+
 export function SignalPanel({
   signal, loading, onAnalyze, activeTab,
   onTrade, walletConnected, error,
 }: SignalPanelProps) {
   const label = activeTab.toUpperCase();
   const style = signal ? DIRECTION_STYLES[signal.direction] : null;
+  const [stepIdx, setStepIdx] = useState(0);
+
+  useEffect(() => {
+    if (!loading) {
+      setStepIdx(0);
+      return;
+    }
+    const timer = setInterval(() => {
+      setStepIdx((prev) => (prev < LOADING_STEPS.length - 1 ? prev + 1 : prev));
+    }, 600);
+    return () => clearInterval(timer);
+  }, [loading]);
 
   return (
     <div className="flex flex-col gap-3">
@@ -127,7 +146,7 @@ export function SignalPanel({
       {loading && (
         <div
           style={{ background: 'var(--brand-card)', border: '1px solid var(--brand-border)' }}
-          className="rounded-xl p-8 flex flex-col items-center justify-center gap-4"
+          className="rounded-xl p-6 flex flex-col items-center justify-center gap-4"
         >
           <div className="relative w-12 h-12">
             <div className="absolute inset-0 rounded-full border-2" style={{ borderColor: 'rgba(0,255,167,0.18)' }} />
@@ -139,6 +158,29 @@ export function SignalPanel({
           <div className="text-center">
             <p className="text-slate-300 text-sm font-medium">Synthesizing signal…</p>
             <p className="text-slate-500 text-xs mt-1">Reading ETF flows + news with {AGENT_BRANDING.name}</p>
+          </div>
+          <div
+            style={{ background: 'rgba(0,255,167,0.04)', border: '1px solid rgba(0,255,167,0.15)' }}
+            className="w-full rounded-lg p-3 space-y-2"
+          >
+            {LOADING_STEPS.map((stepText, idx) => {
+              const done = idx < stepIdx;
+              const active = idx === stepIdx;
+              return (
+                <div key={stepText} className="flex items-center gap-2 text-[11px] font-mono">
+                  {done ? (
+                    <CheckCircle2 size={12} style={{ color: '#34D399' }} className="shrink-0" />
+                  ) : active ? (
+                    <span className="w-3 h-3 rounded-full border border-emerald-400 border-t-transparent animate-spin shrink-0" />
+                  ) : (
+                    <span className="w-3 h-3 rounded-full border border-slate-700 shrink-0" />
+                  )}
+                  <span className={done ? 'text-emerald-400' : active ? 'text-slate-200' : 'text-slate-600'}>
+                    {stepText}
+                  </span>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

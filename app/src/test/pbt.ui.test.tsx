@@ -62,6 +62,10 @@ vi.mock('../services/sodex', () => ({
   USE_TESTNET: false,
   CHAIN_ID: 286623,
   CHAIN_ID_HEX: '0x45F9F',
+  SPOT_MIN_NOTIONAL_USD: 5,
+  PERPS_MIN_NOTIONAL_USD: 10,
+  MIN_BASE_QUANTITY: { BTC: 0.00001, ETH: 0.0001 },
+  validateOrderMinimum: vi.fn(() => ({ valid: true, minNotionalUsd: 5, minQuantity: 0.00001 })),
   getBuilderConfig: vi.fn(() => ({ fee: 50 })),
   setBuilderConfig: vi.fn(),
 }));

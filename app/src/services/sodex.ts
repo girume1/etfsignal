@@ -12,6 +12,101 @@ const PERPS_GW    = USE_TESTNET ? TESTNET_GW_PERPS : MAINNET_PERPS_GW;
 export const CHAIN_ID     = USE_TESTNET ? 138565  : 286623;   // testnet: ValueChain testnet | mainnet: ValueChain
 export const CHAIN_ID_HEX = USE_TESTNET ? '0x21D45' : '0x45F9F'; // hex for wallet_switchEthereumChain
 
+// ─── Exchange Minimum Order Rules (verified from SoDEX /markets/symbols) ──────
+// SoDEX enforces minNotional="5" ($5 USDC) on Spot (BTC/USDC, ETH/USDC) and
+// minNotional="10" ($10 USD) on Perps (BTC-USD, ETH-USD). $1 orders are rejected
+// by the matching engine with "notional is invalid".
+export const SPOT_MIN_NOTIONAL_USD  = 5;
+export const PERPS_MIN_NOTIONAL_USD = 10;
+export const MIN_BASE_QUANTITY: Record<string, number> = {
+  BTC: 0.00001,
+  ETH: 0.0001,
+};
+
+export interface OrderValidationResult {
+  valid: boolean;
+  minNotionalUsd: number;
+  minQuantity: number;
+  estimatedNotionalUsd?: number;
+  error?: string;
+}
+
+export function validateOrderMinimum(params: {
+  symbol: string;
+  quantity: string | number;
+  currency?: string;
+  marketType?: 'spot' | 'futures';
+  referencePrice?: number;
+}): OrderValidationResult {
+  const baseAsset = params.symbol.split('-')[0].replace(/^V/i, '').toUpperCase();
+  const isFutures = params.marketType === 'futures';
+  const minNotionalUsd = isFutures ? PERPS_MIN_NOTIONAL_USD : SPOT_MIN_NOTIONAL_USD;
+  const minQuantity = MIN_BASE_QUANTITY[baseAsset] ?? 0.0001;
+  const numAmount = Number(params.quantity);
+
+  if (!Number.isFinite(numAmount) || numAmount <= 0) {
+    return {
+      valid: false,
+      minNotionalUsd,
+      minQuantity,
+      error: 'Enter a valid order amount greater than 0.',
+    };
+  }
+
+  const isQuoteCurrency = Boolean(params.currency && params.currency.toUpperCase() !== baseAsset);
+
+  if (isQuoteCurrency) {
+    if (numAmount < minNotionalUsd) {
+      return {
+        valid: false,
+        minNotionalUsd,
+        minQuantity,
+        estimatedNotionalUsd: numAmount,
+        error: `Minimum ${isFutures ? 'futures' : 'spot'} order size on SoDEX is $${minNotionalUsd} (entered $${numAmount.toFixed(2)}).`,
+      };
+    }
+    if (params.referencePrice && params.referencePrice > 0) {
+      const convertedBaseQty = numAmount / params.referencePrice;
+      if (convertedBaseQty < minQuantity) {
+        return {
+          valid: false,
+          minNotionalUsd,
+          minQuantity,
+          estimatedNotionalUsd: numAmount,
+          error: `Order size is below SoDEX minimum quantity (${minQuantity} ${baseAsset}).`,
+        };
+      }
+    }
+    return { valid: true, minNotionalUsd, minQuantity, estimatedNotionalUsd: numAmount };
+  }
+
+  // Base-asset denominated order (BTC or ETH)
+  if (numAmount < minQuantity) {
+    return {
+      valid: false,
+      minNotionalUsd,
+      minQuantity,
+      error: `Minimum ${baseAsset} order quantity on SoDEX is ${minQuantity} ${baseAsset}.`,
+    };
+  }
+
+  if (params.referencePrice && params.referencePrice > 0) {
+    const notionalUsd = numAmount * params.referencePrice;
+    if (notionalUsd < minNotionalUsd) {
+      return {
+        valid: false,
+        minNotionalUsd,
+        minQuantity,
+        estimatedNotionalUsd: notionalUsd,
+        error: `Order value (~$${notionalUsd.toFixed(2)}) is below SoDEX's $${minNotionalUsd} minimum ${isFutures ? 'futures' : 'spot'} notional.`,
+      };
+    }
+    return { valid: true, minNotionalUsd, minQuantity, estimatedNotionalUsd: notionalUsd };
+  }
+
+  return { valid: true, minNotionalUsd, minQuantity };
+}
+
 // ─── Builder Integration ──────────────────────────────────────────────────────
 // SoDEX Builder Race: attach Builder ID & fee (in basis points) to generate builder fees.
 export function getBuilderConfig(): { id?: number; fee: number } {

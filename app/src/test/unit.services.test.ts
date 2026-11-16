@@ -5,8 +5,10 @@
 
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { fetchEtfMetrics, fetchNews } from '../services/sosovalue';
-import { analyzeMarket } from '../services/ai';
-import { placeSpotOrder, truncateAddress } from '../services/sodex';
+import { analyzeMarket, getLastSignalTiming } from '../services/ai';
+import { placeSpotOrder, truncateAddress, validateOrderMinimum, SPOT_MIN_NOTIONAL_USD, PERPS_MIN_NOTIONAL_USD } from '../services/sodex';
+import { handleTelegramLinkRequest, normalizeLinkCode, dualSet, codeKey } from '../../../api/telegram-link';
+import { verifyAndLinkWallet, resolveTelegramUserName, buildStartMessage } from '../../../api/telegram';
 import type { EtfData } from '../types';
 
 const EMPTY_ETF_DATA: EtfData = {
@@ -316,5 +318,180 @@ describe('truncateAddress', () => {
     const address = '0xabcdef1234567890abcdef1234567890abcdef12';
     const result = truncateAddress(address);
     expect(result).toMatch(/^.{6}\.\.\.(.{4})$/);
+  });
+});
+
+// ─── 17.5: Minimum order validation (SoDEX $5 spot / $10 perps) ──────────────
+
+describe('validateOrderMinimum', () => {
+  it('rejects $1 spot orders because SoDEX enforces a $5 minNotional on spot', () => {
+    const res = validateOrderMinimum({
+      symbol: 'BTC-USDC',
+      quantity: '1',
+      currency: 'USDC',
+      marketType: 'spot',
+      referencePrice: 95000,
+    });
+    expect(res.valid).toBe(false);
+    expect(res.minNotionalUsd).toBe(SPOT_MIN_NOTIONAL_USD);
+    expect(res.error).toContain('$5');
+  });
+
+  it('accepts $5+ spot orders and $10+ futures orders', () => {
+    const spotOk = validateOrderMinimum({
+      symbol: 'BTC-USDC',
+      quantity: '5',
+      currency: 'USDC',
+      marketType: 'spot',
+      referencePrice: 95000,
+    });
+    expect(spotOk.valid).toBe(true);
+
+    const perpsLow = validateOrderMinimum({
+      symbol: 'BTC-USD',
+      quantity: '5',
+      currency: 'USDC',
+      marketType: 'futures',
+      referencePrice: 95000,
+    });
+    expect(perpsLow.valid).toBe(false);
+    expect(perpsLow.minNotionalUsd).toBe(PERPS_MIN_NOTIONAL_USD);
+
+    const perpsOk = validateOrderMinimum({
+      symbol: 'BTC-USD',
+      quantity: '10',
+      currency: 'USDC',
+      marketType: 'futures',
+      referencePrice: 95000,
+    });
+    expect(perpsOk.valid).toBe(true);
+  });
+
+  it('enforces base-asset minQuantity and minNotional when referencePrice is provided', () => {
+    const tooSmallQty = validateOrderMinimum({
+      symbol: 'BTC-USDC',
+      quantity: '0.000001',
+      currency: 'BTC',
+      marketType: 'spot',
+    });
+    expect(tooSmallQty.valid).toBe(false);
+
+    const belowNotional = validateOrderMinimum({
+      symbol: 'BTC-USDC',
+      quantity: '0.00002',
+      currency: 'BTC',
+      marketType: 'spot',
+      referencePrice: 90000, // $1.80 < $5
+    });
+    expect(belowNotional.valid).toBe(false);
+    expect(belowNotional.error).toContain('$5');
+  });
+});
+
+// ─── 17.6: End-to-End Dashboard ↔ Telegram Linking & /start Message ──────────
+
+describe('Telegram Account Linking & /start Greeting', () => {
+  it('normalizes valid ETF-XXXXXX codes (spaces, lowercase, /link prefix) and rejects invalid codes', () => {
+    expect(normalizeLinkCode('  etf-ab23cd  ')).toBe('ETF-AB23CD');
+    expect(normalizeLinkCode('/link ETF-9K4M2P')).toBe('ETF-9K4M2P');
+    expect(normalizeLinkCode('`/link etf-7h8j9k`')).toBe('ETF-7H8J9K');
+    expect(normalizeLinkCode('ETF-123')).toBeNull();
+    expect(normalizeLinkCode('ABC-123456')).toBeNull();
+    expect(normalizeLinkCode('')).toBeNull();
+  });
+
+  it('completes full dashboard → Telegram link → status check → single-use guard → unlink flow', async () => {
+    const wallet = '0xAbCdEf1234567890abcdef1234567890AbCdEf12';
+    const chatId = 987654321;
+
+    // 1. Dashboard generates a link code
+    const postReq = new Request('https://etfsignal.vercel.app/api/telegram-link', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ walletAddress: wallet }),
+    });
+    const postRes = await handleTelegramLinkRequest(postReq);
+    expect(postRes.status).toBe(200);
+    const { code, expiresIn } = await postRes.json() as { code: string; expiresIn: number };
+    expect(code).toMatch(/^ETF-[A-Z0-9]{6}$/);
+    expect(expiresIn).toBe(600);
+
+    // 2. Before linking in Telegram, GET status is linked=false
+    const statusBefore = await handleTelegramLinkRequest(
+      new Request(`https://etfsignal.vercel.app/api/telegram-link?wallet=${wallet}`),
+    );
+    expect(await statusBefore.json()).toEqual({ linked: false });
+
+    // 3. Telegram bot verifies the code (testing lowercase + extra spaces)
+    const linkResult = await verifyAndLinkWallet(`  ${code.toLowerCase()}  `, chatId);
+    expect(linkResult.ok).toBe(true);
+    expect(linkResult.status).toBe('linked');
+    expect(linkResult.message).toContain('Wallet Linked!');
+
+    // 4. Dashboard GET status now reflects linked=true with chatId
+    const statusAfter = await handleTelegramLinkRequest(
+      new Request(`https://etfsignal.vercel.app/api/telegram-link?wallet=${wallet}`),
+    );
+    expect(await statusAfter.json()).toEqual({ linked: true, chatId: String(chatId) });
+
+    // 5. Reusing the exact same code is rejected (single-use enforcement)
+    const reuseResult = await verifyAndLinkWallet(code, chatId);
+    expect(reuseResult.ok).toBe(false);
+    expect(reuseResult.status).toBe('not_found');
+
+    // 6. Dashboard DELETE unlinks the wallet
+    const delRes = await handleTelegramLinkRequest(
+      new Request(`https://etfsignal.vercel.app/api/telegram-link?wallet=${wallet}`, { method: 'DELETE' }),
+    );
+    expect(delRes.status).toBe(200);
+
+    const statusUnlinked = await handleTelegramLinkRequest(
+      new Request(`https://etfsignal.vercel.app/api/telegram-link?wallet=${wallet}`),
+    );
+    expect(await statusUnlinked.json()).toEqual({ linked: false });
+  });
+
+  it('returns expired status when a code is past its 10-minute expiration window', async () => {
+    const expiredCode = 'ETF-EXP234';
+    await dualSet(
+      codeKey(expiredCode),
+      JSON.stringify({
+        walletAddress: '0x1111111111111111111111111111111111111111',
+        expiresAt: Date.now() - 5000,
+      }),
+      300,
+    );
+
+    const res = await verifyAndLinkWallet(expiredCode, 12345);
+    expect(res.ok).toBe(false);
+    expect(res.status).toBe('expired');
+    expect(res.message).toContain('Code expired');
+  });
+
+  it('formats /start greeting with first_name, username fallback, and "there" fallback', () => {
+    expect(resolveTelegramUserName({ first_name: 'Alice', username: 'alice_eth' })).toBe('Alice');
+    expect(resolveTelegramUserName({ first_name: '  ', username: '@bob_trader' })).toBe('bob_trader');
+    expect(resolveTelegramUserName({})).toBe('there');
+    expect(resolveTelegramUserName(null)).toBe('there');
+
+    const msg = buildStartMessage('Alice');
+    expect(msg).toContain('Hi! Welcome to ETFSignalAI, Alice! 👋');
+    expect(msg).toContain("I'm *The Agent*, ETFSignalAI's market intelligence assistant.");
+    expect(msg).toContain('/signal or /btc');
+    expect(msg).toContain('/link');
+  });
+
+  it('records end-to-end timing breakdown during analyzeMarket', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ content: [{ text: '{"direction":"NEUTRAL","confidence":55,"headline":"Test","summary":"Test","keyFactors":["a","b","c"],"tradeIdea":"Hold","riskWarning":"None","entryZone":{"low":90000,"high":91000},"takeProfit":{"price":95000,"pct":5,"rationale":"TP"},"stopLoss":{"price":88000,"pct":-3,"rationale":"SL"}}' }] }),
+    }));
+
+    await analyzeMarket('BTC', EMPTY_ETF_DATA, [], 90500, { sosoValueMs: 12, marketDataMs: 1 });
+    const timing = getLastSignalTiming();
+    expect(timing).not.toBeNull();
+    expect(timing!.sosoValueMs).toBe(12);
+    expect(timing!.totalMs).toBeGreaterThanOrEqual(13);
   });
 });

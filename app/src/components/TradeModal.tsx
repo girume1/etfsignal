@@ -6,7 +6,10 @@ import {
   ChevronUp, ChevronDown, CheckCircle2, XCircle,
 } from 'lucide-react';
 import type { MarketSignal, OrderSide, TradeOrder } from '../types';
-import { fetchBalances, getPerpsMaxLeverage, getQuantityPrecision, updatePerpsCollateral, USE_TESTNET, getBuilderConfig } from '../services/sodex';
+import {
+  fetchBalances, getPerpsMaxLeverage, getQuantityPrecision, updatePerpsCollateral,
+  USE_TESTNET, getBuilderConfig, validateOrderMinimum, SPOT_MIN_NOTIONAL_USD, PERPS_MIN_NOTIONAL_USD,
+} from '../services/sodex';
 import { computePositionSize, computeLeveragedRisk, type LeveragedRiskResult } from '../services/riskManager';
 
 function RiskPanel({
@@ -263,10 +266,26 @@ export function TradeModal({
   const slInvalid = Boolean(stopLossPrice && entryPrice &&
     (side === 'BUY' ? Number(stopLossPrice) >= entryPrice : Number(stopLossPrice) <= entryPrice));
 
+  const orderMinCheck = useMemo(
+    () =>
+      validateOrderMinimum({
+        symbol: marketType === 'futures' ? `${baseAsset}-USD` : symbol,
+        quantity: amount,
+        currency,
+        marketType,
+        referencePrice: entryPrice,
+      }),
+    [marketType, baseAsset, symbol, amount, currency, entryPrice],
+  );
+
   async function handleSubmit() {
     if (!acknowledged) return;
     if (orderType === 'LIMIT' && !limitPrice) return;
     if (tpInvalid || slInvalid) return;
+    if (!orderMinCheck.valid) {
+      setResult({ success: false, message: orderMinCheck.error ?? 'Order below minimum size.' });
+      return;
+    }
 
     // Spot MARKET BUY sends SoDEX's native `funds` field (proven working, see
     // confirmTrade). Every other quote-currency case — LIMIT orders (schema
@@ -652,7 +671,7 @@ export function TradeModal({
                 <label className="text-xs text-slate-500 uppercase tracking-wider font-semibold flex items-center gap-1.5">
                   Amount
                   <span className="text-[10px] text-slate-600 normal-case font-normal">
-                    min order {marketType === 'futures' ? '$10' : '$5'}
+                    min order ${marketType === 'futures' ? PERPS_MIN_NOTIONAL_USD : SPOT_MIN_NOTIONAL_USD}
                   </span>
                 </label>
 
@@ -775,6 +794,12 @@ export function TradeModal({
                 </div>
                 )}
               </div>
+              {!orderMinCheck.valid && orderMinCheck.error && (
+                <p className="text-[11px] text-amber-400 mt-1.5 flex items-center gap-1">
+                  <AlertTriangle size={11} className="shrink-0" />
+                  {orderMinCheck.error}
+                </p>
+              )}
               {marketType === 'futures' && (
                 <p className="text-[10px] text-slate-600 mt-1.5">
                   Balance shown is your spot wallet — perps margin is a separate SoDEX sub-account.

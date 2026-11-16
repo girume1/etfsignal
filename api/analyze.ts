@@ -113,28 +113,38 @@ export default async function handler(req: any, res: any) {
           parts: [{ text: String(m.content ?? '') }],
         }));
 
-    const config: Record<string, unknown> = {};
+    const config: Record<string, unknown> = {
+      // Disable internal chain-of-thought token delay on Gemini Flash for sub-2s latency
+      thinkingConfig: { thinkingBudget: 0 },
+    };
     if (system) {
       config.systemInstruction = String(system);
+    } else {
+      config.responseMimeType = 'application/json';
     }
     if (max_tokens) {
-      config.maxOutputTokens = Math.max(Number(max_tokens) || 2048, 2048);
+      config.maxOutputTokens = Math.max(Number(max_tokens) || 1024, 1024);
     }
 
     // Try v1beta first (supports gemini-flash-latest alias + systemInstruction), then default v1
     for (const apiVersion of ['v1beta', undefined] as const) {
       const ai = new GoogleGenAI(apiVersion ? { apiKey, apiVersion } : { apiKey });
       for (const model of MODELS) {
+        const t0 = Date.now();
         try {
           const response = await ai.models.generateContent({
             model,
             contents,
-            ...(Object.keys(config).length > 0 ? { config } : {}),
+            config,
           });
 
           const text: string = response.text ?? '';
           if (text && text.trim()) {
-            return res.status(200).json({ content: [{ text }] });
+            const geminiApiMs = Date.now() - t0;
+            return res.status(200).json({
+              content: [{ text }],
+              _timing: { geminiApiMs, model },
+            });
           }
         } catch {
           // try next model / apiVersion

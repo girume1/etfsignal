@@ -6,7 +6,29 @@ export interface SignalContext {
   backtestSummary?: { hitRate: number; avgPnl: number; sampleSize: number };
   flow30dTotal?: number;
   flow90dTotal?: number;
+  sosoValueMs?: number;
+  marketDataMs?: number;
 }
+
+export interface SignalTimingBreakdown {
+  sosoValueMs: number;
+  marketDataMs: number;
+  dataProcessingMs: number;
+  geminiApiMs: number;
+  validationMs: number;
+  totalMs: number;
+}
+
+let lastSignalTiming: SignalTimingBreakdown | null = null;
+
+export function getLastSignalTiming(): SignalTimingBreakdown | null {
+  return lastSignalTiming;
+}
+
+// Short-lived cache & in-flight deduplication to avoid duplicate Gemini requests for identical market state
+const SIGNAL_CACHE_TTL_MS = 45_000;
+const signalCache = new Map<string, { signal: MarketSignal; ts: number }>();
+const inflightRequests = new Map<string, Promise<MarketSignal>>();
 
 export function buildPrompt(
   etfType: 'BTC' | 'ETH',
@@ -158,44 +180,99 @@ export async function analyzeMarket(
   currentPrice?: number | null,
   context: SignalContext = {},
 ): Promise<MarketSignal> {
-  const prompt = buildPrompt(etfType, etfData, news, currentPrice ?? null, context);
+  const tStart = performance.now();
+  const sosoValueMs = context.sosoValueMs ?? 0;
+  const marketDataMs = context.marketDataMs ?? 0;
 
-  // Calls our serverless function — NOT Google directly
-  // API key stays safe on the server
-  const response = await fetch('/api/analyze', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      max_tokens: 1000,
-      messages: [{ role: 'user', content: prompt }],
-    }),
-  });
+  // Deduplicate concurrent identical requests when real ETF data is present
+  const hasRealData = etfData.dailyNetInflow.value !== null || etfData.totalNetAssets.value !== null;
+  const priceBucket = currentPrice ? Math.round(currentPrice / 50) * 50 : 0;
+  const cacheKey = `${etfType}:${etfData.dailyNetInflow.value ?? 'null'}:${news.length}:${priceBucket}`;
 
-  if (!response.ok) {
-    throw new Error(`AI API error: ${response.status}`);
+  if (hasRealData) {
+    const cached = signalCache.get(cacheKey);
+    if (cached && Date.now() - cached.ts < SIGNAL_CACHE_TTL_MS) {
+      return cached.signal;
+    }
+    const inflight = inflightRequests.get(cacheKey);
+    if (inflight) {
+      return inflight;
+    }
   }
 
-  const data = await response.json();
-  const text = data.content?.[0]?.text || '';
+  const runAnalysis = async (): Promise<MarketSignal> => {
+    const tPromptStart = performance.now();
+    const prompt = buildPrompt(etfType, etfData, news, currentPrice ?? null, context);
+    const dataProcessingMs = Math.round(performance.now() - tPromptStart);
 
-  try {
-    const clean = text.replace(/```json|```/g, '').trim();
-    const parsed = JSON.parse(clean);
-    return { ...parsed, timestamp: new Date() };
-  } catch {
-    const fallbackPrice = currentPrice ?? 0;
-    return {
-      direction: 'NEUTRAL',
-      confidence: 50,
-      headline: 'Analysis unavailable — check API setup',
-      summary: text.slice(0, 200),
-      keyFactors: ['Data received', 'Parsing failed', 'Check console'],
-      tradeIdea: 'Unable to generate trade idea at this time.',
-      riskWarning: 'Always do your own research before trading.',
-      entryZone: { low: fallbackPrice * 0.99, high: fallbackPrice * 1.01 },
-      takeProfit: { price: fallbackPrice * 1.05, pct: 5, rationale: 'Default +5% target' },
-      stopLoss:   { price: fallbackPrice * 0.97, pct: -3, rationale: 'Default -3% stop' },
-      timestamp: new Date(),
+    // Calls our serverless function — NOT Google directly
+    // API key stays safe on the server
+    const tGeminiStart = performance.now();
+    const response = await fetch('/api/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        max_tokens: 1000,
+        messages: [{ role: 'user', content: prompt }],
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`AI API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const geminiApiMs = Math.round(performance.now() - tGeminiStart);
+    const text = data.content?.[0]?.text || '';
+
+    const tValidStart = performance.now();
+    let resultSignal: MarketSignal;
+    try {
+      const clean = text.replace(/```json|```/g, '').trim();
+      const parsed = JSON.parse(clean);
+      resultSignal = { ...parsed, timestamp: new Date() };
+    } catch {
+      const fallbackPrice = currentPrice ?? 0;
+      resultSignal = {
+        direction: 'NEUTRAL',
+        confidence: 50,
+        headline: 'Analysis unavailable — check API setup',
+        summary: text.slice(0, 200),
+        keyFactors: ['Data received', 'Parsing failed', 'Check console'],
+        tradeIdea: 'Unable to generate trade idea at this time.',
+        riskWarning: 'Always do your own research before trading.',
+        entryZone: { low: fallbackPrice * 0.99, high: fallbackPrice * 1.01 },
+        takeProfit: { price: fallbackPrice * 1.05, pct: 5, rationale: 'Default +5% target' },
+        stopLoss:   { price: fallbackPrice * 0.97, pct: -3, rationale: 'Default -3% stop' },
+        timestamp: new Date(),
+      };
+    }
+    const validationMs = Math.round(performance.now() - tValidStart);
+    const totalMs = Math.round(performance.now() - tStart) + sosoValueMs + marketDataMs;
+
+    lastSignalTiming = {
+      sosoValueMs,
+      marketDataMs,
+      dataProcessingMs,
+      geminiApiMs,
+      validationMs,
+      totalMs,
     };
+    console.info('[The Agent] Signal timing breakdown (ms):', lastSignalTiming);
+
+    if (hasRealData && resultSignal.headline !== 'Analysis unavailable — check API setup') {
+      signalCache.set(cacheKey, { signal: resultSignal, ts: Date.now() });
+    }
+    return resultSignal;
+  };
+
+  if (!hasRealData) {
+    return runAnalysis();
   }
+
+  const promise = runAnalysis().finally(() => {
+    inflightRequests.delete(cacheKey);
+  });
+  inflightRequests.set(cacheKey, promise);
+  return promise;
 }

@@ -300,6 +300,7 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     setSignal(null);
     setSignalError(null);
     try {
+      const tMktStart = performance.now();
       const livePrice = activeTab === 'btc' ? (liveBtcPx ?? latestBtcPx) : (liveEthPx ?? latestEthPx);
       const etfType: EtfType = activeTab === 'btc' ? 'us-btc-spot' : 'us-eth-spot';
 
@@ -312,22 +313,36 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
             sampleSize: resolvedReal.length,
           }
         : undefined;
+      const marketDataMs = Math.round(performance.now() - tMktStart);
 
-      // Requirement 4.7: 30D/90D flow totals for prompt context
-      const [flow30, flow90] = await Promise.all([
-        fetchHistoricalInflows(etfType, 30),
+      // Requirement 4.7: Fetch 90D inflows once (and derive 30D slice from it) with a 2.5s timeout
+      // so slow historical endpoints never stall signal generation.
+      const tSosoStart = performance.now();
+      const flow90 = await Promise.race([
         fetchHistoricalInflows(etfType, 90),
+        new Promise<typeof activeHist>((resolve) => setTimeout(() => resolve(activeHist), 2500)),
       ]);
+      const sosoValueMs = Math.round(performance.now() - tSosoStart);
+
+      const flow30 = flow90.slice(-30);
       const flow30dTotal = flow30.length > 0 ? flow30.reduce((a, h) => a + h.inflow, 0) : undefined;
       const flow90dTotal = flow90.length > 0 ? flow90.reduce((a, h) => a + h.inflow, 0) : undefined;
 
-      const r = await analyzeMarket(activeLabel, activeData, news, livePrice, { backtestSummary, flow30dTotal, flow90dTotal });
+      const r = await analyzeMarket(activeLabel, activeData, news, livePrice, {
+        backtestSummary,
+        flow30dTotal,
+        flow90dTotal,
+        sosoValueMs,
+        marketDataMs,
+      });
       setSignal(r);
-      persistSignal(r, activeLabel);
-      // Fire-and-forget: notify Telegram subscribers (never blocks the UI)
-      notifyTelegramSubscribers(r, activeLabel).catch(() => {});
-      setHistory(await fetchSignalHistory());
       setSourceStatus('gemini', 'live');
+      setSignalLoading(false);
+
+      // Non-blocking background persistence & Telegram broadcast
+      persistSignal(r, activeLabel);
+      notifyTelegramSubscribers(r, activeLabel).catch(() => {});
+      fetchSignalHistory().then(setHistory).catch(() => {});
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Agent analysis failed.';
       console.error(err);

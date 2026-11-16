@@ -13,6 +13,20 @@ declare const process: { env: Record<string, string | undefined> };
 
 export const config = { runtime: 'edge' };
 
+import {
+  upstash,
+  kvAvailable,
+  dualGet,
+  dualSet,
+  dualDel,
+  normalizeLinkCode,
+  codeKey,
+  walletKey,
+  chatKey,
+  handleTelegramLinkRequest,
+} from './telegram-link';
+import { handleTelegramNotifyRequest } from './telegram-notify';
+
 const TELEGRAM_API     = 'https://api.telegram.org';
 const SOSO_PRIMARY     = 'https://openapi.sosovalue.com';
 const SOSO_FALLBACK    = 'https://api.sosovalue.xyz';
@@ -201,30 +215,6 @@ function formatGasMessage(gas: GasData): string {
 const GAS_REFRESH_KEYBOARD = {
   inline_keyboard: [[{ text: '🔄 Refresh', callback_data: 'gas_refresh' }]],
 };
-
-// ─── Upstash Redis (HTTP-only — no npm package required) ─────────────────────
-// Uses the Upstash REST command format: POST body is ["CMD", "key", "arg", ...]
-
-async function upstash(command: string, ...args: (string | number)[]): Promise<any> {
-  const url   = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-  if (!url || !token) return null;
-  try {
-    const res = await fetch(url, {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body:    JSON.stringify([command, ...args]),
-    });
-    if (!res.ok) return null;
-    const data: any = await res.json();
-    return data?.result ?? null;
-  } catch {
-    return null;
-  }
-}
-
-const kvAvailable = () =>
-  !!(process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN);
 
 async function subscriberAdd(chatId: string)      { return upstash('SADD',      SUBSCRIBERS_KEY, chatId); }
 async function subscriberRemove(chatId: string)   { return upstash('SREM',      SUBSCRIBERS_KEY, chatId); }
@@ -455,9 +445,19 @@ async function handleChart(
   }
 }
 
-async function handleStart(token: string, chatId: number, _firstName: string) {
-  await sendMessage(token, chatId, [
-    `Hi! I'm *The Agent*, ETFSignalAI's market intelligence assistant. I analyze institutional ETF flows, market trends, and trading signals to help you make more informed decisions.`,
+export function resolveTelegramUserName(from?: { first_name?: string; username?: string } | null): string {
+  const first = typeof from?.first_name === 'string' ? from.first_name.trim() : '';
+  if (first) return first;
+  const user = typeof from?.username === 'string' ? from.username.trim().replace(/^@+/, '') : '';
+  if (user) return user;
+  return 'there';
+}
+
+export function buildStartMessage(firstName: string): string {
+  return [
+    `Hi! Welcome to ETFSignalAI, ${firstName}! 👋`,
+    ``,
+    `I'm *The Agent*, ETFSignalAI's market intelligence assistant. I analyze institutional ETF flows, market trends, and trading signals to help you make more informed decisions.`,
     ``,
     `*Agent Market Intelligence:*`,
     `• /signal or /btc — Live BTC ETF signal`,
@@ -478,7 +478,11 @@ async function handleStart(token: string, chatId: number, _firstName: string) {
     `📊 *Data:* SoSoValue + Binance + Etherscan`,
     `⚡ *Intelligence:* The Agent · AI Market Intelligence`,
     `⛓ *Exchange:* SoDEX · chain 286623`,
-  ].join('\n'));
+  ].join('\n');
+}
+
+async function handleStart(token: string, chatId: number, firstName: string) {
+  await sendMessage(token, chatId, buildStartMessage(firstName));
 }
 
 async function handleHelp(token: string, chatId: number) {
@@ -604,74 +608,115 @@ async function handleSubscribe(token: string, chatId: number) {
   ].filter(Boolean).join('\n'));
 }
 
-async function handleLink(token: string, chatId: number, rawCode: string) {
-  const code = rawCode.toUpperCase();
-  if (!code.startsWith('ETF-') || code.length !== 10) {
-    await sendMessage(token, chatId, [
-      `⚠️ *Invalid code format.*`,
-      ``,
-      `Usage: \`/link ETF-XXXXXX\``,
-      ``,
-      `Get your personal code from the dashboard:`,
-      `[${DASHBOARD_URL}/app](${DASHBOARD_URL}/app) → Trade → Link Telegram`,
-    ].join('\n'));
-    return;
+export interface LinkVerificationResult {
+  ok: boolean;
+  status: 'linked' | 'invalid_format' | 'not_found' | 'expired';
+  walletAddress?: string;
+  message: string;
+}
+
+export async function verifyAndLinkWallet(
+  rawCode: string,
+  chatId: number | string,
+): Promise<LinkVerificationResult> {
+  const code = normalizeLinkCode(rawCode);
+  if (!code) {
+    return {
+      ok: false,
+      status: 'invalid_format',
+      message: [
+        `⚠️ *Invalid code format.*`,
+        ``,
+        `Usage: \`/link ETF-XXXXXX\``,
+        ``,
+        `Get your personal code from the dashboard:`,
+        `[${DASHBOARD_URL}/app](${DASHBOARD_URL}/app) → Trade → Link Telegram`,
+      ].join('\n'),
+    };
   }
 
-  const raw = await upstash('GET', `etfsignal:link:code:${code}`);
+  const raw = await dualGet(codeKey(code));
   if (!raw) {
-    await sendMessage(token, chatId, [
-      `❌ *Code not found or expired.*`,
-      ``,
-      `Codes expire after 10 minutes. Please generate a new one from the dashboard.`,
-      `[Get a new code →](${DASHBOARD_URL}/app)`,
-    ].join('\n'));
-    return;
+    return {
+      ok: false,
+      status: 'not_found',
+      message: [
+        `❌ *Code not found or expired.*`,
+        ``,
+        `Codes expire after 10 minutes and can only be used once. Please generate a new one from the dashboard.`,
+        `[Get a new code →](${DASHBOARD_URL}/app)`,
+      ].join('\n'),
+    };
   }
 
   let data: { walletAddress: string; expiresAt: number };
-  try { data = JSON.parse(raw); } catch {
-    await sendMessage(token, chatId, '❌ *Invalid code.* Please generate a new one.');
-    return;
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    await dualDel(codeKey(code));
+    return {
+      ok: false,
+      status: 'not_found',
+      message: '❌ *Invalid code.* Please generate a new one from the dashboard.',
+    };
   }
 
   if (Date.now() > data.expiresAt) {
-    await upstash('DEL', `etfsignal:link:code:${code}`);
-    await sendMessage(token, chatId, '❌ *Code expired.* Please generate a new one from the dashboard.');
-    return;
+    await dualDel(codeKey(code));
+    return {
+      ok: false,
+      status: 'expired',
+      message: [
+        `❌ *Code expired.*`,
+        ``,
+        `Codes are valid for 10 minutes. Please generate a new one from the dashboard.`,
+        `[Get a new code →](${DASHBOARD_URL}/app)`,
+      ].join('\n'),
+    };
   }
 
-  const { walletAddress } = data;
+  const walletAddress = data.walletAddress.trim();
   const short = `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`;
 
   await Promise.all([
-    upstash('SET', `etfsignal:link:wallet:${walletAddress.toLowerCase()}`, String(chatId)),
-    upstash('SET', `etfsignal:link:chat:${chatId}`, walletAddress.toLowerCase()),
-    upstash('DEL', `etfsignal:link:code:${code}`),
+    dualSet(walletKey(walletAddress), String(chatId)),
+    dualSet(chatKey(chatId), walletAddress.toLowerCase()),
+    dualDel(codeKey(code)),
+    dualDel(`etfsignal:link:pending:${walletAddress.toLowerCase()}`),
   ]);
 
-  await sendMessage(token, chatId, [
-    `✅ *Wallet Linked!*`,
-    ``,
-    `Your wallet \`${short}\` is now connected to this Telegram account.`,
-    ``,
-    `You will now receive *personal alerts* when:`,
-    `• A trade executes on SoDEX from your wallet`,
-    ``,
-    `_Use /unlink to disconnect your wallet_`,
-    `[Open Dashboard →](${DASHBOARD_URL}/app)`,
-  ].join('\n'));
+  return {
+    ok: true,
+    status: 'linked',
+    walletAddress,
+    message: [
+      `✅ *Wallet Linked!*`,
+      ``,
+      `Your wallet \`${short}\` is now connected to this Telegram account.`,
+      ``,
+      `You will now receive *personal alerts* when:`,
+      `• A trade executes on SoDEX from your wallet`,
+      ``,
+      `_Use /unlink to disconnect your wallet_`,
+      `[Open Dashboard →](${DASHBOARD_URL}/app)`,
+    ].join('\n'),
+  };
+}
+
+async function handleLink(token: string, chatId: number, rawCode: string) {
+  const result = await verifyAndLinkWallet(rawCode, chatId);
+  await sendMessage(token, chatId, result.message);
 }
 
 async function handleUnlink(token: string, chatId: number) {
-  const walletAddress = await upstash('GET', `etfsignal:link:chat:${chatId}`);
+  const walletAddress = await dualGet(chatKey(chatId));
   if (!walletAddress) {
     await sendMessage(token, chatId, '⚠️ *No wallet linked to this account.*\n\nUse /link to connect your wallet.');
     return;
   }
   await Promise.all([
-    upstash('DEL', `etfsignal:link:wallet:${walletAddress}`),
-    upstash('DEL', `etfsignal:link:chat:${chatId}`),
+    dualDel(walletKey(walletAddress)),
+    dualDel(chatKey(chatId)),
   ]);
   const short = `${(walletAddress as string).slice(0, 6)}...${(walletAddress as string).slice(-4)}`;
   await sendMessage(token, chatId, `🔗 *Wallet \`${short}\` unlinked.*\n\nYou will no longer receive personal trade alerts.\n\nUse /link to reconnect anytime.`);
@@ -716,6 +761,17 @@ async function handleSignal(
 // ─── Main webhook handler ─────────────────────────────────────────────────────
 
 export default async function handler(req: Request) {
+  const reqUrl = new URL(req.url);
+  const route = reqUrl.searchParams.get('_route');
+
+  // Shared-isolate routing for /api/telegram-link and /api/telegram-notify
+  if (route === 'link' || reqUrl.pathname.endsWith('/telegram-link')) {
+    return handleTelegramLinkRequest(req);
+  }
+  if (route === 'notify' || reqUrl.pathname.endsWith('/telegram-notify')) {
+    return handleTelegramNotifyRequest(req);
+  }
+
   if (req.method !== 'POST') {
     return new Response('Method not allowed', { status: 405 });
   }
@@ -730,7 +786,7 @@ export default async function handler(req: Request) {
 
   // Derive base URL from the incoming request so this works in any environment
   // (production, preview, local). Used to call /api/analyze — same proxy the dashboard uses.
-  const baseUrl = new URL(req.url).origin;
+  const baseUrl = reqUrl.origin;
 
   let update: any;
   try { update = await req.json(); }
@@ -763,13 +819,14 @@ export default async function handler(req: Request) {
   if (!message) return new Response('OK', { status: 200 }); // ignore non-message updates
 
   const chatId:    number = message.chat?.id;
-  const text:      string = message.text ?? '';
-  const firstName: string = message.from?.first_name ?? 'Trader';
+  const text:      string = (message.text ?? '').trim();
+  const firstName: string = resolveTelegramUserName(message.from);
 
   // Parse command and optional argument (e.g. "/tv btc" → command="/tv", arg="btc")
-  const parts:   string[] = text.trim().split(/\s+/);
+  const parts:   string[] = text.split(/\s+/);
   const command: string   = (parts[0] ?? '').split('@')[0].toLowerCase();
   const arg:     string   = (parts[1] ?? '').toLowerCase();
+  const rawRest: string   = parts.slice(1).join(' ').trim();
 
   try {
     switch (command) {
@@ -794,7 +851,7 @@ export default async function handler(req: Request) {
         break;
 
       case '/link':
-        await handleLink(botToken, chatId, arg || parts[1] || '');
+        await handleLink(botToken, chatId, rawRest);
         break;
 
       case '/unlink':
@@ -835,14 +892,17 @@ export default async function handler(req: Request) {
       }
 
       default:
-        if (text.startsWith('/')) {
+        // If user pastes bare "ETF-XXXXXX" directly in chat, treat it as /link ETF-XXXXXX
+        if (normalizeLinkCode(text)) {
+          await handleLink(botToken, chatId, text);
+        } else if (text.startsWith('/')) {
           await sendMessage(
             botToken,
             chatId,
             `Unknown command: \`${command}\`\n\nType /help to see available commands.`,
           );
         }
-        // Ignore plain text messages silently
+        // Ignore other plain text messages silently
     }
   } catch (err: any) {
     console.error('[telegram] handler error:', err);

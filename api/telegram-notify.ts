@@ -13,6 +13,8 @@ declare const process: { env: Record<string, string | undefined> };
 
 export const config = { runtime: 'edge' };
 
+import { upstash, dualGet, walletKey } from './telegram-link';
+
 const SUBSCRIBERS_KEY = 'telegram:subscribers';
 const DASHBOARD_URL   = 'https://etfsignal.vercel.app';
 
@@ -44,26 +46,6 @@ interface SignalNotification {
   reduceOnly?:      boolean;
   takeProfitPrice?: string;
   stopLossPrice?:   string;
-}
-
-// ─── Upstash Redis helper ────────────────────────────────────────────────────
-
-async function upstash(command: string, ...args: (string | number)[]): Promise<any> {
-  const url   = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-  if (!url || !token) return null;
-  try {
-    const res = await fetch(url, {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body:    JSON.stringify([command, ...args]),
-    });
-    if (!res.ok) return null;
-    const data: any = await res.json();
-    return data?.result ?? null;
-  } catch {
-    return null;
-  }
 }
 
 // ─── Subscriber list resolution ──────────────────────────────────────────────
@@ -162,7 +144,7 @@ function formatTradeMessage(body: SignalNotification): string {
 
 // ─── Handler ─────────────────────────────────────────────────────────────────
 
-export default async function handler(req: Request) {
+export async function handleTelegramNotifyRequest(req: Request): Promise<Response> {
   if (req.method !== 'POST') {
     return json({ error: 'Method not allowed' }, 405);
   }
@@ -197,7 +179,7 @@ export default async function handler(req: Request) {
   // ── Personal alert — must run BEFORE the subscriber early-return ─────────
   // The wallet owner gets notified even if they haven't used /subscribe.
   if (isTrade && body.walletAddress) {
-    const linkedChatId = await upstash('GET', `etfsignal:link:wallet:${body.walletAddress.toLowerCase()}`);
+    const linkedChatId = await dualGet(walletKey(body.walletAddress));
     if (linkedChatId) {
       const personalMsg = [
         `🔔 *Your SoDEX Trade Executed*`,
@@ -252,6 +234,10 @@ export default async function handler(req: Request) {
 
   const successCount = results.filter((r) => r.ok).length;
   return json({ sent: successCount, total: chatIds.length, results }, 200);
+}
+
+export default async function handler(req: Request) {
+  return handleTelegramNotifyRequest(req);
 }
 
 function json(data: unknown, status: number) {

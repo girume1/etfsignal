@@ -18,17 +18,42 @@ function TelegramLinkCard({ walletAddress }: { walletAddress: string }) {
   const [loading,  setLoading]  = useState(false);
   const [copied,   setCopied]   = useState(false);
   const [linked,   setLinked]   = useState<boolean | null>(null);
+  const [linkErr,  setLinkErr]  = useState<string | null>(null);
 
-  // Check link status on first render (useEffect, not useState)
-  useEffect(() => {
+  const checkLinkStatus = useCallback(() => {
     fetch(`/api/telegram-link?wallet=${encodeURIComponent(walletAddress)}`)
       .then(r => r.json())
-      .then((d: any) => setLinked(d.linked ?? false))
+      .then((d: any) => {
+        if (d.linked) {
+          setLinked(true);
+          setCode(null);
+        } else {
+          setLinked(false);
+        }
+      })
       .catch(() => setLinked(false));
   }, [walletAddress]);
 
+  // Check link status on mount and when wallet changes
+  useEffect(() => {
+    checkLinkStatus();
+  }, [checkLinkStatus]);
+
+  // Poll link status while a generated code is active so UI updates immediately once linked in Telegram
+  useEffect(() => {
+    if (!code || linked) return;
+    const interval = setInterval(checkLinkStatus, 4000);
+    const onFocus = () => checkLinkStatus();
+    window.addEventListener('focus', onFocus);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [code, linked, checkLinkStatus]);
+
   const generateCode = useCallback(async () => {
     setLoading(true);
+    setLinkErr(null);
     try {
       const res = await fetch('/api/telegram-link', {
         method:  'POST',
@@ -36,9 +61,16 @@ function TelegramLinkCard({ walletAddress }: { walletAddress: string }) {
         body:    JSON.stringify({ walletAddress }),
       });
       const data: any = await res.json();
-      if (data.code) setCode(data.code);
-    } catch { /* silent */ }
-    finally { setLoading(false); }
+      if (res.ok && data.code) {
+        setCode(data.code);
+      } else {
+        setLinkErr(data.error || 'Could not generate code. Please try again.');
+      }
+    } catch {
+      setLinkErr('Network error generating link code.');
+    } finally {
+      setLoading(false);
+    }
   }, [walletAddress]);
 
   const copyCode = useCallback(() => {
@@ -84,6 +116,10 @@ function TelegramLinkCard({ walletAddress }: { walletAddress: string }) {
       <p className="text-[11px] text-slate-500 mb-3 leading-relaxed">
         Connect your wallet to @ETFSignalAIBot to receive personal trade alerts when your orders execute.
       </p>
+
+      {linkErr && (
+        <p className="text-[11px] text-red-400 mb-2 font-mono">{linkErr}</p>
+      )}
 
       {!code ? (
         <button

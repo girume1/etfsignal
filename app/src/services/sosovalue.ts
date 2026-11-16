@@ -110,10 +110,25 @@ export function getLastSuccessfulFetch(type: EtfType, days: number): Date | null
   return entry ? new Date(entry.ts) : null;
 }
 
+const INFLOW_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
 export async function fetchHistoricalInflows(
   type: EtfType,
   days = 14,
 ): Promise<HistoricalInflow[]> {
+  const now = Date.now();
+
+  // 1. Fast path: return cached entry for exact window or slice from a larger cached window (e.g. 90D -> 30D/14D)
+  const exactCached = lastGood.get(goodKey(type, days));
+  if (exactCached && now - exactCached.ts < INFLOW_CACHE_TTL_MS) {
+    return exactCached.data;
+  }
+  for (const [key, entry] of lastGood.entries()) {
+    if (key.startsWith(`${type}-`) && now - entry.ts < INFLOW_CACHE_TTL_MS && entry.data.length >= days) {
+      return entry.data.slice(-days);
+    }
+  }
+
   // SoSoValue v2 endpoints accept both POST (body) and GET (params).
   // Try POST first since it's what the other v2 endpoints use, then fall back to GET.
   const attempts: Array<{ method: 'POST' | 'GET'; body?: unknown; params?: Record<string, string | number> }> = [
