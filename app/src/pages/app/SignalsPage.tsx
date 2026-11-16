@@ -21,8 +21,8 @@ const HOW_STEPS = [
 export default function SignalsPage() {
   const {
     activeData, activeLabel, activeTab, setActiveTab,
-    sentiment, signal, signalLoading, signalError,
-    handleAnalyze, openTradeModal, wallet, history, loading,
+    sentiment, signal, signalLoading, signalError, analysisStage,
+    handleAnalyze, cancelAnalyze, openTradeModal, wallet, history, loading,
     liveBtcPx, liveEthPx,
   } = useDashboard();
   const { density } = useDensity();
@@ -161,6 +161,8 @@ export default function SignalsPage() {
             onAnalyze={handleAnalyze} activeTab={activeTab}
             onTrade={openTradeModal} walletConnected={wallet.connected}
             error={signalError}
+            analysisStage={analysisStage}
+            onCancel={cancelAnalyze}
           />
           {signal && (
             <AskAI asset={activeLabel} etfData={activeData} signal={signal} />

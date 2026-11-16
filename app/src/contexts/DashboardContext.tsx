@@ -1,5 +1,5 @@
 import {
-  createContext, useContext, useState, useEffect, useCallback, useMemo,
+  createContext, useContext, useState, useEffect, useCallback, useMemo, useRef,
   type ReactNode,
 } from 'react';
 import { useDynamicContext } from '@dynamic-labs/sdk-react-core';
@@ -15,7 +15,7 @@ import { getSeenAlertIds, markAlertsSeen } from '../services/alertsSeen';
 import { deriveAlerts } from '../services/alerts';
 import type { HistoricalInflow, PricePoint } from '../types';
 import { computeSentiment } from '../services/sentiment';
-import { analyzeMarket } from '../services/ai';
+import { analyzeMarket, type AnalysisStage } from '../services/ai';
 import { placeSpotOrder, placePerpsOrder, USE_TESTNET } from '../services/sodex';
 import { notifyTelegramSubscribers, notifyTelegramTrade } from '../services/telegram';
 import { saveTrade, getTradeHistory } from '../services/tradeHistory';
@@ -60,7 +60,9 @@ interface DashboardContextValue {
   signal: MarketSignal | null;
   signalLoading: boolean;
   signalError: string | null;
+  analysisStage: AnalysisStage | null;
   handleAnalyze: () => Promise<void>;
+  cancelAnalyze: () => void;
 
   // wallet + trade
   wallet: WalletState;
@@ -107,6 +109,8 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
   const [signal,        setSignal]        = useState<MarketSignal | null>(null);
   const [signalLoading, setSignalLoading] = useState(false);
   const [signalError,   setSignalError]   = useState<string | null>(null);
+  const [analysisStage, setAnalysisStage] = useState<AnalysisStage | null>(null);
+  const analyzeAbortRef = useRef<AbortController | null>(null);
 
   const [wallet,       setWallet]       = useState<WalletState>({ connected: false, address: null, network: null });
   const [signer,       setSigner]       = useState<JsonRpcSigner | null>(null);
@@ -236,7 +240,26 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(i);
   }, [refresh]);
 
-  useEffect(() => { setSignal(null); setSignalError(null); }, [activeTab]);
+  const cancelAnalyze = useCallback(() => {
+    if (analyzeAbortRef.current) {
+      analyzeAbortRef.current.abort();
+      analyzeAbortRef.current = null;
+    }
+    setSignalLoading(false);
+    setAnalysisStage(null);
+  }, []);
+
+  useEffect(() => {
+    // Abort any in-flight signal request when switching tabs so stale responses never overwrite
+    if (analyzeAbortRef.current) {
+      analyzeAbortRef.current.abort();
+      analyzeAbortRef.current = null;
+    }
+    setSignalLoading(false);
+    setAnalysisStage(null);
+    setSignal(null);
+    setSignalError(null);
+  }, [activeTab]);
 
   // ── Derived values ────────────────────────────────────────────────────────
   const activeData:  EtfData | null     = activeTab === 'btc' ? btcData  : ethData;
@@ -295,10 +318,18 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
 
   // ── AI signal ────────────────────────────────────────────────────────────
   const handleAnalyze = useCallback(async () => {
-    if (!activeData) return;
+    if (!activeData || signalLoading) return;
+
+    if (analyzeAbortRef.current) {
+      analyzeAbortRef.current.abort();
+    }
+    const controller = new AbortController();
+    analyzeAbortRef.current = controller;
+
     setSignalLoading(true);
     setSignal(null);
     setSignalError(null);
+    setAnalysisStage('fetching_data');
     try {
       const tMktStart = performance.now();
       const livePrice = activeTab === 'btc' ? (liveBtcPx ?? latestBtcPx) : (liveEthPx ?? latestEthPx);
@@ -324,6 +355,9 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
       ]);
       const sosoValueMs = Math.round(performance.now() - tSosoStart);
 
+      if (controller.signal.aborted) return;
+
+      setAnalysisStage('calculating_momentum');
       const flow30 = flow90.slice(-30);
       const flow30dTotal = flow30.length > 0 ? flow30.reduce((a, h) => a + h.inflow, 0) : undefined;
       const flow90dTotal = flow90.length > 0 ? flow90.reduce((a, h) => a + h.inflow, 0) : undefined;
@@ -334,7 +368,12 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
         flow90dTotal,
         sosoValueMs,
         marketDataMs,
+        onStageChange: setAnalysisStage,
+        signal: controller.signal,
       });
+
+      if (controller.signal.aborted) return;
+
       setSignal(r);
       setSourceStatus('gemini', 'live');
       setSignalLoading(false);
@@ -344,14 +383,20 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
       notifyTelegramSubscribers(r, activeLabel).catch(() => {});
       fetchSignalHistory().then(setHistory).catch(() => {});
     } catch (err: unknown) {
+      if (controller.signal.aborted || (err instanceof Error && err.name === 'AbortError')) {
+        return;
+      }
       const msg = err instanceof Error ? err.message : 'Agent analysis failed.';
       console.error(err);
       setSignalError(msg);
       setSourceStatus('gemini', 'error');
     } finally {
-      setSignalLoading(false);
+      if (analyzeAbortRef.current === controller) {
+        analyzeAbortRef.current = null;
+        setSignalLoading(false);
+      }
     }
-  }, [activeData, activeLabel, activeTab, news, persistSignal, setSourceStatus, history]);
+  }, [activeData, activeLabel, activeTab, activeHist, liveBtcPx, latestBtcPx, liveEthPx, latestEthPx, news, persistSignal, setSourceStatus, history, signalLoading]);
 
   // ── Trade modal ───────────────────────────────────────────────────────────
   const openTradeModal  = useCallback((side: OrderSide) => setTradeModal({ side }), []);
@@ -427,7 +472,7 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     activeLabel, latestBtcPx, latestEthPx,
     liveBtcPx, liveEthPx, liveConnected,
     sentiment,
-    signal, signalLoading, signalError, handleAnalyze,
+    signal, signalLoading, signalError, analysisStage, handleAnalyze, cancelAnalyze,
     wallet, signer,
     handleConnectWallet, handleDisconnectWallet,
     tradeModal, openTradeModal, closeTradeModal, confirmTrade,

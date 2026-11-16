@@ -3,6 +3,14 @@
   "buildCommand": "cd app && npm run build",
   "outputDirectory": "app/dist",
   "framework": null,
+  "functions": {
+    "api/analyze.ts": {
+      "maxDuration": 30
+    },
+    "api/sosovalue.ts": {
+      "maxDuration": 15
+    }
+  },
   "rewrites": [
     { "source": "/api/telegram-link", "destination": "/api/telegram?_route=link" },
     { "source": "/api/telegram-notify", "destination": "/api/telegram?_route=notify" },

@@ -5,10 +5,17 @@
 
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { fetchEtfMetrics, fetchNews } from '../services/sosovalue';
-import { analyzeMarket, getLastSignalTiming } from '../services/ai';
+import { analyzeMarket, getLastSignalTiming, clearSignalCache, type AnalysisStage } from '../services/ai';
 import { placeSpotOrder, truncateAddress, validateOrderMinimum, SPOT_MIN_NOTIONAL_USD, PERPS_MIN_NOTIONAL_USD } from '../services/sodex';
 import { handleTelegramLinkRequest, normalizeLinkCode, dualSet, codeKey } from '../../../api/telegram-link';
-import { verifyAndLinkWallet, resolveTelegramUserName, buildStartMessage } from '../../../api/telegram';
+import telegramWebhookHandler, {
+  verifyAndLinkWallet,
+  resolveTelegramUserName,
+  buildStartMessage,
+  handleSignal,
+  editMessage,
+  resetTelegramDedupeState,
+} from '../../../api/telegram';
 import type { EtfData } from '../types';
 
 const EMPTY_ETF_DATA: EtfData = {
@@ -481,17 +488,214 @@ describe('Telegram Account Linking & /start Greeting', () => {
     expect(msg).toContain('/link');
   });
 
-  it('records end-to-end timing breakdown during analyzeMarket', async () => {
+  it('records end-to-end timing breakdown and stage transitions during analyzeMarket', async () => {
+    clearSignalCache();
+    const stages: AnalysisStage[] = [];
+
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
       json: async () => ({ content: [{ text: '{"direction":"NEUTRAL","confidence":55,"headline":"Test","summary":"Test","keyFactors":["a","b","c"],"tradeIdea":"Hold","riskWarning":"None","entryZone":{"low":90000,"high":91000},"takeProfit":{"price":95000,"pct":5,"rationale":"TP"},"stopLoss":{"price":88000,"pct":-3,"rationale":"SL"}}' }] }),
     }));
 
-    await analyzeMarket('BTC', EMPTY_ETF_DATA, [], 90500, { sosoValueMs: 12, marketDataMs: 1 });
+    await analyzeMarket('BTC', EMPTY_ETF_DATA, [], 90500, {
+      sosoValueMs: 12,
+      marketDataMs: 1,
+      onStageChange: (s) => stages.push(s),
+    });
     const timing = getLastSignalTiming();
     expect(timing).not.toBeNull();
     expect(timing!.sosoValueMs).toBe(12);
     expect(timing!.totalMs).toBeGreaterThanOrEqual(13);
+    expect(stages).toEqual([
+      'calculating_momentum',
+      'calling_agent',
+      'validating_signal',
+      'ready',
+    ]);
+  });
+
+  it('propagates 504 timeout error without fabricating a completed signal and supports AbortController cancellation', async () => {
+    clearSignalCache();
+
+    // 1. 504 timeout throws an explicit error rather than fabricating a signal
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: false,
+      status: 504,
+      json: async () => ({ error: 'The Agent timed out after 7.5s waiting for Gemini. Please retry.' }),
+    }));
+
+    await expect(analyzeMarket('BTC', EMPTY_ETF_DATA, [], 95000)).rejects.toThrow(/timed out.*504/i);
+
+    // 2. AbortController cancels in-flight analysis cleanly
+    const controller = new AbortController();
+    controller.abort();
+    await expect(
+      analyzeMarket('BTC', EMPTY_ETF_DATA, [], 95000, { signal: controller.signal }),
+    ).rejects.toThrow(/cancelled/i);
+  });
+});
+
+// ─── 17.7: Telegram Single-Message Progress Editing & Deduplication ──────────
+
+describe('Telegram Progress Editing & Deduplication', () => {
+  it('sends ONE initial progress message and edits the SAME message_id through all stages to final signal', async () => {
+    resetTelegramDedupeState();
+    const sendCalls: Array<{ chat_id: number | string; text: string }> = [];
+    const editCalls: Array<{ chat_id: number | string; message_id: number; text: string }> = [];
+
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
+      const bodyObj = init?.body ? JSON.parse(init.body as string) : {};
+
+      if (url.endsWith('/sendChatAction')) {
+        return new Response(JSON.stringify({ ok: true }), { status: 200 });
+      }
+      if (url.endsWith('/sendMessage')) {
+        sendCalls.push({ chat_id: bodyObj.chat_id, text: bodyObj.text });
+        return new Response(JSON.stringify({ ok: true, result: { message_id: 777 } }), { status: 200 });
+      }
+      if (url.endsWith('/editMessageText')) {
+        editCalls.push({ chat_id: bodyObj.chat_id, message_id: bodyObj.message_id, text: bodyObj.text });
+        return new Response(JSON.stringify({ ok: true }), { status: 200 });
+      }
+      if (url.includes('binance.com')) {
+        return new Response(JSON.stringify({ lastPrice: '96000', priceChangePercent: '2.5' }), { status: 200 });
+      }
+      if (url.endsWith('/api/analyze')) {
+        const aiPayload = {
+          direction: 'LONG',
+          confidence: 82,
+          entryPrice: 96000,
+          takeProfit: 101500,
+          stopLoss: 93200,
+          timeframe: '1D',
+          thesis: 'Sustained IBIT creations support upside continuation.',
+          topDriver: 'BlackRock IBIT +$218M inflow',
+        };
+        return new Response(
+          JSON.stringify({ content: [{ text: JSON.stringify(aiPayload) }] }),
+          { status: 200 },
+        );
+      }
+      return new Response(JSON.stringify({ code: 0, data: null }), { status: 200 });
+    }));
+
+    await handleSignal('test-bot-token', 555123, 'BTC', 'https://etfsignal.vercel.app');
+
+    // Exactly ONE sendMessage call (the initial progress message)
+    expect(sendCalls).toHaveLength(1);
+    expect(sendCalls[0].text).toContain('The Agent is analyzing BTC ETF flows');
+
+    // All subsequent updates (fetching data, synthesizing, and final signal) edit message_id 777
+    expect(editCalls.length).toBeGreaterThanOrEqual(3);
+    for (const edit of editCalls) {
+      expect(edit.message_id).toBe(777);
+      expect(edit.chat_id).toBe(555123);
+    }
+    expect(editCalls[0].text).toContain('Fetching institutional BTC ETF data');
+    expect(editCalls[1].text).toContain('Synthesizing the BTC market signal');
+    expect(editCalls[editCalls.length - 1].text).toContain('The Agent — BTC Market Intelligence');
+    expect(editCalls[editCalls.length - 1].text).toContain('LONG');
+  });
+
+  it('replaces the progress message in-place with an error message when /api/analyze fails and handles unchanged edits safely', async () => {
+    resetTelegramDedupeState();
+    const sendCalls: string[] = [];
+    const editCalls: string[] = [];
+
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
+      const bodyObj = init?.body ? JSON.parse(init.body as string) : {};
+      if (url.endsWith('/sendMessage')) {
+        sendCalls.push(bodyObj.text);
+        return new Response(JSON.stringify({ ok: true, result: { message_id: 888 } }), { status: 200 });
+      }
+      if (url.endsWith('/editMessageText')) {
+        editCalls.push(bodyObj.text);
+        return new Response(JSON.stringify({ ok: true }), { status: 200 });
+      }
+      if (url.endsWith('/api/analyze')) {
+        return new Response(JSON.stringify({ error: 'The Agent timed out' }), { status: 504 });
+      }
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    }));
+
+    await handleSignal('test-bot-token', 555999, 'ETH', 'https://etfsignal.vercel.app');
+
+    // Still only 1 sendMessage call; the error replaces message 888 via editMessageText
+    expect(sendCalls).toHaveLength(1);
+    expect(editCalls[editCalls.length - 1]).toContain('ETH Signal Analysis Failed');
+    expect(editCalls[editCalls.length - 1]).toContain('The Agent timed out');
+
+    // Also verify editMessage safely treats "message is not modified" as true
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ ok: false, description: 'Bad Request: message is not modified' }), { status: 400 }),
+    ));
+    const unchangedOk = await editMessage('test-bot-token', 555999, 888, 'same text');
+    expect(unchangedOk).toBe(true);
+  });
+
+  it('deduplicates concurrent signal requests for the same (chatId, asset) and duplicate webhook update_ids', async () => {
+    resetTelegramDedupeState();
+    process.env.TELEGRAM_BOT_TOKEN = 'test-bot-token';
+    let sendCount = 0;
+
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(async (url: string) => {
+      if (url.endsWith('/sendMessage')) {
+        sendCount++;
+        return new Response(JSON.stringify({ ok: true, result: { message_id: 999 } }), { status: 200 });
+      }
+      if (url.endsWith('/api/analyze')) {
+        await new Promise((r) => setTimeout(r, 40));
+        return new Response(
+          JSON.stringify({
+            content: [{
+              text: JSON.stringify({
+                direction: 'LONG',
+                confidence: 75,
+                entryPrice: 95000,
+                takeProfit: 100000,
+                stopLoss: 92000,
+                timeframe: '1D',
+                thesis: 'Inflows steady.',
+                topDriver: 'IBIT',
+              }),
+            }],
+          }),
+          { status: 200 },
+        );
+      }
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    }));
+
+    // 1. Concurrent handleSignal calls for the same chatId + asset only run once
+    await Promise.all([
+      handleSignal('test-bot-token', 100200, 'BTC', 'https://etfsignal.vercel.app'),
+      handleSignal('test-bot-token', 100200, 'BTC', 'https://etfsignal.vercel.app'),
+    ]);
+    expect(sendCount).toBe(1);
+
+    // 2. Duplicate webhook update_id deliveries are ignored on the second delivery
+    sendCount = 0;
+    const webhookPayload = {
+      update_id: 444555666,
+      message: {
+        chat: { id: 300400 },
+        from: { first_name: 'Mike' },
+        text: '/btc',
+      },
+    };
+    await telegramWebhookHandler(
+      new Request('https://etfsignal.vercel.app/api/telegram', {
+        method: 'POST',
+        body: JSON.stringify(webhookPayload),
+      }),
+    );
+    await telegramWebhookHandler(
+      new Request('https://etfsignal.vercel.app/api/telegram', {
+        method: 'POST',
+        body: JSON.stringify(webhookPayload),
+      }),
+    );
+    expect(sendCount).toBe(1);
   });
 });

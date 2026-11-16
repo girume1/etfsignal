@@ -5,6 +5,7 @@ import {
   TrendingUp, TrendingDown, AlertTriangle, RefreshCw, Settings2, CheckCircle2,
 } from 'lucide-react';
 import type { MarketSignal, ActiveTab, SignalWeight } from '../types';
+import type { AnalysisStage } from '../services/ai';
 import { AGENT_BRANDING } from '../config/agentBranding';
 
 interface SignalPanelProps {
@@ -15,6 +16,8 @@ interface SignalPanelProps {
   onTrade: (side: 'BUY' | 'SELL') => void;
   walletConnected: boolean;
   error?: string | null;
+  analysisStage?: AnalysisStage | null;
+  onCancel?: () => void;
 }
 
 const DIRECTION_STYLES = {
@@ -51,30 +54,42 @@ const PREVIEW_FEATURES = [
   { icon: Target,       label: 'AI-generated TP & SL price levels' },
 ];
 
-const LOADING_STEPS = [
-  'Ingesting SoSoValue ETF flows & market data',
-  'Computing 30D/90D institutional momentum',
-  'Synthesizing directional signal with The Agent',
+const LOADING_STAGES: Array<{ key: AnalysisStage; label: string }> = [
+  { key: 'fetching_data',        label: 'Fetching live ETF and market data' },
+  { key: 'calculating_momentum', label: 'Calculating institutional momentum' },
+  { key: 'calling_agent',        label: 'Sending analysis to The Agent' },
+  { key: 'validating_signal',    label: 'Validating the generated signal' },
+  { key: 'ready',                label: 'Signal ready' },
 ];
 
 export function SignalPanel({
   signal, loading, onAnalyze, activeTab,
-  onTrade, walletConnected, error,
+  onTrade, walletConnected, error, analysisStage, onCancel,
 }: SignalPanelProps) {
   const label = activeTab.toUpperCase();
   const style = signal ? DIRECTION_STYLES[signal.direction] : null;
-  const [stepIdx, setStepIdx] = useState(0);
+  const [fallbackIdx, setFallbackIdx] = useState(0);
+  const [elapsedSec, setElapsedSec] = useState(0);
 
   useEffect(() => {
     if (!loading) {
-      setStepIdx(0);
+      setFallbackIdx(0);
+      setElapsedSec(0);
       return;
     }
+    const startedAt = Date.now();
     const timer = setInterval(() => {
-      setStepIdx((prev) => (prev < LOADING_STEPS.length - 1 ? prev + 1 : prev));
-    }, 600);
+      const sec = (Date.now() - startedAt) / 1000;
+      setElapsedSec(sec);
+      // Only advance fallback index up to stage 2 ('calling_agent') if analysisStage prop is not provided
+      setFallbackIdx((prev) => (prev < 2 ? prev + 1 : prev));
+    }, 500);
     return () => clearInterval(timer);
   }, [loading]);
+
+  const activeStageIdx = analysisStage
+    ? Math.max(0, LOADING_STAGES.findIndex((s) => s.key === analysisStage))
+    : fallbackIdx;
 
   return (
     <div className="flex flex-col gap-3">
@@ -157,17 +172,19 @@ export function SignalPanel({
           </div>
           <div className="text-center">
             <p className="text-slate-300 text-sm font-medium">Synthesizing signal…</p>
-            <p className="text-slate-500 text-xs mt-1">Reading ETF flows + news with {AGENT_BRANDING.name}</p>
+            <p className="text-slate-500 text-xs mt-1">
+              Reading ETF flows + news with {AGENT_BRANDING.name} · <span className="font-mono text-slate-400">{elapsedSec.toFixed(1)}s</span>
+            </p>
           </div>
           <div
             style={{ background: 'rgba(0,255,167,0.04)', border: '1px solid rgba(0,255,167,0.15)' }}
             className="w-full rounded-lg p-3 space-y-2"
           >
-            {LOADING_STEPS.map((stepText, idx) => {
-              const done = idx < stepIdx;
-              const active = idx === stepIdx;
+            {LOADING_STAGES.map((stage, idx) => {
+              const done = idx < activeStageIdx;
+              const active = idx === activeStageIdx;
               return (
-                <div key={stepText} className="flex items-center gap-2 text-[11px] font-mono">
+                <div key={stage.key} className="flex items-center gap-2 text-[11px] font-mono">
                   {done ? (
                     <CheckCircle2 size={12} style={{ color: '#34D399' }} className="shrink-0" />
                   ) : active ? (
@@ -176,12 +193,25 @@ export function SignalPanel({
                     <span className="w-3 h-3 rounded-full border border-slate-700 shrink-0" />
                   )}
                   <span className={done ? 'text-emerald-400' : active ? 'text-slate-200' : 'text-slate-600'}>
-                    {stepText}
+                    {stage.label}
                   </span>
                 </div>
               );
             })}
           </div>
+          {elapsedSec >= 6 && (
+            <div className="w-full flex items-center justify-between gap-2 text-[11px] text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
+              <span>Processing high institutional data volume — still waiting for {AGENT_BRANDING.name}…</span>
+              {onCancel && (
+                <button
+                  onClick={onCancel}
+                  className="text-[10px] font-mono underline text-amber-300 hover:text-white shrink-0"
+                >
+                  Cancel
+                </button>
+              )}
+            </div>
+          )}
         </div>
       )}
 

@@ -30,7 +30,7 @@ export default function OverviewPage() {
     activeLabel, activeTab, setActiveTab,
     latestBtcPx, latestEthPx, liveBtcPx, liveEthPx,
     loading, lastUpdated, sentiment,
-    signal, signalLoading, signalError, handleAnalyze,
+    signal, signalLoading, signalError, analysisStage, handleAnalyze, cancelAnalyze,
     alerts, history, news, refresh,
     openTradeModal, wallet,
   } = useDashboard();
@@ -169,6 +169,8 @@ export default function OverviewPage() {
             onAnalyze={handleAnalyze} activeTab={activeTab}
             onTrade={openTradeModal} walletConnected={wallet.connected}
             error={signalError}
+            analysisStage={analysisStage}
+            onCancel={cancelAnalyze}
           />
           <AskAI asset={activeLabel} etfData={activeData} signal={signal} />
         </div>

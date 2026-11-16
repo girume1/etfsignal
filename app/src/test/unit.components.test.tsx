@@ -156,21 +156,30 @@ describe('SignalPanel', () => {
   });
 
   it('renders loading spinner and "Synthesizing signal..." when loading=true', () => {
-    render(<SignalPanel {...defaultProps} signal={null} loading={true} />);
+    render(<SignalPanel {...defaultProps} signal={null} loading={true} analysisStage="calling_agent" />);
     expect(screen.getByText('Synthesizing signal…')).toBeInTheDocument();
+    expect(screen.getByText('Fetching live ETF and market data')).toBeInTheDocument();
+    expect(screen.getByText('Calculating institutional momentum')).toBeInTheDocument();
+    expect(screen.getByText('Sending analysis to The Agent')).toBeInTheDocument();
+    expect(screen.getByText('Validating the generated signal')).toBeInTheDocument();
   });
 
   it('renders error state and Retry button when error is set', () => {
+    const onAnalyze = vi.fn();
     render(
       <SignalPanel
         {...defaultProps}
+        onAnalyze={onAnalyze}
         signal={null}
         error="Gemini API error: 500"
       />,
     );
 
     expect(screen.getByText('Gemini API error: 500')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /retry/i })).toBeInTheDocument();
+    const retryBtn = screen.getByRole('button', { name: /retry/i });
+    expect(retryBtn).toBeInTheDocument();
+    fireEvent.click(retryBtn);
+    expect(onAnalyze).toHaveBeenCalledOnce();
   });
 
   it('renders "Connect wallet to execute on SoDEX" when wallet is not connected', () => {

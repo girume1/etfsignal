@@ -43,30 +43,38 @@ const CHART_SYMBOLS: Record<string, { symbol: string; label: string }> = {
 
 // ─── Telegram helpers ─────────────────────────────────────────────────────────
 
-async function sendMessage(
+export async function sendMessage(
   token: string,
   chatId: number | string,
   text: string,
   parseMode: 'Markdown' | 'HTML' = 'Markdown',
-) {
-  await fetch(`${TELEGRAM_API}/bot${token}/sendMessage`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      chat_id:                  chatId,
-      text,
-      parse_mode:               parseMode,
-      disable_web_page_preview: true,
-    }),
-  });
+): Promise<number | null> {
+  try {
+    const res = await fetch(`${TELEGRAM_API}/bot${token}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id:                  chatId,
+        text,
+        parse_mode:               parseMode,
+        disable_web_page_preview: true,
+      }),
+    });
+    const data: any = await res.json().catch(() => null);
+    return typeof data?.result?.message_id === 'number' ? data.result.message_id : null;
+  } catch {
+    return null;
+  }
 }
 
 async function sendTyping(token: string, chatId: number | string) {
-  await fetch(`${TELEGRAM_API}/bot${token}/sendChatAction`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ chat_id: chatId, action: 'typing' }),
-  });
+  try {
+    await fetch(`${TELEGRAM_API}/bot${token}/sendChatAction`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, action: 'typing' }),
+    });
+  } catch { /* ignore typing errors */ }
 }
 
 // ─── Telegram: send photo from URL ───────────────────────────────────────────
@@ -110,25 +118,38 @@ async function sendPhotoBuffer(
   });
 }
 
-// Edit an existing text message (used by callback_query Refresh)
-async function editMessage(
+// Edit an existing text message (used by progress updates and callback_query Refresh).
+// Safely handles "message is not modified" and returns true if edited or unchanged, false if uneditable.
+export async function editMessage(
   token:     string,
   chatId:    number | string,
   messageId: number,
   text:      string,
   replyMarkup?: unknown,
-) {
-  await fetch(`${TELEGRAM_API}/bot${token}/editMessageText`, {
-    method:  'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      chat_id:      chatId,
-      message_id:   messageId,
-      text,
-      parse_mode:   'Markdown',
-      reply_markup: replyMarkup,
-    }),
-  });
+): Promise<boolean> {
+  try {
+    const res = await fetch(`${TELEGRAM_API}/bot${token}/editMessageText`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id:                  chatId,
+        message_id:               messageId,
+        text,
+        parse_mode:               'Markdown',
+        disable_web_page_preview: true,
+        ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
+      }),
+    });
+    if (res.ok) return true;
+    const errJson: any = await res.json().catch(() => ({}));
+    const desc = String(errJson?.description ?? '').toLowerCase();
+    if (desc.includes('message is not modified')) {
+      return true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
 }
 
 async function answerCallback(token: string, callbackQueryId: string, text?: string) {
@@ -233,7 +254,8 @@ interface EtfSnapshot {
 }
 
 async function fetchEtfSnapshot(type: 'us-btc-spot' | 'us-eth-spot'): Promise<EtfSnapshot | null> {
-  const apiKey = process.env.SOSO_API_KEY ?? process.env.SOSOVALUE_API_KEY;
+  const rawKey = process.env.SOSO_API_KEY ?? process.env.SOSOVALUE_API_KEY;
+  const apiKey = rawKey ? rawKey.trim().replace(/^["']|["']$/g, '') : '';
   if (!apiKey) return null;
 
   for (const base of [SOSO_PRIMARY, SOSO_FALLBACK]) {
@@ -249,16 +271,21 @@ async function fetchEtfSnapshot(type: 'us-btc-spot' | 'us-eth-spot'): Promise<Et
       if (json.code !== 0 || !json.data) continue;
 
       const d = json.data;
+      const toNum = (v: unknown): number | null => {
+        if (v === null || v === undefined || v === '') return null;
+        const n = Number(v);
+        return Number.isFinite(n) ? n : null;
+      };
       const topFunds: Array<{ ticker: string; inflow: number }> = (d.list ?? [])
-        .filter((f: any) => (f.dailyNetInflow?.value ?? 0) > 0)
-        .sort((a: any, b: any) => (b.dailyNetInflow?.value ?? 0) - (a.dailyNetInflow?.value ?? 0))
+        .filter((f: any) => (toNum(f.dailyNetInflow?.value) ?? 0) > 0)
+        .sort((a: any, b: any) => (toNum(b.dailyNetInflow?.value) ?? 0) - (toNum(a.dailyNetInflow?.value) ?? 0))
         .slice(0, 3)
-        .map((f: any) => ({ ticker: f.ticker, inflow: f.dailyNetInflow?.value ?? 0 }));
+        .map((f: any) => ({ ticker: f.ticker, inflow: toNum(f.dailyNetInflow?.value) ?? 0 }));
 
       return {
-        totalAum:    d.totalNetAssets?.value  ?? null,
-        dailyInflow: d.dailyNetInflow?.value  ?? null,
-        cumInflow:   d.cumNetInflow?.value    ?? null,
+        totalAum:    toNum(d.totalNetAssets?.value),
+        dailyInflow: toNum(d.dailyNetInflow?.value),
+        cumInflow:   toNum(d.cumNetInflow?.value),
         topFunds,
       };
     } catch { /* try next host */ }
@@ -306,18 +333,30 @@ function confBar(pct: number): string {
   return `[${'▓'.repeat(filled)}${'░'.repeat(10 - filled)}] ${pct}%`;
 }
 
-// ─── Signal generation (Gemini AI + live SoSoValue data) ─────────────────────
+// ─── Signal generation (The Agent + live SoSoValue data) ─────────────────────
 // Routes through /api/analyze (Node.js proxy) — same path the web dashboard uses.
 
-async function generateSignal(asset: 'BTC' | 'ETH', baseUrl: string): Promise<string> {
+async function generateSignal(
+  asset: 'BTC' | 'ETH',
+  baseUrl: string,
+  onProgress?: (stageText: string) => Promise<void>,
+): Promise<string> {
   const etfType = asset === 'BTC' ? 'us-btc-spot' : 'us-eth-spot';
   const binSym  = asset === 'BTC' ? 'BTCUSDT'     : 'ETHUSDT';
+
+  if (onProgress) {
+    await onProgress(`📊 *Fetching institutional ${asset} ETF data...*`);
+  }
 
   // Fetch ETF data + live price in parallel
   const [snap, ticker] = await Promise.all([
     fetchEtfSnapshot(etfType),
     fetchBinanceTicker(binSym),
   ]);
+
+  if (onProgress) {
+    await onProgress(`🧠 *Synthesizing the ${asset} market signal...*`);
+  }
 
   // Build data section for the prompt
   const rows: string[] = [];
@@ -358,14 +397,21 @@ Respond with ONLY a JSON object (no markdown, no extra text):
     }),
   });
 
-  if (!aiRes.ok) throw new Error(`Agent API error: ${aiRes.status}`);
+  if (!aiRes.ok) {
+    const errBody: any = await aiRes.json().catch(() => ({}));
+    throw new Error(errBody?.error || `Agent API error: ${aiRes.status}`);
+  }
 
   const aiData: any  = await aiRes.json();
   const raw: string  = aiData?.content?.[0]?.text?.trim() ?? '';
 
   let sig: any;
-  try { sig = JSON.parse(raw); }
-  catch { throw new Error('Failed to parse signal JSON from The Agent'); }
+  try {
+    const clean = raw.replace(/```json|```/g, '').trim();
+    sig = JSON.parse(clean);
+  } catch {
+    throw new Error('Failed to parse signal JSON from The Agent');
+  }
 
   const dirEmoji: Record<string, string> = { LONG: '🟢', SHORT: '🔴', NEUTRAL: '🟡' };
   const emoji = dirEmoji[sig.direction] ?? '⚪';
@@ -733,28 +779,92 @@ async function handleUnsubscribe(token: string, chatId: number) {
   );
 }
 
-async function handleSignal(
+// ─── Deduplication & Single-Message Progress for /signal, /btc, /eth ─────────
+
+const INFLIGHT_TTL_SEC = 20;
+const UPDATE_DEDUPE_TTL_SEC = 120;
+const localInFlight = new Set<string>();
+const localSeenUpdates = new Map<number, number>();
+
+export function resetTelegramDedupeState(): void {
+  localInFlight.clear();
+  localSeenUpdates.clear();
+}
+
+async function isDuplicateWebhookUpdate(updateId?: number): Promise<boolean> {
+  if (typeof updateId !== 'number') return false;
+  const now = Date.now();
+  const prev = localSeenUpdates.get(updateId);
+  if (prev && now - prev < UPDATE_DEDUPE_TTL_SEC * 1000) {
+    return true;
+  }
+  localSeenUpdates.set(updateId, now);
+
+  const key = `etfsignal:tg:update:${updateId}`;
+  const existing = await dualGet(key);
+  if (existing) return true;
+  await dualSet(key, '1', UPDATE_DEDUPE_TTL_SEC);
+  return false;
+}
+
+export async function handleSignal(
   token:   string,
   chatId:  number,
   asset:   'BTC' | 'ETH',
   baseUrl: string,
-) {
-  await sendTyping(token, chatId);
-  await sendMessage(
-    token,
-    chatId,
-    `⚙️ *The Agent is analyzing ${asset} ETF flows...*\n_Fetching live SoSoValue data — this takes a few seconds_`,
-  );
+): Promise<void> {
+  const lockKey = `etfsignal:tg:inflight:${chatId}:${asset}`;
+  if (localInFlight.has(lockKey)) {
+    return;
+  }
+  // Acquire local lock synchronously before awaiting remote lock to prevent race conditions
+  localInFlight.add(lockKey);
 
   try {
-    const signalText = await generateSignal(asset, baseUrl);
-    await sendMessage(token, chatId, signalText);
-  } catch (err: any) {
-    await sendMessage(
-      token,
-      chatId,
-      `❌ *Signal generation failed*\n\`${err.message}\`\n\nPlease try again in a moment.`,
-    );
+    const remoteLock = await dualGet(lockKey);
+    if (remoteLock) {
+      return;
+    }
+    await dualSet(lockKey, String(Date.now()), INFLIGHT_TTL_SEC);
+
+    await sendTyping(token, chatId);
+
+    // 1. Send ONE initial progress message and store its message_id
+    let lastProgressText = `⚙️ *The Agent is analyzing ${asset} ETF flows...*`;
+    const progressMsgId = await sendMessage(token, chatId, lastProgressText);
+
+    const updateProgress = async (nextText: string) => {
+      if (!progressMsgId || nextText === lastProgressText) return;
+      lastProgressText = nextText;
+      await editMessage(token, chatId, progressMsgId, nextText);
+    };
+
+    try {
+      const signalText = await generateSignal(asset, baseUrl, updateProgress);
+
+      // Replace the progress message in-place with the final signal
+      if (progressMsgId) {
+        const edited = await editMessage(token, chatId, progressMsgId, signalText);
+        if (!edited) {
+          await sendMessage(token, chatId, signalText);
+        }
+      } else {
+        await sendMessage(token, chatId, signalText);
+      }
+    } catch (err: any) {
+      const errorText = `❌ *${asset} Signal Analysis Failed*\n\`${err?.message ?? 'Analysis unavailable'}\`\n\nPlease try again in a moment.`;
+      if (progressMsgId) {
+        const edited = await editMessage(token, chatId, progressMsgId, errorText);
+        if (!edited) {
+          await sendMessage(token, chatId, errorText);
+        }
+      } else {
+        await sendMessage(token, chatId, errorText);
+      }
+    }
+  } finally {
+    localInFlight.delete(lockKey);
+    await dualDel(lockKey);
   }
 }
 
@@ -791,6 +901,11 @@ export default async function handler(req: Request) {
   let update: any;
   try { update = await req.json(); }
   catch { return new Response('Bad request', { status: 400 }); }
+
+  // Deduplicate repeated Telegram webhook deliveries for the same update_id
+  if (await isDuplicateWebhookUpdate(update?.update_id)) {
+    return new Response('OK', { status: 200 });
+  }
 
   // ── Handle inline keyboard callbacks (e.g. gas Refresh button) ─────────────
   const cbQuery = update?.callback_query;

@@ -1,6 +1,13 @@
 import type { EtfData, NewsItem, MarketSignal } from '../types';
 import { getNewsTitle, formatUSD } from './sosovalue';
 
+export type AnalysisStage =
+  | 'fetching_data'
+  | 'calculating_momentum'
+  | 'calling_agent'
+  | 'validating_signal'
+  | 'ready';
+
 /** Requirement 2.10, 4.7: optional quantitative context appended to the AI prompt. */
 export interface SignalContext {
   backtestSummary?: { hitRate: number; avgPnl: number; sampleSize: number };
@@ -8,6 +15,8 @@ export interface SignalContext {
   flow90dTotal?: number;
   sosoValueMs?: number;
   marketDataMs?: number;
+  onStageChange?: (stage: AnalysisStage) => void;
+  signal?: AbortSignal;
 }
 
 export interface SignalTimingBreakdown {
@@ -27,8 +36,14 @@ export function getLastSignalTiming(): SignalTimingBreakdown | null {
 
 // Short-lived cache & in-flight deduplication to avoid duplicate Gemini requests for identical market state
 const SIGNAL_CACHE_TTL_MS = 45_000;
+const CLIENT_ANALYZE_TIMEOUT_MS = 16_000;
 const signalCache = new Map<string, { signal: MarketSignal; ts: number }>();
 const inflightRequests = new Map<string, Promise<MarketSignal>>();
+
+export function clearSignalCache(): void {
+  signalCache.clear();
+  inflightRequests.clear();
+}
 
 export function buildPrompt(
   etfType: 'BTC' | 'ETH',
@@ -192,6 +207,7 @@ export async function analyzeMarket(
   if (hasRealData) {
     const cached = signalCache.get(cacheKey);
     if (cached && Date.now() - cached.ts < SIGNAL_CACHE_TTL_MS) {
+      context.onStageChange?.('ready');
       return cached.signal;
     }
     const inflight = inflightRequests.get(cacheKey);
@@ -201,30 +217,68 @@ export async function analyzeMarket(
   }
 
   const runAnalysis = async (): Promise<MarketSignal> => {
+    if (context.signal?.aborted) {
+      throw new DOMException('Analysis cancelled', 'AbortError');
+    }
+
+    context.onStageChange?.('calculating_momentum');
     const tPromptStart = performance.now();
     const prompt = buildPrompt(etfType, etfData, news, currentPrice ?? null, context);
     const dataProcessingMs = Math.round(performance.now() - tPromptStart);
 
-    // Calls our serverless function — NOT Google directly
-    // API key stays safe on the server
+    context.onStageChange?.('calling_agent');
     const tGeminiStart = performance.now();
-    const response = await fetch('/api/analyze', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        max_tokens: 1000,
-        messages: [{ role: 'user', content: prompt }],
-      }),
-    });
+
+    // Combine caller AbortSignal with client-side timeout so requests never hang indefinitely
+    const timeoutController = new AbortController();
+    const timeoutId = setTimeout(() => timeoutController.abort(), CLIENT_ANALYZE_TIMEOUT_MS);
+    const onCallerAbort = () => timeoutController.abort();
+    context.signal?.addEventListener('abort', onCallerAbort, { once: true });
+
+    let response: Response;
+    try {
+      response = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          max_tokens: 1000,
+          messages: [{ role: 'user', content: prompt }],
+        }),
+        ...(context.signal ? { signal: timeoutController.signal } : {}),
+      });
+    } catch (err: any) {
+      if (context.signal?.aborted) {
+        throw new DOMException('Analysis cancelled', 'AbortError');
+      }
+      if (timeoutController.signal.aborted || err?.name === 'AbortError') {
+        throw new Error('The Agent timed out waiting for a response. Please click Retry.');
+      }
+      throw err;
+    } finally {
+      clearTimeout(timeoutId);
+      context.signal?.removeEventListener('abort', onCallerAbort);
+    }
 
     if (!response.ok) {
-      throw new Error(`AI API error: ${response.status}`);
+      let errMessage = `AI API error: ${response.status}`;
+      try {
+        const errBody = await response.json();
+        if (errBody?.error && typeof errBody.error === 'string') {
+          errMessage = response.status === 504
+            ? `${errBody.error} (HTTP 504)`
+            : errBody.error;
+        }
+      } catch {
+        // keep default status error message
+      }
+      throw new Error(errMessage);
     }
 
     const data = await response.json();
     const geminiApiMs = Math.round(performance.now() - tGeminiStart);
     const text = data.content?.[0]?.text || '';
 
+    context.onStageChange?.('validating_signal');
     const tValidStart = performance.now();
     let resultSignal: MarketSignal;
     try {
@@ -259,6 +313,8 @@ export async function analyzeMarket(
       totalMs,
     };
     console.info('[The Agent] Signal timing breakdown (ms):', lastSignalTiming);
+
+    context.onStageChange?.('ready');
 
     if (hasRealData && resultSignal.headline !== 'Analysis unavailable — check API setup') {
       signalCache.set(cacheKey, { signal: resultSignal, ts: Date.now() });
