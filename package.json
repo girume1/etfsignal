@@ -2,6 +2,7 @@
   "name": "etfsignal-root",
   "private": true,
   "dependencies": {
+    "@google/genai": "^3.3.0",
     "ethers": "^6.16.0"
   }
 }
