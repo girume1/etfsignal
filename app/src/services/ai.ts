@@ -36,7 +36,7 @@ export function getLastSignalTiming(): SignalTimingBreakdown | null {
 
 // Short-lived cache & in-flight deduplication to avoid duplicate Gemini requests for identical market state
 const SIGNAL_CACHE_TTL_MS = 45_000;
-const CLIENT_ANALYZE_TIMEOUT_MS = 16_000;
+const CLIENT_ANALYZE_TIMEOUT_MS = 26_000;
 const signalCache = new Map<string, { signal: MarketSignal; ts: number }>();
 const inflightRequests = new Map<string, Promise<MarketSignal>>();
 
@@ -173,19 +173,42 @@ Answer the user's question concisely (2-4 sentences max). Reference specific num
     { role: 'user' as const, content: question },
   ];
 
-  const response = await fetch('/api/analyze', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      max_tokens: 400,
-      system: systemContext,
-      messages,
-    }),
-  });
+  const timeoutController = new AbortController();
+  const timeoutId = setTimeout(() => timeoutController.abort(), CLIENT_ANALYZE_TIMEOUT_MS);
+  try {
+    const response = await fetch('/api/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        max_tokens: 400,
+        system: systemContext,
+        messages,
+      }),
+      signal: timeoutController.signal,
+    });
 
-  if (!response.ok) throw new Error(`AI API error: ${response.status}`);
-  const data = await response.json();
-  return data.content?.[0]?.text || '(no response)';
+    if (!response.ok) {
+      let errMsg = `AI API error: ${response.status}`;
+      try {
+        const errBody = await response.json();
+        if (errBody?.error && typeof errBody.error === 'string') {
+          errMsg = errBody.error;
+        }
+      } catch {
+        // keep status error
+      }
+      throw new Error(errMsg);
+    }
+    const data = await response.json();
+    return data.content?.[0]?.text || '(no response)';
+  } catch (err: any) {
+    if (timeoutController.signal.aborted || err?.name === 'AbortError') {
+      throw new Error('The Agent timed out answering your question. Please try again.');
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 export async function analyzeMarket(
@@ -244,7 +267,7 @@ export async function analyzeMarket(
           max_tokens: 1000,
           messages: [{ role: 'user', content: prompt }],
         }),
-        ...(context.signal ? { signal: timeoutController.signal } : {}),
+        signal: timeoutController.signal,
       });
     } catch (err: any) {
       if (context.signal?.aborted) {

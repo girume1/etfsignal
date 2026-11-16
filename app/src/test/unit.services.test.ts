@@ -8,6 +8,7 @@ import { fetchEtfMetrics, fetchNews } from '../services/sosovalue';
 import { analyzeMarket, getLastSignalTiming, clearSignalCache, type AnalysisStage } from '../services/ai';
 import { placeSpotOrder, truncateAddress, validateOrderMinimum, SPOT_MIN_NOTIONAL_USD, PERPS_MIN_NOTIONAL_USD } from '../services/sodex';
 import { handleTelegramLinkRequest, normalizeLinkCode, dualSet, codeKey } from '../../../api/telegram-link';
+import analyzeHandler from '../../../api/analyze';
 import telegramWebhookHandler, {
   verifyAndLinkWallet,
   resolveTelegramUserName,
@@ -697,5 +698,229 @@ describe('Telegram Progress Editing & Deduplication', () => {
       }),
     );
     expect(sendCount).toBe(1);
+  });
+
+  it('supports /eth command end-to-end and falls back to plain text if Markdown entities fail to parse', async () => {
+    resetTelegramDedupeState();
+    process.env.TELEGRAM_BOT_TOKEN = 'test-bot-token';
+    const sendCalls: Array<Record<string, unknown>> = [];
+    const editCalls: Array<Record<string, unknown>> = [];
+    let aiPrompt = '';
+
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
+      const bodyObj = init?.body ? JSON.parse(init.body as string) : {};
+      if (url.endsWith('/sendMessage')) {
+        sendCalls.push(bodyObj);
+        return new Response(JSON.stringify({ ok: true, result: { message_id: 4242 } }), { status: 200 });
+      }
+      if (url.endsWith('/editMessageText')) {
+        editCalls.push(bodyObj);
+        // Simulate Telegram rejecting Markdown entities on one edit call
+        if (editCalls.length === 2 && bodyObj.parse_mode === 'Markdown') {
+          return new Response(JSON.stringify({ ok: false, description: "Bad Request: can't parse entities" }), { status: 400 });
+        }
+        return new Response(JSON.stringify({ ok: true }), { status: 200 });
+      }
+      if (url.endsWith('/api/analyze')) {
+        aiPrompt = bodyObj.messages?.[0]?.content ?? '';
+        return new Response(
+          JSON.stringify({
+            content: [{
+              text: JSON.stringify({
+                direction: 'LONG',
+                confidence: 80,
+                entryPrice: 3200,
+                takeProfit: 3450,
+                stopLoss: 3080,
+                timeframe: '1D',
+                thesis: 'ETH spot ETF inflows remain constructive.',
+                topDriver: 'ETHA net inflows',
+              }),
+            }],
+          }),
+          { status: 200 },
+        );
+      }
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    }));
+
+    await telegramWebhookHandler(
+      new Request('https://etfsignal.vercel.app/api/telegram', {
+        method: 'POST',
+        body: JSON.stringify({
+          update_id: 777888999,
+          message: { chat: { id: 888777 }, from: { first_name: 'Alice' }, text: '/eth' },
+        }),
+      }),
+    );
+
+    expect(aiPrompt).toContain('for ETH');
+    expect(sendCalls).toHaveLength(1);
+    const lastEditText = String(editCalls[editCalls.length - 1]?.text ?? '');
+    expect(lastEditText).toContain('The Agent — ETH Market Intelligence');
+    expect(lastEditText).toContain('LONG');
+
+    // Verify editMessage plain-text retry directly when "can't parse entities" occurs
+    let plainRetryBody: Record<string, unknown> | null = null;
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(async (_url: string, init?: RequestInit) => {
+      const body = JSON.parse(init?.body as string);
+      if (body.parse_mode) {
+        return new Response(JSON.stringify({ ok: false, description: "Bad Request: can't parse entities" }), { status: 400 });
+      }
+      plainRetryBody = body;
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    }));
+    const ok = await editMessage('test-bot-token', 888777, 4242, '*broken_markdown`test');
+    expect(ok).toBe(true);
+    expect(plainRetryBody).not.toBeNull();
+    expect(plainRetryBody!.parse_mode).toBeUndefined();
+  });
+});
+
+// ─── 17.8: /api/analyze Gemini Deadline, Fallback & Error Handling ───────────
+
+function createMockRes() {
+  const res: { statusCode: number; body: any; status: (code: number) => any; json: (payload: any) => any } = {
+    statusCode: 200,
+    body: null,
+    status(code: number) {
+      this.statusCode = code;
+      return this;
+    },
+    json(payload: any) {
+      this.body = payload;
+      return this;
+    },
+  };
+  return res;
+}
+
+describe('/api/analyze Gemini handler', () => {
+  it('enforces valid Gemini X-Server-Timeout (>= 10s) on primary and fallback models and never fabricates on failure', async () => {
+    process.env.GEMINI_API_KEY = 'test-gemini-key';
+    const capturedCalls: Array<{ url: string; headers: Record<string, string>; body: any }> = [];
+
+    // 1. Primary (gemini-flash-latest) succeeds with X-Server-Timeout >= 10s
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
+      capturedCalls.push({
+        url: String(url),
+        headers: Object.fromEntries(new Headers(init?.headers).entries()),
+        body: init?.body ? JSON.parse(String(init.body)) : null,
+      });
+      return new Response(
+        JSON.stringify({ candidates: [{ content: { parts: [{ text: '{"direction":"BULLISH"}' }] } }] }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      );
+    }));
+
+    const resOk = createMockRes();
+    await analyzeHandler(
+      { method: 'POST', body: { max_tokens: 1000, messages: [{ role: 'user', content: 'Analyze BTC' }] } },
+      resOk,
+    );
+    expect(resOk.statusCode).toBe(200);
+    expect(resOk.body.content[0].text).toBe('{"direction":"BULLISH"}');
+    expect(resOk.body._timing.model).toBe('gemini-flash-latest');
+    expect(Number(capturedCalls[0].headers['x-server-timeout'])).toBeGreaterThanOrEqual(10);
+    expect(capturedCalls[0].body.generationConfig?.thinkingConfig?.thinkingBudget).toBe(0);
+
+    // 2. Falls back to gemini-2.0-flash (no thinkingConfig, timeout >= 10s) on HTTP 429 from primary
+    capturedCalls.length = 0;
+    let attempt = 0;
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
+      attempt++;
+      capturedCalls.push({
+        url: String(url),
+        headers: Object.fromEntries(new Headers(init?.headers).entries()),
+        body: init?.body ? JSON.parse(String(init.body)) : null,
+      });
+      if (attempt === 1) {
+        return new Response(JSON.stringify({ error: { code: 429, message: 'Rate limited' } }), { status: 429 });
+      }
+      return new Response(
+        JSON.stringify({ candidates: [{ content: { parts: [{ text: '{"direction":"BEARISH"}' }] } }] }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      );
+    }));
+
+    const resFallback = createMockRes();
+    await analyzeHandler(
+      { method: 'POST', body: { max_tokens: 1000, messages: [{ role: 'user', content: 'Analyze ETH' }] } },
+      resFallback,
+    );
+    expect(resFallback.statusCode).toBe(200);
+    expect(resFallback.body._timing.model).toBe('gemini-2.0-flash');
+    expect(capturedCalls).toHaveLength(2);
+    expect(Number(capturedCalls[1].headers['x-server-timeout'])).toBeGreaterThanOrEqual(10);
+    expect(capturedCalls[1].body.generationConfig?.thinkingConfig).toBeUndefined();
+
+    // 3. Returns explicit HTTP 504 on timeout and HTTP 503 on upstream failure — never fabricates a signal
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new DOMException('The operation was aborted', 'AbortError')));
+    const resTimeout = createMockRes();
+    await analyzeHandler(
+      { method: 'POST', body: { max_tokens: 1000, messages: [{ role: 'user', content: 'Analyze BTC' }] } },
+      resTimeout,
+    );
+    expect(resTimeout.statusCode).toBe(504);
+    expect(resTimeout.body.errorType).toBe('gemini_timeout');
+    expect(resTimeout.body.content).toBeUndefined();
+
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => new Response(
+      JSON.stringify({ error: { code: 503, message: 'Service temporarily overloaded' } }),
+      { status: 503, headers: { 'Content-Type': 'application/json' } },
+    )));
+    const res503 = createMockRes();
+    await analyzeHandler(
+      { method: 'POST', body: { max_tokens: 1000, messages: [{ role: 'user', content: 'Analyze BTC' }] } },
+      res503,
+    );
+    expect(res503.statusCode).toBe(503);
+    expect(res503.body.error).toBe('Service temporarily overloaded');
+    expect(res503.body.content).toBeUndefined();
+  });
+
+  it('website analyzeMarket supports ETH and handles HTTP 429 and 503 without fabricating signals', async () => {
+    clearSignalCache();
+
+    // ETH success
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        content: [{
+          text: JSON.stringify({
+            direction: 'BULLISH',
+            confidence: 82,
+            headline: 'ETH institutional flows accelerate',
+            summary: 'ETHA leads daily inflows.',
+            keyFactors: ['ETHA inflows', 'Low selling pressure', 'Macro stability'],
+            tradeIdea: 'Long ETH on SoDEX.',
+            riskWarning: 'Macro volatility.',
+            entryZone: { low: 3150, high: 3210 },
+            takeProfit: { price: 3420, pct: 6.5, rationale: 'Resistance target' },
+            stopLoss: { price: 3060, pct: -3.2, rationale: 'Support invalidation' },
+          }),
+        }],
+      }),
+    }));
+    const ethSig = await analyzeMarket('ETH', EMPTY_ETF_DATA, [], 3180);
+    expect(ethSig.direction).toBe('BULLISH');
+    expect(ethSig.confidence).toBe(82);
+
+    // HTTP 429 handling
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: false,
+      status: 429,
+      json: async () => ({ error: 'The Agent is temporarily rate-limited by the upstream AI provider. Please retry in a few seconds.' }),
+    }));
+    await expect(analyzeMarket('BTC', EMPTY_ETF_DATA, [], 95000)).rejects.toThrow(/rate-limited/i);
+
+    // HTTP 503 handling
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: false,
+      status: 503,
+      json: async () => ({ error: 'Upstream unavailable' }),
+    }));
+    await expect(analyzeMarket('BTC', EMPTY_ETF_DATA, [], 95000)).rejects.toThrow(/unavailable/i);
   });
 });

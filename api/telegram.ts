@@ -43,6 +43,16 @@ const CHART_SYMBOLS: Record<string, { symbol: string; label: string }> = {
 
 // ─── Telegram helpers ─────────────────────────────────────────────────────────
 
+async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export async function sendMessage(
   token: string,
   chatId: number | string,
@@ -61,7 +71,24 @@ export async function sendMessage(
       }),
     });
     const data: any = await res.json().catch(() => null);
-    return typeof data?.result?.message_id === 'number' ? data.result.message_id : null;
+    if (res.ok) {
+      return typeof data?.result?.message_id === 'number' ? data.result.message_id : null;
+    }
+    const desc = String(data?.description ?? '').toLowerCase();
+    if (desc.includes("can't parse entities")) {
+      const plainRes = await fetch(`${TELEGRAM_API}/bot${token}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id:                  chatId,
+          text:                     text.replace(/[*_`[\]]/g, ''),
+          disable_web_page_preview: true,
+        }),
+      });
+      const plainData: any = await plainRes.json().catch(() => null);
+      return typeof plainData?.result?.message_id === 'number' ? plainData.result.message_id : null;
+    }
+    return null;
   } catch {
     return null;
   }
@@ -145,6 +172,22 @@ export async function editMessage(
     const desc = String(errJson?.description ?? '').toLowerCase();
     if (desc.includes('message is not modified')) {
       return true;
+    }
+    if (desc.includes("can't parse entities")) {
+      const plainRes = await fetch(`${TELEGRAM_API}/bot${token}/editMessageText`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id:                  chatId,
+          message_id:               messageId,
+          text:                     text.replace(/[*_`[\]]/g, ''),
+          disable_web_page_preview: true,
+          ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
+        }),
+      });
+      if (plainRes.ok) return true;
+      const plainErr: any = await plainRes.json().catch(() => ({}));
+      return String(plainErr?.description ?? '').toLowerCase().includes('message is not modified');
     }
     return false;
   } catch {
@@ -260,11 +303,15 @@ async function fetchEtfSnapshot(type: 'us-btc-spot' | 'us-eth-spot'): Promise<Et
 
   for (const base of [SOSO_PRIMARY, SOSO_FALLBACK]) {
     try {
-      const res = await fetch(`${base}/openapi/v2/etf/currentEtfDataMetrics`, {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json', 'x-soso-api-key': apiKey },
-        body:    JSON.stringify({ type }),
-      });
+      const res = await fetchWithTimeout(
+        `${base}/openapi/v2/etf/currentEtfDataMetrics`,
+        {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json', 'x-soso-api-key': apiKey },
+          body:    JSON.stringify({ type }),
+        },
+        4000,
+      );
       if (!res.ok) continue;
 
       const json: any = await res.json();
@@ -296,7 +343,11 @@ async function fetchEtfSnapshot(type: 'us-btc-spot' | 'us-eth-spot'): Promise<Et
 // Fetch 24-hr ticker from Binance (price + percent change)
 async function fetchBinanceTicker(symbol: 'BTCUSDT' | 'ETHUSDT'): Promise<{ price: number; changePct: number } | null> {
   try {
-    const res = await fetch(`https://api.binance.com/api/v3/ticker/24hr?symbol=${symbol}`);
+    const res = await fetchWithTimeout(
+      `https://api.binance.com/api/v3/ticker/24hr?symbol=${symbol}`,
+      {},
+      4000,
+    );
     if (!res.ok) return null;
     const d: any = await res.json();
     return {
@@ -388,13 +439,22 @@ Respond with ONLY a JSON object (no markdown, no extra text):
 }`;
 
   // Call the /api/analyze proxy (Node.js, not Edge) — same endpoint the dashboard uses
-  const aiRes = await fetch(`${baseUrl}/api/analyze`, {
-    method:  'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      max_tokens: 512,
-      messages:   [{ role: 'user', content: prompt }],
-    }),
+  const aiRes = await fetchWithTimeout(
+    `${baseUrl}/api/analyze`,
+    {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        max_tokens: 512,
+        messages:   [{ role: 'user', content: prompt }],
+      }),
+    },
+    25_000,
+  ).catch((err: any) => {
+    if (err?.name === 'AbortError') {
+      throw new Error('The Agent timed out waiting for Gemini. Please try again.');
+    }
+    throw err;
   });
 
   if (!aiRes.ok) {
@@ -781,7 +841,7 @@ async function handleUnsubscribe(token: string, chatId: number) {
 
 // ─── Deduplication & Single-Message Progress for /signal, /btc, /eth ─────────
 
-const INFLIGHT_TTL_SEC = 20;
+const INFLIGHT_TTL_SEC = 25;
 const UPDATE_DEDUPE_TTL_SEC = 120;
 const localInFlight = new Set<string>();
 const localSeenUpdates = new Map<number, number>();
@@ -852,7 +912,8 @@ export async function handleSignal(
         await sendMessage(token, chatId, signalText);
       }
     } catch (err: any) {
-      const errorText = `❌ *${asset} Signal Analysis Failed*\n\`${err?.message ?? 'Analysis unavailable'}\`\n\nPlease try again in a moment.`;
+      const safeMsg = String(err?.message ?? 'Analysis unavailable').replace(/`/g, "'");
+      const errorText = `❌ *${asset} Signal Analysis Failed*\n\`${safeMsg}\`\n\nPlease try again in a moment.`;
       if (progressMsgId) {
         const edited = await editMessage(token, chatId, progressMsgId, errorText);
         if (!edited) {
