@@ -1,19 +1,8 @@
 import {
-  createContext, useContext, useState, useEffect,
+  useState, useEffect,
   type ReactNode,
 } from 'react';
-
-type Theme = 'dark' | 'light';
-
-interface ThemeContextValue {
-  theme: Theme;
-  toggleTheme: () => void;
-}
-
-const ThemeContext = createContext<ThemeContextValue>({
-  theme: 'dark',
-  toggleTheme: () => {},
-});
+import { ThemeContext, type Theme } from './themeStore';
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setTheme] = useState<Theme>(() => {
@@ -26,7 +15,11 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
-    try { localStorage.setItem('etfsignal-theme', theme); } catch {}
+    try {
+      localStorage.setItem('etfsignal-theme', theme);
+    } catch {
+      // ignore storage errors
+    }
   }, [theme]);
 
   const toggleTheme = () => setTheme(t => t === 'dark' ? 'light' : 'dark');
@@ -36,8 +29,4 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       {children}
     </ThemeContext.Provider>
   );
-}
-
-export function useTheme() {
-  return useContext(ThemeContext);
 }

@@ -247,7 +247,6 @@ export function TradingChart({
       }
     };
   // Re-create the chart when symbol, interval, limit, or retryCount changes
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [symbol, interval, limit, retryCount]);
 
   // ── Derive display price: live WebSocket > latest candle close ────────────

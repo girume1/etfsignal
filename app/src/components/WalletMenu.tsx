@@ -1,11 +1,12 @@
 import { useState, useRef, useEffect } from 'react';
-import { Copy, ExternalLink, LogOut, ChevronUp, ChevronDown } from 'lucide-react';
+import { Copy, ExternalLink, LogOut, ChevronUp, ChevronDown, RefreshCw } from 'lucide-react';
 import type { WalletState } from '../types';
-import { truncateAddress, USE_TESTNET, CHAIN_ID } from '../services/sodex';
-import { useDashboard } from '../contexts/DashboardContext';
+import { truncateAddress } from '../services/sodex';
+import { ACTIVE_VALUECHAIN, getChainDisplayName } from '../config/valuechain';
+import { useDashboard } from '../contexts/dashboardStore';
 
-const EXPLORER = `https://${USE_TESTNET ? 'testnet.' : ''}sodex.com/portfolio?address=`;
-const EXPLORER_HOST = `${USE_TESTNET ? 'testnet.' : ''}sodex.com`;
+const EXPLORER = ACTIVE_VALUECHAIN.explorerPortfolioUrl;
+const EXPLORER_HOST = ACTIVE_VALUECHAIN.sodexHost;
 
 interface WalletMenuProps {
   wallet: WalletState;
@@ -14,10 +15,19 @@ interface WalletMenuProps {
 }
 
 export function WalletMenu({ wallet, onConnect, onDisconnect }: WalletMenuProps) {
-  const { profile } = useDashboard();
+  const { profile, switchToValueChain } = useDashboard();
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+
+  const isLocked = wallet.connected && wallet.networkStatus === 'locked';
+  const isWrongNetwork = Boolean(
+    wallet.connected &&
+    !isLocked &&
+    wallet.chainId != null &&
+    wallet.chainId !== ACTIVE_VALUECHAIN.chainId,
+  );
+  const wrongNetworkName = wallet.chainName ?? getChainDisplayName(wallet.chainId);
 
   useEffect(() => {
     function onClickOutside(e: MouseEvent) {
@@ -47,7 +57,9 @@ export function WalletMenu({ wallet, onConnect, onDisconnect }: WalletMenuProps)
       await navigator.clipboard.writeText(wallet.address);
       setCopied(true);
       setTimeout(() => setCopied(false), 1800);
-    } catch {}
+    } catch {
+      // clipboard unavailable
+    }
   }
 
   return (
@@ -67,7 +79,11 @@ export function WalletMenu({ wallet, onConnect, onDisconnect }: WalletMenuProps)
         {profile.avatar ? (
           <img src={profile.avatar} alt="" className="w-4 h-4 rounded-full object-cover shrink-0" />
         ) : (
-          <span className="w-1.5 h-1.5 rounded-full bg-green-400 inline-block" />
+          <span
+            className={`w-1.5 h-1.5 rounded-full inline-block ${
+              isLocked || isWrongNetwork ? 'bg-amber-400' : 'bg-green-400'
+            }`}
+          />
         )}
         <span className="hidden sm:inline">{profile.name || truncateAddress(wallet.address)}</span>
         <span className="sm:hidden">Wallet</span>
@@ -106,26 +122,50 @@ export function WalletMenu({ wallet, onConnect, onDisconnect }: WalletMenuProps)
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              {/* Network badge */}
-              <span
-                style={{ background: 'rgba(52,211,153,0.12)', color: '#34D399', border: '1px solid rgba(52,211,153,0.3)' }}
-                className="text-[10px] px-2 py-0.5 rounded-full font-mono uppercase tracking-wider flex items-center gap-1"
-              >
-                <span className="w-1.5 h-1.5 rounded-full bg-green-400 inline-block shrink-0" />
-                SoDEX {USE_TESTNET ? 'Testnet' : 'Mainnet'}
-              </span>
-              <span
-                style={{ color: '#64748B' }}
-                className="text-[10px] font-mono"
-              >
-                chain {CHAIN_ID}
-              </span>
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Network status pill */}
+              {isLocked ? (
+                <button
+                  type="button"
+                  onClick={() => void switchToValueChain?.()}
+                  style={{ background: 'rgba(251,191,36,0.12)', color: '#FBBF24', border: '1px solid rgba(251,191,36,0.35)' }}
+                  className="text-[10px] px-2 py-0.5 rounded-full font-mono tracking-wider flex items-center gap-1 hover:opacity-90"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block shrink-0" />
+                  Unlock wallet · Retry
+                </button>
+              ) : isWrongNetwork ? (
+                <button
+                  type="button"
+                  onClick={() => void switchToValueChain?.()}
+                  style={{ background: 'rgba(251,191,36,0.12)', color: '#FBBF24', border: '1px solid rgba(251,191,36,0.35)' }}
+                  className="text-[10px] px-2 py-0.5 rounded-full font-mono tracking-wider flex items-center gap-1 hover:opacity-90"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block shrink-0" />
+                  Wrong network: {wrongNetworkName} · Switch
+                </button>
+              ) : (
+                <span
+                  style={{ background: 'rgba(52,211,153,0.12)', color: '#34D399', border: '1px solid rgba(52,211,153,0.3)' }}
+                  className="text-[10px] px-2 py-0.5 rounded-full font-mono tracking-wider flex items-center gap-1"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-400 inline-block shrink-0" />
+                  {ACTIVE_VALUECHAIN.name} · {ACTIVE_VALUECHAIN.chainId}
+                </span>
+              )}
             </div>
           </div>
 
           {/* Actions */}
           <div className="py-2">
+            {(isWrongNetwork || isLocked) && (
+              <MenuAction
+                icon={<RefreshCw size={14} />}
+                label={isLocked ? 'Unlock Wallet & Retry' : `Switch to ${ACTIVE_VALUECHAIN.name}`}
+                onClick={() => { setOpen(false); void switchToValueChain?.(); }}
+                highlight
+              />
+            )}
             <MenuAction
               icon={<Copy size={14} />}
               label={copied ? 'Copied!' : 'Copy Address'}

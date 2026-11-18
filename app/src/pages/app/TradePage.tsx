@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
-import { useDashboard } from '../../contexts/DashboardContext';
-import { USE_TESTNET, getBuilderConfig } from '../../services/sodex';
+import { useDashboard } from '../../contexts/dashboardStore';
+import { getBuilderConfig } from '../../services/sodex';
+import { ACTIVE_VALUECHAIN, USE_TESTNET, getChainDisplayName } from '../../config/valuechain';
 import { ArrowLeftRight, Zap, TrendingUp, TrendingDown, Sparkles, Droplets, ClockIcon, Send, Copy, Check } from 'lucide-react';
 
 function timeAgo(ms: number): string {
@@ -23,7 +24,7 @@ function TelegramLinkCard({ walletAddress }: { walletAddress: string }) {
   const checkLinkStatus = useCallback(() => {
     fetch(`/api/telegram-link?wallet=${encodeURIComponent(walletAddress)}`)
       .then(r => r.json())
-      .then((d: any) => {
+      .then((d: { linked?: boolean }) => {
         if (d.linked) {
           setLinked(true);
           setCode(null);
@@ -60,7 +61,7 @@ function TelegramLinkCard({ walletAddress }: { walletAddress: string }) {
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({ walletAddress }),
       });
-      const data: any = await res.json();
+      const data = (await res.json()) as { code?: string; error?: string };
       if (res.ok && data.code) {
         setCode(data.code);
       } else {
@@ -157,12 +158,34 @@ export default function TradePage() {
   const {
     wallet, activeTab, setActiveTab,
     signal, signalLoading,
-    openTradeModal, handleAnalyze,
+    openTradeModal, handleAnalyze, switchToValueChain,
     liveBtcPx, liveEthPx, latestBtcPx, latestEthPx,
     tradeHistory,
   } = useDashboard();
 
   const builderConfig = useMemo(() => getBuilderConfig(), []);
+  const isLocked = wallet.connected && wallet.networkStatus === 'locked';
+  const isWrongNetwork = Boolean(
+    wallet.connected &&
+    !isLocked &&
+    wallet.chainId != null &&
+    wallet.chainId !== ACTIVE_VALUECHAIN.chainId,
+  );
+  const manualOnlyWrongNetwork = isWrongNetwork && wallet.canAutoSwitch === false;
+  const connectedNetworkLabel = !wallet.connected
+    ? ACTIVE_VALUECHAIN.label
+    : isLocked
+    ? 'Wallet locked'
+    : wallet.chainId != null
+    ? (wallet.chainName ?? getChainDisplayName(wallet.chainId))
+    : 'Detecting…';
+  const connectedChainIdLabel = !wallet.connected
+    ? String(ACTIVE_VALUECHAIN.chainId)
+    : isLocked
+    ? 'Locked'
+    : wallet.chainId != null
+    ? String(wallet.chainId)
+    : '—';
 
   const assets = [
     {
@@ -195,7 +218,7 @@ export default function TradePage() {
           <h1 className="text-xl font-bold text-white">SoDEX Trade</h1>
         </div>
         <p className="text-sm text-slate-400">
-          Trade BTC &amp; ETH pairs on SoDEX {USE_TESTNET ? 'testnet · chain 138565' : 'mainnet · ValueChain chain 286623'}
+          Trade BTC &amp; ETH pairs on SoDEX {USE_TESTNET ? `testnet · chain ${ACTIVE_VALUECHAIN.chainId}` : `mainnet · ${ACTIVE_VALUECHAIN.name} chain ${ACTIVE_VALUECHAIN.chainId}`}
         </p>
       </div>
 
@@ -217,7 +240,7 @@ export default function TradePage() {
         >
           <Sparkles size={16} style={{ color: '#00FFA7' }} className="shrink-0 mt-0.5" />
           <div className="text-[11px] text-slate-300 leading-relaxed">
-            <span className="font-semibold text-white">SoDEX Mainnet Trading:</span> Real mainnet order execution on ValueChain (Chain ID 286623). Every order is signed via EIP-712 and routed with integrated <span className="font-mono text-[#00FFA7]">Builder Fee ({builderConfig.fee / 10} bps)</span>{builderConfig.id ? ` · Builder ID #${builderConfig.id}` : ''}.
+            <span className="font-semibold text-white">SoDEX Mainnet Trading:</span> Real mainnet order execution on {ACTIVE_VALUECHAIN.name} (Chain ID {ACTIVE_VALUECHAIN.chainId}). Every order is signed via EIP-712 and routed with integrated <span className="font-mono text-[#00FFA7]">Builder Fee ({builderConfig.fee / 10} bps)</span>{builderConfig.id ? ` · Builder ID #${builderConfig.id}` : ''}.
           </div>
         </div>
       )}
@@ -303,12 +326,17 @@ export default function TradePage() {
             >
               {signalDir} · {signal.confidence}%
             </span>
+            {signal.source === 'fallback' && (
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/25">
+                Rule-based fallback
+              </span>
+            )}
           </div>
           <p className="text-sm text-slate-300 leading-relaxed">{signal.headline}</p>
         </div>
       )}
 
-      {/* No signal nudge */}
+      {/* Optional signal suggestion (never blocks trading) */}
       {!signal && !signalLoading && (
         <div
           style={{ background: 'rgba(0,255,167,0.05)', border: '1px dashed rgba(0,255,167,0.18)' }}
@@ -316,9 +344,14 @@ export default function TradePage() {
         >
           <Zap size={16} style={{ color: '#00FFA7', marginTop: 2 }} className="shrink-0" />
           <div>
-            <p className="text-sm text-slate-300 font-medium mb-1">Get an Agent signal first</p>
+            <div className="flex items-center gap-2 mb-1">
+              <p className="text-sm text-slate-300 font-medium">Optional: Get an Agent signal</p>
+              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/5 text-slate-400 border border-white/10">
+                Optional
+              </span>
+            </div>
             <p className="text-xs text-slate-500 leading-relaxed mb-3">
-              Run The Agent's ETF flow analysis to get a BULLISH / BEARISH direction before executing. Signals improve your entry timing.
+              Run The Agent&apos;s ETF flow analysis for directional context before executing, or place a manual Buy/Sell order directly anytime.
             </p>
             <button
               onClick={handleAnalyze}
@@ -346,14 +379,14 @@ export default function TradePage() {
       <div className="grid grid-cols-2 gap-3">
         <button
           onClick={() => openTradeModal('BUY')}
-          disabled={!wallet.connected}
+          disabled={!wallet.connected || manualOnlyWrongNetwork}
           className="py-4 rounded-xl font-bold text-base transition-all active:scale-[0.98] disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           style={{
-            background: wallet.connected
+            background: wallet.connected && !manualOnlyWrongNetwork
               ? 'linear-gradient(135deg, #059669, #10B981)'
               : 'rgba(255,255,255,0.05)',
             color: '#fff',
-            boxShadow: wallet.connected ? '0 4px 20px rgba(16,185,129,0.3)' : 'none',
+            boxShadow: wallet.connected && !manualOnlyWrongNetwork ? '0 4px 20px rgba(16,185,129,0.3)' : 'none',
           }}
         >
           <TrendingUp size={16} />
@@ -362,14 +395,14 @@ export default function TradePage() {
 
         <button
           onClick={() => openTradeModal('SELL')}
-          disabled={!wallet.connected}
+          disabled={!wallet.connected || manualOnlyWrongNetwork}
           className="py-4 rounded-xl font-bold text-base transition-all active:scale-[0.98] disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           style={{
-            background: wallet.connected
+            background: wallet.connected && !manualOnlyWrongNetwork
               ? 'linear-gradient(135deg, #EF4444, #DC2626)'
               : 'rgba(255,255,255,0.05)',
             color: '#fff',
-            boxShadow: wallet.connected ? '0 4px 20px rgba(239,68,68,0.3)' : 'none',
+            boxShadow: wallet.connected && !manualOnlyWrongNetwork ? '0 4px 20px rgba(239,68,68,0.3)' : 'none',
           }}
         >
           <TrendingDown size={16} />
@@ -383,10 +416,63 @@ export default function TradePage() {
         </p>
       )}
 
+      {isLocked && (
+        <div
+          style={{ background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.28)' }}
+          className="rounded-xl px-4 py-3 flex items-center justify-between gap-3 -mt-2"
+        >
+          <p className="text-xs text-amber-300">
+            {wallet.networkError ?? `Unlock your wallet to connect to ${ACTIVE_VALUECHAIN.name} (${ACTIVE_VALUECHAIN.chainId}).`}
+          </p>
+          <button
+            type="button"
+            onClick={() => void switchToValueChain?.()}
+            className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-amber-400/20 text-amber-200 border border-amber-400/35 hover:bg-amber-400/30 transition-colors shrink-0"
+          >
+            Unlock wallet · Retry
+          </button>
+        </div>
+      )}
+
+      {manualOnlyWrongNetwork && (
+        <div
+          style={{ background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.3)' }}
+          className="rounded-xl px-4 py-3 space-y-1.5 -mt-2"
+        >
+          <p className="text-xs font-semibold text-amber-300">
+            Buy / Sell disabled — switch to {ACTIVE_VALUECHAIN.name} in your wallet
+          </p>
+          <p className="text-[11px] text-slate-400 leading-relaxed">
+            {wallet.networkError ?? `Connected to ${connectedNetworkLabel} (${connectedChainIdLabel}), and this wallet does not support automatic switching. Add or switch manually:`}
+          </p>
+          <p className="text-[11px] font-mono text-amber-200/90">
+            Network: {ACTIVE_VALUECHAIN.name} · Chain ID: {ACTIVE_VALUECHAIN.chainId} · Currency: {ACTIVE_VALUECHAIN.nativeCurrency.symbol} · RPC: {ACTIVE_VALUECHAIN.rpcUrl}
+          </p>
+        </div>
+      )}
+
+      {isWrongNetwork && !manualOnlyWrongNetwork && (
+        <div
+          style={{ background: 'rgba(251,191,36,0.07)', border: '1px solid rgba(251,191,36,0.25)' }}
+          className="rounded-xl px-4 py-2.5 flex items-center justify-between gap-3 -mt-2"
+        >
+          <p className="text-xs text-amber-300">
+            Connected to <span className="font-mono font-semibold">{connectedNetworkLabel} ({connectedChainIdLabel})</span>. {wallet.networkError ?? `Switch to ${ACTIVE_VALUECHAIN.name} before signing.`}
+          </p>
+          <button
+            type="button"
+            onClick={() => void switchToValueChain?.()}
+            className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-amber-400/20 text-amber-200 border border-amber-400/35 hover:bg-amber-400/30 transition-colors shrink-0"
+          >
+            Switch to {ACTIVE_VALUECHAIN.name}
+          </button>
+        </div>
+      )}
+
       {/* Deposit / Faucet banner */}
       {USE_TESTNET ? (
         <a
-          href={`https://testnet.sodex.com/trade/spot/${currentAsset.id === 'btc' ? 'BTC_USDC' : 'ETH_USDC'}?action=claim`}
+          href={`${ACTIVE_VALUECHAIN.sodexUrl}/trade/spot/${currentAsset.id === 'btc' ? 'BTC_USDC' : 'ETH_USDC'}?action=claim`}
           target="_blank"
           rel="noopener noreferrer"
           className="flex items-center justify-between rounded-xl px-4 py-3 transition-all hover:opacity-90 group"
@@ -405,7 +491,7 @@ export default function TradePage() {
         </a>
       ) : (
         <a
-          href={`https://sodex.com/trade/spot/${currentAsset.id === 'btc' ? 'BTC_USDC' : 'ETH_USDC'}`}
+          href={`${ACTIVE_VALUECHAIN.sodexUrl}/trade/spot/${currentAsset.id === 'btc' ? 'BTC_USDC' : 'ETH_USDC'}`}
           target="_blank"
           rel="noopener noreferrer"
           className="flex items-center justify-between rounded-xl px-4 py-3 transition-all hover:opacity-90 group"
@@ -415,7 +501,7 @@ export default function TradePage() {
             <Droplets size={15} style={{ color: '#00FFA7' }} className="shrink-0" />
             <div>
               <div className="text-xs font-semibold text-slate-200">Deposit on SoDEX Mainnet</div>
-              <div className="text-[11px] text-slate-500">Fund your account with USDC or {currentAsset.label} on ValueChain →</div>
+              <div className="text-[11px] text-slate-500">Fund your account with USDC or {currentAsset.label} on {ACTIVE_VALUECHAIN.name} →</div>
             </div>
           </div>
           <span className="text-xs font-semibold px-3 py-1 rounded-lg" style={{ background: 'rgba(0,255,167,0.12)', color: '#00FFA7' }}>
@@ -429,16 +515,43 @@ export default function TradePage() {
         style={{ background: 'var(--brand-panel)', border: '1px solid var(--brand-border)' }}
         className="rounded-xl p-4 grid grid-cols-3 gap-4 text-center"
       >
-        {[
-          { label: 'Network', value: USE_TESTNET ? 'ValueChain Testnet' : 'ValueChain Mainnet' },
-          { label: 'Chain ID', value: USE_TESTNET ? '138565' : '286623' },
-          { label: 'Settlement', value: USE_TESTNET ? 'vUSDC' : 'USDC' },
-        ].map(item => (
-          <div key={item.label}>
-            <div className="text-[10px] text-slate-500 uppercase tracking-wider font-mono mb-1">{item.label}</div>
-            <div className="text-sm font-semibold font-mono text-slate-200">{item.value}</div>
+        <div>
+          <div className="text-[10px] text-slate-500 uppercase tracking-wider font-mono mb-1">Network</div>
+          <div
+            className={`text-sm font-semibold font-mono ${
+              isLocked || isWrongNetwork ? 'text-amber-300' : 'text-slate-200'
+            }`}
+            data-testid="trade-connected-network"
+          >
+            {connectedNetworkLabel}
           </div>
-        ))}
+          {isWrongNetwork && (
+            <button
+              type="button"
+              onClick={() => void switchToValueChain?.()}
+              className="mt-1 text-[10px] font-mono text-amber-300 underline hover:text-amber-200"
+            >
+              Switch to {ACTIVE_VALUECHAIN.name}
+            </button>
+          )}
+        </div>
+        <div>
+          <div className="text-[10px] text-slate-500 uppercase tracking-wider font-mono mb-1">Chain ID</div>
+          <div
+            className={`text-sm font-semibold font-mono ${
+              isLocked || isWrongNetwork ? 'text-amber-300' : 'text-slate-200'
+            }`}
+            data-testid="trade-connected-chain-id"
+          >
+            {connectedChainIdLabel}
+          </div>
+        </div>
+        <div>
+          <div className="text-[10px] text-slate-500 uppercase tracking-wider font-mono mb-1">Settlement</div>
+          <div className="text-sm font-semibold font-mono text-slate-200">
+            {ACTIVE_VALUECHAIN.settlementCurrency}
+          </div>
+        </div>
       </div>
 
       {/* Telegram link */}

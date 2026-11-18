@@ -77,8 +77,12 @@ export interface MarketSignal {
   takeProfit: TpSlLevel;
   stopLoss: TpSlLevel;
   timestamp: Date;
-  /** Factor-level weighting breakdown produced by the AI model. */
+  /** Factor-level weighting breakdown produced by the model or rule engine. */
   weights?: SignalWeight[];
+  /** Origin of the signal: 'ai' (server model) or 'fallback' (deterministic local rules). */
+  source?: 'ai' | 'fallback';
+  /** Human-readable explanation when source === 'fallback'. */
+  degradedReason?: string;
 }
 
 // ─── SoDEX Types ───────────────────────────────────────────────────────────
@@ -103,7 +107,7 @@ export interface TradeOrder {
 
 export interface TradeConfirmation {
   order: TradeOrder;
-  signal: MarketSignal;
+  signal?: MarketSignal | null;
   acknowledged: boolean;
 }
 
@@ -147,10 +151,23 @@ export interface PerpsPosition {
   updatedAt:     number;   // ms epoch
 }
 
+export type WalletNetworkStatus =
+  | 'matched'
+  | 'wrong_network'
+  | 'switching'
+  | 'locked'
+  | 'manual_switch_required'
+  | 'unknown';
+
 export interface WalletState {
   connected: boolean;
   address: string | null;
   network: 'testnet' | 'mainnet' | null;
+  chainId?: number | null;
+  chainName?: string | null;
+  networkStatus?: WalletNetworkStatus;
+  networkError?: string | null;
+  canAutoSwitch?: boolean;
 }
 
 // ─── Alerts / Signal History / Sentiment ──────────────────────────────────
@@ -183,6 +200,7 @@ export interface HistoricalSignal {
   slPrice?: number;                                     // stop-loss absolute price
   outcome?: 'PENDING' | 'HIT' | 'MISS' | 'EXPIRED';   // evaluation outcome
   evaluatedAt?: number;                                 // ms epoch, set after evaluation
+  source?: 'ai' | 'fallback';                           // fallback signals are excluded from AI hit-rate stats
 }
 
 export interface SentimentScore {

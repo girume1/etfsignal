@@ -46,7 +46,7 @@ describe('saveSignal', () => {
 
 describe('evaluatePendingSignals', () => {
   it('only evaluates PENDING signals >=24h old with tp/sl/entry set', async () => {
-    const patchCalls: any[] = [];
+    const patchCalls: Array<{ id?: string; outcome?: string; pnlPct?: number }> = [];
 
     vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
       if (url === '/api/signal-archive' && (!init || !init.method)) {

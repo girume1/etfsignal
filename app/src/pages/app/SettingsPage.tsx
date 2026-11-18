@@ -1,8 +1,9 @@
 import { Settings as SettingsIcon, LogOut, Copy, ExternalLink, Trash2, Camera } from 'lucide-react';
-import { useState, useRef, useEffect } from 'react';
-import { useDashboard } from '../../contexts/DashboardContext';
+import { useState, useRef } from 'react';
+import { useDashboard } from '../../contexts/dashboardStore';
 import { DensityToggle } from '../../components/DensityToggle';
-import { truncateAddress, USE_TESTNET, CHAIN_ID, getBuilderConfig, setBuilderConfig } from '../../services/sodex';
+import { truncateAddress, getBuilderConfig, setBuilderConfig } from '../../services/sodex';
+import { ACTIVE_VALUECHAIN, USE_TESTNET, getChainDisplayName } from '../../config/valuechain';
 import { clearTradeHistory } from '../../services/tradeHistory';
 import { setProfile, resizeImageToDataUrl } from '../../services/profile';
 
@@ -22,7 +23,12 @@ export default function SettingsPage() {
   const { wallet, handleDisconnectWallet, refreshTradeHistory, profile, refreshProfile } = useDashboard();
   const [copied, setCopied] = useState(false);
   const [cleared, setCleared] = useState(false);
-  const [name, setName] = useState(profile.name);
+  const [draftName, setDraftName] = useState<{ base: string; value: string }>(() => ({
+    base: profile.name,
+    value: profile.name,
+  }));
+  const name = draftName.base === profile.name ? draftName.value : profile.name;
+  const setName = (value: string) => setDraftName({ base: profile.name, value });
   const [nameSaved, setNameSaved] = useState(false);
   const [avatarError, setAvatarError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -38,16 +44,15 @@ export default function SettingsPage() {
     setTimeout(() => setBuilderSaved(false), 1500);
   }
 
-  // Sync local field when the underlying profile changes (e.g. wallet switch)
-  useEffect(() => setName(profile.name), [profile.name]);
-
   async function copyAddress() {
     if (!wallet.address) return;
     try {
       await navigator.clipboard.writeText(wallet.address);
       setCopied(true);
       setTimeout(() => setCopied(false), 1800);
-    } catch {}
+    } catch {
+      // clipboard unavailable
+    }
   }
 
   async function handleAvatarPick(e: React.ChangeEvent<HTMLInputElement>) {
@@ -149,7 +154,9 @@ export default function SettingsPage() {
             <div className="flex items-center justify-between gap-3 flex-wrap">
               <div>
                 <div className="text-sm font-mono text-white">{truncateAddress(wallet.address)}</div>
-                <div className="text-[10px] text-slate-500 font-mono mt-0.5">SoDEX {USE_TESTNET ? 'Testnet' : 'Mainnet'} · chain {CHAIN_ID}</div>
+                <div className="text-[10px] text-slate-500 font-mono mt-0.5">
+                  SoDEX {USE_TESTNET ? 'Testnet' : 'Mainnet'} · {wallet.chainId != null ? `${wallet.chainName ?? getChainDisplayName(wallet.chainId)} (${wallet.chainId})` : `${ACTIVE_VALUECHAIN.name} (${ACTIVE_VALUECHAIN.chainId})`}
+                </div>
               </div>
               <div className="flex items-center gap-2">
                 <button
@@ -160,7 +167,7 @@ export default function SettingsPage() {
                   <Copy size={12} className="shrink-0" /> {copied ? 'Copied!' : 'Copy Address'}
                 </button>
                 <a
-                  href={`https://${USE_TESTNET ? 'testnet.' : ''}sodex.com/portfolio?address=${wallet.address}`}
+                  href={`${ACTIVE_VALUECHAIN.explorerPortfolioUrl}${wallet.address}`}
                   target="_blank" rel="noopener noreferrer"
                   className="text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors"
                   style={{ background: 'rgba(255,255,255,0.05)', color: '#94A3B8' }}

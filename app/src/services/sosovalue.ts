@@ -17,17 +17,65 @@ interface ProxyOpts {
   params?: Record<string, string | number>;
 }
 
+interface SosoResponse<T = unknown> {
+  code?: number;
+  msg?: string;
+  message?: string;
+  error?: string;
+  data?: T;
+}
+
+interface RawMetric {
+  value?: unknown;
+  lastUpdateDate?: string;
+  status?: string;
+}
+
+interface RawFund {
+  id: string | number;
+  ticker: string;
+  institute: string;
+  netAssets?: RawMetric;
+  netAssetsPercentage?: RawMetric;
+  dailyNetInflow?: RawMetric;
+  cumNetInflow?: RawMetric;
+  dailyValueTraded?: RawMetric;
+  fee?: RawMetric;
+  discountPremiumRate?: RawMetric;
+}
+
+interface RawEtfPayload {
+  totalNetAssets?: RawMetric;
+  totalNetAssetsPercentage?: RawMetric;
+  totalTokenHoldings?: RawMetric;
+  dailyNetInflow?: RawMetric;
+  cumNetInflow?: RawMetric;
+  dailyTotalValueTraded?: RawMetric;
+  list?: RawFund[];
+}
+
+interface RawInflowItem {
+  date?: string;
+  day?: string;
+  datetime?: string;
+  ts?: string;
+  inflow?: unknown;
+  netInflow?: unknown;
+  netFlow?: unknown;
+  value?: unknown;
+}
+
 async function sosoProxy<T>(opts: ProxyOpts): Promise<T> {
   const res = await fetch('/api/sosovalue', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(opts),
   });
-  const json: any = await res.json();
+  const json = (await res.json()) as SosoResponse & Record<string, unknown>;
 
   if (!res.ok) {
     // 500 means SOSOVALUE_API_KEY is not set in Vercel env vars
-    if (res.status === 500 && json.error?.includes('not configured')) {
+    if (res.status === 500 && typeof json.error === 'string' && json.error.includes('not configured')) {
       throw new Error('SoSoValue API key not configured — add SOSO_API_KEY to your Vercel environment variables.');
     }
     // 403 means the key is invalid or expired
@@ -51,11 +99,11 @@ function toNum(v: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-function normalizeMetric(m: any): EtfMetric {
+function normalizeMetric(m?: RawMetric): EtfMetric {
   return { value: toNum(m?.value), lastUpdateDate: m?.lastUpdateDate ?? '', status: m?.status };
 }
 
-function normalizeEtfData(raw: any): EtfData {
+function normalizeEtfData(raw?: RawEtfPayload): EtfData {
   return {
     totalNetAssets:           normalizeMetric(raw?.totalNetAssets),
     totalNetAssetsPercentage: normalizeMetric(raw?.totalNetAssetsPercentage),
@@ -63,7 +111,7 @@ function normalizeEtfData(raw: any): EtfData {
     dailyNetInflow:           normalizeMetric(raw?.dailyNetInflow),
     cumNetInflow:             normalizeMetric(raw?.cumNetInflow),
     dailyTotalValueTraded:    normalizeMetric(raw?.dailyTotalValueTraded),
-    list: (Array.isArray(raw?.list) ? raw.list : []).map((f: any): EtfFund => ({
+    list: (Array.isArray(raw?.list) ? raw.list : []).map((f: RawFund): EtfFund => ({
       id:                  String(f.id),
       ticker:              f.ticker,
       institute:           f.institute,
@@ -88,11 +136,11 @@ export async function fetchEtfMetrics(type: EtfType): Promise<EtfData> {
   let lastErr: Error = new Error('ETF API unreachable');
   for (const attempt of attempts) {
     try {
-      const json: any = await sosoProxy(attempt);
+      const json = await sosoProxy<SosoResponse<RawEtfPayload>>(attempt);
       if (json.code !== 0) throw new Error(json.msg || 'ETF API error');
       return normalizeEtfData(json.data);
-    } catch (err: any) {
-      lastErr = err;
+    } catch (err: unknown) {
+      lastErr = err instanceof Error ? err : new Error(String(err));
     }
   }
   throw lastErr;
@@ -136,10 +184,17 @@ export async function fetchHistoricalInflows(
     { method: 'GET',  params: { type, days } },
   ];
 
+  type RawInflowContainer = RawInflowItem[] | {
+    list?: RawInflowItem[];
+    records?: RawInflowItem[];
+    data?: RawInflowItem[];
+    items?: RawInflowItem[];
+  };
+
   for (const base of [ETF_BASE, ETF_BASE_ALT]) {
     for (const attempt of attempts) {
       try {
-        const json: any = await sosoProxy({
+        const json = await sosoProxy<SosoResponse<RawInflowContainer>>({
           method: attempt.method,
           url: `${base}/openapi/v2/etf/etfNetInflowHistory`,
           ...(attempt.body   ? { body: attempt.body }     : {}),
@@ -149,7 +204,7 @@ export async function fetchHistoricalInflows(
 
         // Normalise response — SoSoValue returns data as array or { list: [...] }
         const raw = json.data;
-        const list: any[] = Array.isArray(raw)
+        const list: RawInflowItem[] = Array.isArray(raw)
           ? raw
           : (raw?.list ?? raw?.records ?? raw?.data ?? raw?.items ?? []);
 
@@ -157,7 +212,7 @@ export async function fetchHistoricalInflows(
 
         // Normalise field names across API versions
         const normalised: HistoricalInflow[] = list
-          .map((item: any) => ({
+          .map((item: RawInflowItem) => ({
             date:   item.date    ?? item.day      ?? item.datetime ?? item.ts ?? '',
             inflow: Number(item.inflow ?? item.netInflow ?? item.netFlow ?? item.value ?? 0),
           }))

@@ -1,5 +1,7 @@
 import type { EtfData, NewsItem, MarketSignal } from '../types';
 import { getNewsTitle, formatUSD } from './sosovalue';
+import { buildFallbackSignal } from './fallbackSignal';
+import { AI_TOTAL_BUDGET_MS, AI_CLIENT_TIMEOUT_BUFFER_MS } from '../../../api/aiBudget';
 
 export type AnalysisStage =
   | 'fetching_data'
@@ -13,6 +15,8 @@ export interface SignalContext {
   backtestSummary?: { hitRate: number; avgPnl: number; sampleSize: number };
   flow30dTotal?: number;
   flow90dTotal?: number;
+  inflows?: number[];
+  atr?: number;
   sosoValueMs?: number;
   marketDataMs?: number;
   onStageChange?: (stage: AnalysisStage) => void;
@@ -23,7 +27,7 @@ export interface SignalTimingBreakdown {
   sosoValueMs: number;
   marketDataMs: number;
   dataProcessingMs: number;
-  geminiApiMs: number;
+  aiApiMs: number;
   validationMs: number;
   totalMs: number;
 }
@@ -34,15 +38,59 @@ export function getLastSignalTiming(): SignalTimingBreakdown | null {
   return lastSignalTiming;
 }
 
-// Short-lived cache & in-flight deduplication to avoid duplicate Gemini requests for identical market state
+// Short-lived cache & in-flight deduplication to avoid duplicate AI requests for identical market state
 const SIGNAL_CACHE_TTL_MS = 45_000;
-const CLIENT_ANALYZE_TIMEOUT_MS = 26_000;
+export const CLIENT_ANALYZE_TIMEOUT_MS = AI_TOTAL_BUDGET_MS + AI_CLIENT_TIMEOUT_BUFFER_MS;
 const signalCache = new Map<string, { signal: MarketSignal; ts: number }>();
 const inflightRequests = new Map<string, Promise<MarketSignal>>();
+
+// Client circuit breaker: after 2 consecutive AI failures, skip remote calls for 60s and serve fallback immediately
+export const AI_CIRCUIT_FAILURE_THRESHOLD = 2;
+export const AI_CIRCUIT_COOLDOWN_MS = 60_000;
+let consecutiveAiFailures = 0;
+let circuitOpenedAt: number | null = null;
+
+export interface AiCircuitState {
+  isOpen: boolean;
+  remainingMs: number;
+  consecutiveFailures: number;
+}
+
+export function isAiCircuitOpen(now = Date.now()): boolean {
+  if (circuitOpenedAt === null) return false;
+  if (now - circuitOpenedAt < AI_CIRCUIT_COOLDOWN_MS) {
+    return true;
+  }
+  circuitOpenedAt = null;
+  consecutiveAiFailures = 0;
+  return false;
+}
+
+export function getAiCircuitState(now = Date.now()): AiCircuitState {
+  const open = isAiCircuitOpen(now);
+  return {
+    isOpen: open,
+    remainingMs: open && circuitOpenedAt !== null ? Math.max(0, AI_CIRCUIT_COOLDOWN_MS - (now - circuitOpenedAt)) : 0,
+    consecutiveFailures: consecutiveAiFailures,
+  };
+}
+
+export function resetAiCircuitBreaker(): void {
+  consecutiveAiFailures = 0;
+  circuitOpenedAt = null;
+}
+
+function recordAiFailure(now = Date.now()): void {
+  consecutiveAiFailures += 1;
+  if (consecutiveAiFailures >= AI_CIRCUIT_FAILURE_THRESHOLD) {
+    circuitOpenedAt = now;
+  }
+}
 
 export function clearSignalCache(): void {
   signalCache.clear();
   inflightRequests.clear();
+  resetAiCircuitBreaker();
 }
 
 export function buildPrompt(
@@ -173,6 +221,10 @@ Answer the user's question concisely (2-4 sentences max). Reference specific num
     { role: 'user' as const, content: question },
   ];
 
+  if (isAiCircuitOpen()) {
+    throw new Error('The Agent is taking a short cooldown after repeated provider errors. Please click "Try again" in a moment.');
+  }
+
   const timeoutController = new AbortController();
   const timeoutId = setTimeout(() => timeoutController.abort(), CLIENT_ANALYZE_TIMEOUT_MS);
   try {
@@ -188,7 +240,8 @@ Answer the user's question concisely (2-4 sentences max). Reference specific num
     });
 
     if (!response.ok) {
-      let errMsg = `AI API error: ${response.status}`;
+      recordAiFailure();
+      let errMsg = `The Agent is temporarily unavailable (HTTP ${response.status}).`;
       try {
         const errBody = await response.json();
         if (errBody?.error && typeof errBody.error === 'string') {
@@ -200,10 +253,18 @@ Answer the user's question concisely (2-4 sentences max). Reference specific num
       throw new Error(errMsg);
     }
     const data = await response.json();
+    resetAiCircuitBreaker();
     return data.content?.[0]?.text || '(no response)';
-  } catch (err: any) {
-    if (timeoutController.signal.aborted || err?.name === 'AbortError') {
+  } catch (err: unknown) {
+    const errName = err instanceof Error ? err.name : '';
+    const errMessage = err instanceof Error ? err.message : String(err ?? '');
+    if (timeoutController.signal.aborted || errName === 'AbortError') {
+      recordAiFailure();
       throw new Error('The Agent timed out answering your question. Please try again.');
+    }
+    if (err instanceof TypeError || /network|fetch/i.test(errMessage)) {
+      recordAiFailure();
+      throw new Error('Could not reach The Agent right now. Please check your connection and try again.');
     }
     throw err;
   } finally {
@@ -239,6 +300,45 @@ export async function analyzeMarket(
     }
   }
 
+  const returnFallback = (
+    degradedReason: string,
+    meta: { errorType: string; status?: number },
+    dataProcessingMs = 0,
+    apiStart?: number,
+  ): MarketSignal => {
+    // Emit structured diagnostic warning without secrets or prompts so fallbacks are diagnosable
+    console.warn('[The Agent] analyzeMarket falling back to rule-based signal:', {
+      asset: etfType,
+      errorType: meta.errorType,
+      ...(meta.status !== undefined ? { status: meta.status } : {}),
+      reason: degradedReason,
+    });
+    context.onStageChange?.('validating_signal');
+    const tValidStart = performance.now();
+    const fallback = buildFallbackSignal({
+      asset: etfType,
+      etfData,
+      inflows: context.inflows,
+      currentPrice,
+      atr: context.atr,
+      degradedReason,
+    });
+    const validationMs = Math.round(performance.now() - tValidStart);
+    const aiApiMs = apiStart ? Math.round(performance.now() - apiStart) : 0;
+    const totalMs = Math.round(performance.now() - tStart) + sosoValueMs + marketDataMs;
+
+    lastSignalTiming = {
+      sosoValueMs,
+      marketDataMs,
+      dataProcessingMs,
+      aiApiMs,
+      validationMs,
+      totalMs,
+    };
+    context.onStageChange?.('ready');
+    return fallback;
+  };
+
   const runAnalysis = async (): Promise<MarketSignal> => {
     if (context.signal?.aborted) {
       throw new DOMException('Analysis cancelled', 'AbortError');
@@ -249,8 +349,19 @@ export async function analyzeMarket(
     const prompt = buildPrompt(etfType, etfData, news, currentPrice ?? null, context);
     const dataProcessingMs = Math.round(performance.now() - tPromptStart);
 
+    // Client circuit breaker: skip AI calls during 60s cooldown after 2 consecutive failures
+    const circuit = getAiCircuitState();
+    if (circuit.isOpen) {
+      const remainSec = Math.max(1, Math.ceil(circuit.remainingMs / 1000));
+      return returnFallback(
+        `AI temporarily paused after ${circuit.consecutiveFailures} consecutive failures (${remainSec}s cooldown) — showing rule-based signal.`,
+        { errorType: 'circuit_open' },
+        dataProcessingMs,
+      );
+    }
+
     context.onStageChange?.('calling_agent');
-    const tGeminiStart = performance.now();
+    const tApiStart = performance.now();
 
     // Combine caller AbortSignal with client-side timeout so requests never hang indefinitely
     const timeoutController = new AbortController();
@@ -269,23 +380,36 @@ export async function analyzeMarket(
         }),
         signal: timeoutController.signal,
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (context.signal?.aborted) {
         throw new DOMException('Analysis cancelled', 'AbortError');
       }
-      if (timeoutController.signal.aborted || err?.name === 'AbortError') {
-        throw new Error('The Agent timed out waiting for a response. Please click Retry.');
-      }
-      throw err;
+      recordAiFailure();
+      const errName = err instanceof Error ? err.name : '';
+      const errMessage = err instanceof Error ? err.message : '';
+      const isTimeout = timeoutController.signal.aborted || errName === 'AbortError';
+      const reason = isTimeout
+        ? 'The Agent timed out waiting for a response — showing rule-based fallback.'
+        : (errMessage ? `AI network error (${errMessage}) — showing rule-based fallback.` : 'AI network unavailable — showing rule-based fallback.');
+      return returnFallback(
+        reason,
+        { errorType: isTimeout ? 'timeout' : (errName || 'network_error') },
+        dataProcessingMs,
+        tApiStart,
+      );
     } finally {
       clearTimeout(timeoutId);
       context.signal?.removeEventListener('abort', onCallerAbort);
     }
 
     if (!response.ok) {
-      let errMessage = `AI API error: ${response.status}`;
+      let errMessage = `AI provider unavailable (HTTP ${response.status})`;
+      let errorType = 'http_error';
       try {
         const errBody = await response.json();
+        if (typeof errBody?.errorType === 'string' && errBody.errorType) {
+          errorType = errBody.errorType;
+        }
         if (errBody?.error && typeof errBody.error === 'string') {
           errMessage = response.status === 504
             ? `${errBody.error} (HTTP 504)`
@@ -294,12 +418,45 @@ export async function analyzeMarket(
       } catch {
         // keep default status error message
       }
-      throw new Error(errMessage);
+      recordAiFailure();
+      return returnFallback(
+        `${errMessage} — showing rule-based fallback.`,
+        { errorType, status: response.status },
+        dataProcessingMs,
+        tApiStart,
+      );
     }
 
-    const data = await response.json();
-    const geminiApiMs = Math.round(performance.now() - tGeminiStart);
+    let data: { content?: Array<{ text?: string }>; _timing?: { apiMs?: number } };
+    try {
+      data = await response.json();
+    } catch {
+      recordAiFailure();
+      return returnFallback(
+        'Malformed AI response payload — showing rule-based fallback.',
+        { errorType: 'malformed_json', status: response.status },
+        dataProcessingMs,
+        tApiStart,
+      );
+    }
+
+    // Read only _timing.apiMs from server response, falling back to measured round-trip
+    const aiApiMs =
+      typeof data?._timing?.apiMs === 'number'
+        ? data._timing.apiMs
+        : Math.round(performance.now() - tApiStart);
     const text = data.content?.[0]?.text || '';
+    if (!text.trim()) {
+      recordAiFailure();
+      return returnFallback(
+        'AI returned an empty response — showing rule-based fallback.',
+        { errorType: 'empty_response', status: response.status },
+        dataProcessingMs,
+        tApiStart,
+      );
+    }
+
+    resetAiCircuitBreaker();
 
     context.onStageChange?.('validating_signal');
     const tValidStart = performance.now();
@@ -307,8 +464,12 @@ export async function analyzeMarket(
     try {
       const clean = text.replace(/```json|```/g, '').trim();
       const parsed = JSON.parse(clean);
-      resultSignal = { ...parsed, timestamp: new Date() };
+      resultSignal = { ...parsed, timestamp: new Date(), source: 'ai' };
     } catch {
+      console.warn('[The Agent] analyzeMarket fell back to neutral placeholder after unparseable AI JSON:', {
+        asset: etfType,
+        errorType: 'invalid_json',
+      });
       const fallbackPrice = currentPrice ?? 0;
       resultSignal = {
         direction: 'NEUTRAL',
@@ -322,6 +483,7 @@ export async function analyzeMarket(
         takeProfit: { price: fallbackPrice * 1.05, pct: 5, rationale: 'Default +5% target' },
         stopLoss:   { price: fallbackPrice * 0.97, pct: -3, rationale: 'Default -3% stop' },
         timestamp: new Date(),
+        source: 'ai',
       };
     }
     const validationMs = Math.round(performance.now() - tValidStart);
@@ -331,7 +493,7 @@ export async function analyzeMarket(
       sosoValueMs,
       marketDataMs,
       dataProcessingMs,
-      geminiApiMs,
+      aiApiMs,
       validationMs,
       totalMs,
     };

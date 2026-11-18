@@ -6,7 +6,7 @@
 import { describe, it } from 'vitest';
 import * as fc from 'fast-check';
 import { computeSentiment } from '../services/sentiment';
-import { detectAnomalies, getTopFunds } from '../components/EtfPanel';
+import { detectAnomalies, getTopFunds } from '../utils/etfAnomalies';
 
 // ─── P8: Sentiment score range invariant ─────────────────────────────────
 // Validates: Requirements 5.2

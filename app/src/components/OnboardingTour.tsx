@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LayoutDashboard, BarChart2, Zap, ArrowLeftRight, X } from 'lucide-react';
-
-const SEEN_KEY = 'etfsignal:tour-seen';
+import { markTourSeen } from '../utils/onboardingTour';
 
 const STEPS = [
   {
@@ -30,18 +29,6 @@ const STEPS = [
     path: '/app/trade',
   },
 ];
-
-export function shouldShowTour(): boolean {
-  try {
-    return localStorage.getItem(SEEN_KEY) !== '1';
-  } catch {
-    return false;
-  }
-}
-
-function markTourSeen() {
-  try { localStorage.setItem(SEEN_KEY, '1'); } catch {}
-}
 
 export function OnboardingTour({ onDone }: { onDone: () => void }) {
   const [step, setStep] = useState(0);

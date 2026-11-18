@@ -1,14 +1,11 @@
 import { useState, useMemo } from 'react';
-import { useDashboard } from '../../contexts/DashboardContext';
-import { useDensity } from '../../contexts/DensityContext';
+import { useDashboard } from '../../contexts/dashboardStore';
+import { useDensity } from '../../contexts/densityStore';
 import { QuickStats } from '../../components/QuickStats';
 import { getNewsTitle } from '../../services/sosovalue';
 import type { NewsItem } from '../../types';
 import { NEWS_CATEGORY_MAP } from '../../types';
 import { filterNewsBySearch, filterNewsByCategory } from '../../utils/filters';
-
-// Re-export for backward compatibility and direct testing
-export { filterNewsBySearch, filterNewsByCategory };
 
 function timeAgo(ts: number): string {
   const diff = Date.now() - ts * 1000;

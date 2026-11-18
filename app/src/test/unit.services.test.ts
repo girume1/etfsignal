@@ -5,7 +5,15 @@
 
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { fetchEtfMetrics, fetchNews } from '../services/sosovalue';
-import { analyzeMarket, getLastSignalTiming, clearSignalCache, type AnalysisStage } from '../services/ai';
+import {
+  analyzeMarket,
+  askFollowUp,
+  getLastSignalTiming,
+  clearSignalCache,
+  getAiCircuitState,
+  resetAiCircuitBreaker,
+  type AnalysisStage,
+} from '../services/ai';
 import { placeSpotOrder, truncateAddress, validateOrderMinimum, SPOT_MIN_NOTIONAL_USD, PERPS_MIN_NOTIONAL_USD } from '../services/sodex';
 import { handleTelegramLinkRequest, normalizeLinkCode, dualSet, codeKey } from '../../../api/telegram-link';
 import telegramWebhookHandler, {
@@ -121,7 +129,7 @@ describe('fetchNews', () => {
 // Validates: Requirements 3.4
 
 describe('analyzeMarket', () => {
-  it('returns NEUTRAL signal with confidence 50 when Gemini response is not valid JSON', async () => {
+  it('returns NEUTRAL signal with confidence 50 when AI response is not valid JSON', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
@@ -136,7 +144,7 @@ describe('analyzeMarket', () => {
     expect(result.headline.length).toBeGreaterThan(0);
   });
 
-  it('returns all required MarketSignal fields when Gemini response is valid JSON', async () => {
+  it('returns all required MarketSignal fields when AI response is valid JSON and reads server apiMs', async () => {
     const mockSignal = {
       direction: 'BULLISH',
       confidence: 75,
@@ -153,7 +161,10 @@ describe('analyzeMarket', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
-      json: async () => ({ content: [{ text: JSON.stringify(mockSignal) }] }),
+      json: async () => ({
+        content: [{ text: JSON.stringify(mockSignal) }],
+        _timing: { apiMs: 412, totalServerMs: 420 },
+      }),
     }));
 
     const result = await analyzeMarket('BTC', EMPTY_ETF_DATA, [], null);
@@ -170,12 +181,17 @@ describe('analyzeMarket', () => {
     expect(result.takeProfit).toBeDefined();
     expect(result.stopLoss).toBeDefined();
     expect(result.timestamp).toBeInstanceOf(Date);
+    expect(getLastSignalTiming()?.aiApiMs).toBe(412);
   });
 
-  it('returns NEUTRAL fallback when fetch itself throws', async () => {
+  it('returns deterministic rule-based fallback when fetch itself throws', async () => {
+    clearSignalCache();
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('Network error')));
 
-    await expect(analyzeMarket('BTC', EMPTY_ETF_DATA, [], null)).rejects.toThrow('Network error');
+    const result = await analyzeMarket('BTC', EMPTY_ETF_DATA, [], 95000);
+    expect(result.source).toBe('fallback');
+    expect(result.degradedReason).toMatch(/Network error/i);
+    expect(result.confidence).toBeLessThanOrEqual(60);
   });
 });
 
@@ -506,6 +522,7 @@ describe('Telegram Account Linking & /start Greeting', () => {
     const timing = getLastSignalTiming();
     expect(timing).not.toBeNull();
     expect(timing!.sosoValueMs).toBe(12);
+    expect(typeof timing!.aiApiMs).toBe('number');
     expect(timing!.totalMs).toBeGreaterThanOrEqual(13);
     expect(stages).toEqual([
       'calculating_momentum',
@@ -515,19 +532,22 @@ describe('Telegram Account Linking & /start Greeting', () => {
     ]);
   });
 
-  it('propagates 504 timeout error without fabricating a completed signal and supports AbortController cancellation', async () => {
+  it('returns rule-based fallback (source: "fallback") on 504 timeout without throwing and preserves AbortController cancellation', async () => {
     clearSignalCache();
 
-    // 1. 504 timeout throws an explicit error rather than fabricating a signal
+    // 1. 504 timeout returns deterministic fallback signal instead of throwing
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: false,
       status: 504,
-      json: async () => ({ error: 'The Agent timed out after 7.5s waiting for Gemini. Please retry.' }),
+      json: async () => ({ error: 'The Agent timed out after 12.0s waiting for the AI provider. Please retry.' }),
     }));
 
-    await expect(analyzeMarket('BTC', EMPTY_ETF_DATA, [], 95000)).rejects.toThrow(/timed out.*504/i);
+    const fallback = await analyzeMarket('BTC', EMPTY_ETF_DATA, [], 95000);
+    expect(fallback.source).toBe('fallback');
+    expect(fallback.degradedReason).toMatch(/timed out.*504/i);
+    expect(fallback.confidence).toBeLessThanOrEqual(60);
 
-    // 2. AbortController cancels in-flight analysis cleanly
+    // 2. AbortController still cancels in-flight analysis cleanly (user cancel)
     const controller = new AbortController();
     controller.abort();
     await expect(
@@ -621,10 +641,29 @@ describe('Telegram Progress Editing & Deduplication', () => {
 
     await handleSignal('test-bot-token', 555999, 'ETH', 'https://etfsignal.vercel.app');
 
-    // Still only 1 sendMessage call; the error replaces message 888 via editMessageText
+    // Still only 1 sendMessage call; retryable 504 shows a clear "AI is busy, try again" edit on message 888
     expect(sendCalls).toHaveLength(1);
-    expect(editCalls[editCalls.length - 1]).toContain('ETH Signal Analysis Failed');
-    expect(editCalls[editCalls.length - 1]).toContain('The Agent timed out');
+    expect(editCalls[editCalls.length - 1]).toContain('AI is busy, try again');
+
+    // Non-retryable error (e.g. 401 auth_error with retryable: false) shows explicit failure
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
+      const bodyObj = init?.body ? JSON.parse(init.body as string) : {};
+      if (url.endsWith('/sendMessage')) {
+        return new Response(JSON.stringify({ ok: true, result: { message_id: 889 } }), { status: 200 });
+      }
+      if (url.endsWith('/editMessageText')) {
+        editCalls.push(bodyObj.text);
+        return new Response(JSON.stringify({ ok: true }), { status: 200 });
+      }
+      if (url.endsWith('/api/analyze')) {
+        return new Response(JSON.stringify({ error: 'Invalid API key', retryable: false }), { status: 401 });
+      }
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    }));
+    resetTelegramDedupeState();
+    await handleSignal('test-bot-token', 555999, 'BTC', 'https://etfsignal.vercel.app');
+    expect(editCalls[editCalls.length - 1]).toContain('BTC Signal Analysis Failed');
+    expect(editCalls[editCalls.length - 1]).toContain('Invalid API key');
 
     // Also verify editMessage safely treats "message is not modified" as true
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
@@ -778,11 +817,11 @@ describe('Telegram Progress Editing & Deduplication', () => {
 
 // ─── 17.8: Website analyzeMarket Error Handling ────────────────────────────
 
-describe('website analyzeMarket error & ETH coverage', () => {
-  it('website analyzeMarket supports ETH and handles HTTP 429 and 503 without fabricating signals', async () => {
+describe('website analyzeMarket resilience, circuit breaker & ETH coverage', () => {
+  it('supports ETH, returns source:"fallback" on HTTP 429/503/504/timeout, and trips circuit breaker after 2 failures for 60s', async () => {
     clearSignalCache();
 
-    // ETH success
+    // ETH success resets circuit breaker
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
@@ -806,21 +845,76 @@ describe('website analyzeMarket error & ETH coverage', () => {
     const ethSig = await analyzeMarket('ETH', EMPTY_ETF_DATA, [], 3180);
     expect(ethSig.direction).toBe('BULLISH');
     expect(ethSig.confidence).toBe(82);
+    expect(ethSig.source).toBe('ai');
+    expect(getAiCircuitState().isOpen).toBe(false);
 
-    // HTTP 429 handling
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-      ok: false,
-      status: 429,
-      json: async () => ({ error: 'The Agent is temporarily rate-limited by the upstream AI provider. Please retry in a few seconds.' }),
-    }));
-    await expect(analyzeMarket('BTC', EMPTY_ETF_DATA, [], 95000)).rejects.toThrow(/rate-limited/i);
+    // Failure #1: HTTP 429 returns fallback without throwing
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 429,
+        json: async () => ({ error: 'The Agent is temporarily rate-limited by the upstream AI provider. Please retry in a few seconds.' }),
+      })
+      // Failure #2: HTTP 503 returns fallback and trips the 60s circuit breaker
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 503,
+        json: async () => ({ error: 'Upstream unavailable' }),
+      })
+      // Call #3 should NOT hit fetch at all while circuit breaker is open!
+      .mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ content: [{ text: '{}' }] }),
+      });
 
-    // HTTP 503 handling
+    vi.stubGlobal('fetch', fetchMock);
+
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const fb429 = await analyzeMarket('BTC', EMPTY_ETF_DATA, [], 95000);
+    expect(fb429.source).toBe('fallback');
+    expect(fb429.degradedReason).toMatch(/rate-limited/i);
+    expect(warnSpy).toHaveBeenCalledWith(
+      '[The Agent] analyzeMarket falling back to rule-based signal:',
+      expect.objectContaining({
+        asset: 'BTC',
+        errorType: 'http_error',
+        status: 429,
+      }),
+    );
+    expect(getAiCircuitState().isOpen).toBe(false);
+    expect(getAiCircuitState().consecutiveFailures).toBe(1);
+
+    const fb503 = await analyzeMarket('BTC', EMPTY_ETF_DATA, [], 95000);
+    expect(fb503.source).toBe('fallback');
+    expect(fb503.degradedReason).toMatch(/unavailable/i);
+    expect(getAiCircuitState().isOpen).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    // 3rd call skips network while circuit is open
+    const fbCircuit = await analyzeMarket('BTC', EMPTY_ETF_DATA, [], 95000);
+    expect(fbCircuit.source).toBe('fallback');
+    expect(fbCircuit.degradedReason).toMatch(/cooldown/i);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    // Resetting circuit breaker allows fresh AI calls again
+    resetAiCircuitBreaker();
+    expect(getAiCircuitState().isOpen).toBe(false);
+    await analyzeMarket('BTC', EMPTY_ETF_DATA, [], 95000);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it('askFollowUp fails fast when circuit breaker is open and handles 503 cleanly', async () => {
+    clearSignalCache();
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: false,
       status: 503,
-      json: async () => ({ error: 'Upstream unavailable' }),
+      json: async () => ({ error: 'AI provider overloaded' }),
     }));
-    await expect(analyzeMarket('BTC', EMPTY_ETF_DATA, [], 95000)).rejects.toThrow(/unavailable/i);
+
+    await expect(askFollowUp('BTC', EMPTY_ETF_DATA, null, [], 'Why?')).rejects.toThrow(/overloaded/i);
+    await expect(askFollowUp('BTC', EMPTY_ETF_DATA, null, [], 'Why?')).rejects.toThrow(/overloaded/i);
+    expect(getAiCircuitState().isOpen).toBe(true);
+    await expect(askFollowUp('BTC', EMPTY_ETF_DATA, null, [], 'Why?')).rejects.toThrow(/cooldown/i);
   });
 });

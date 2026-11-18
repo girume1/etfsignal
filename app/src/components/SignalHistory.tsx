@@ -1,8 +1,18 @@
+import { useState, useEffect } from 'react';
 import { ArrowUp, ArrowDown, ArrowRight, TrendingUp } from 'lucide-react';
 import {
   ResponsiveContainer, LineChart, Line, Tooltip, ReferenceLine, YAxis,
 } from 'recharts';
 import type { HistoricalSignal } from '../types';
+import {
+  daysAgo,
+  resolvePnl,
+  statsOf,
+  computeRealStats,
+  computeEstimatedStats,
+  countResolved,
+  buildRealChartData,
+} from '../utils/signalStats';
 
 interface SignalHistoryProps {
   signals: HistoricalSignal[];
@@ -19,93 +29,6 @@ const DIR_ICONS: Record<HistoricalSignal['direction'], React.ElementType> = {
   BEARISH: ArrowDown,
   NEUTRAL: ArrowRight,
 };
-
-function daysAgo(ts: number): string {
-  const diffMs = Date.now() - ts;
-  const mins = Math.floor(diffMs / 60000);
-  if (mins < 60) return mins <= 1 ? 'just now' : `${mins}m ago`;
-  const hrs = Math.floor(diffMs / 3600000);
-  if (hrs < 24) return `${hrs}h ago`;
-  const d = Math.floor(diffMs / 86400000);
-  return d === 1 ? '1d ago' : `${d}d ago`;
-}
-
-/**
- * Deterministic mock PnL — stable across page loads.
- * Only shown for signals older than 24h that have no real evaluation.
- * Signals < 24h show "Pending" instead to avoid looking like fabricated data.
- */
-function mockPnl(sig: HistoricalSignal): number {
-  if (Date.now() - sig.timestamp < 24 * 60 * 60 * 1000) return NaN; // hide until 24h
-  let h = 0;
-  for (let i = 0; i < sig.id.length; i++) {
-    h = (Math.imul(31, h) + sig.id.charCodeAt(i)) | 0;
-  }
-  const rand = Math.abs(h) / 2147483647;
-  const hitProb = 0.45 + (sig.confidence / 100) * 0.35;
-  const hit = rand < hitProb;
-  return hit
-    ? +(1 + rand * 7 * (sig.confidence / 100)).toFixed(1)
-    : -(1 + rand * 3).toFixed(1) as unknown as number;
-}
-
-function resolvePnl(sig: HistoricalSignal): { pnl: number; real: boolean } | null {
-  if (sig.pnlReal && typeof sig.pnlPct === 'number') return { pnl: sig.pnlPct, real: true };
-  if (typeof sig.pnlPct === 'number') return { pnl: sig.pnlPct, real: false };
-  const mock = mockPnl(sig);
-  return isNaN(mock) ? null : { pnl: mock, real: false };
-}
-
-function statsOf(resolved: { pnl: number }[]) {
-  const wins   = resolved.filter(p => p.pnl > 0).length;
-  const cumPnl = resolved.reduce((a, b) => a + b.pnl, 0);
-
-  let peak = 0, runSum = 0, maxDD = 0;
-  for (const { pnl } of resolved) {
-    runSum += pnl;
-    if (runSum > peak) peak = runSum;
-    maxDD = Math.max(maxDD, peak - runSum);
-  }
-
-  return {
-    total:   resolved.length,
-    hitRate: Math.round((wins / resolved.length) * 100),
-    avgPnl:  cumPnl / resolved.length,
-    cumPnl,
-    maxDD,
-  };
-}
-
-/** Requirement 5.4: exclusive real-outcome stats, shown once >=3 real records exist. */
-export function computeRealStats(signals: HistoricalSignal[]) {
-  const real = signals.filter(s => s.pnlReal === true && typeof s.pnlPct === 'number');
-  if (real.length < 3) return null;
-  return statsOf(real.map(s => ({ pnl: s.pnlPct as number })));
-}
-
-/** Requirement 5.5: estimated/simulated stats for signals not (yet) real-evaluated. */
-export function computeEstimatedStats(signals: HistoricalSignal[]) {
-  const resolved = signals
-    .filter(s => s.pnlReal !== true)
-    .map(s => resolvePnl(s))
-    .filter((p): p is { pnl: number; real: boolean } => p !== null);
-  return resolved.length >= 3 ? statsOf(resolved) : null;
-}
-
-/** Requirement 2.7: any resolved outcome (real or estimated), used only to gate the "insufficient data" notice. */
-export function countResolved(signals: HistoricalSignal[]): number {
-  return signals.filter(s => resolvePnl(s) !== null).length;
-}
-
-/** Requirement 5.7: sparkline uses only real-evaluated records, oldest first, colored by outcome. */
-export function buildRealChartData(signals: HistoricalSignal[]) {
-  const ordered = [...signals].filter(s => s.pnlReal === true && typeof s.pnlPct === 'number').reverse();
-  let cum = 0;
-  return ordered.map((s, i) => {
-    cum += s.pnlPct as number;
-    return { i, cum: parseFloat(cum.toFixed(2)), hit: s.outcome === 'HIT' };
-  });
-}
 
 function StatsGrid({ stats, dimmed }: { stats: ReturnType<typeof statsOf>; dimmed?: boolean }) {
   return (
@@ -130,9 +53,15 @@ function StatsGrid({ stats, dimmed }: { stats: ReturnType<typeof statsOf>; dimme
 }
 
 export function SignalHistory({ signals, loading }: SignalHistoryProps) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(id);
+  }, []);
+
   const realStats      = !loading ? computeRealStats(signals) : null;
-  const estimatedStats = !loading ? computeEstimatedStats(signals) : null;
-  const resolvedCount   = !loading ? countResolved(signals) : 0;
+  const estimatedStats = !loading ? computeEstimatedStats(signals, now) : null;
+  const resolvedCount   = !loading ? countResolved(signals, now) : 0;
   const chartData       = !loading ? buildRealChartData(signals) : [];
   const chartColor      = realStats && realStats.cumPnl >= 0 ? '#34D399' : '#F87171';
 
@@ -224,7 +153,7 @@ export function SignalHistory({ signals, loading }: SignalHistoryProps) {
           {signals.map(sig => {
             const color   = DIR_COLORS[sig.direction];
             const DirIcon = DIR_ICONS[sig.direction];
-            const outcome = resolvePnl(sig);
+            const outcome = resolvePnl(sig, now);
 
             return (
               <div key={sig.id} className="relative mb-3 last:mb-0">
@@ -244,7 +173,7 @@ export function SignalHistory({ signals, loading }: SignalHistoryProps) {
                       · ${sig.entryPrice.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                     </span>
                   )}
-                  <span className="text-slate-600 ml-auto">{daysAgo(sig.timestamp)}</span>
+                  <span className="text-slate-600 ml-auto">{daysAgo(sig.timestamp, now)}</span>
                 </div>
                 <p className="text-xs text-slate-300 leading-snug">{sig.headline}</p>
                 {outcome ? (
@@ -263,7 +192,7 @@ export function SignalHistory({ signals, loading }: SignalHistoryProps) {
                       {outcome.real ? '✓ evaluated' : '~estimated'}
                     </span>
                   </div>
-                ) : (Date.now() - sig.timestamp < 24 * 60 * 60 * 1000) ? (
+                ) : (now - sig.timestamp < 24 * 60 * 60 * 1000) ? (
                   <span className="inline-block mt-1 text-[10px] font-mono text-slate-600">
                     ⏳ Pending 24h evaluation
                   </span>

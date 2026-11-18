@@ -37,23 +37,23 @@ Most crypto traders are drowning in noise. BTC/ETH spot ETF flows, institutional
 
 **ETFSignal AI** closes that gap.
 
-It pulls institutional ETF flow data from SoSoValue, streams live BTC/ETH prices from Binance, computes a live sentiment score, synthesizes everything with Gemini AI into a structured signal with TP/SL levels and factor weights — then lets you execute directly on SoDEX (spot, or perps long/short with market **or limit** orders, adjustable leverage up to each market's real max, TP/SL bracket orders, reduce-only, and isolated/cross margin) and receive a personal Telegram alert when your trade executes.
+It pulls institutional ETF flow data from SoSoValue, streams live BTC/ETH prices from Binance, computes a live sentiment score, synthesizes everything with Moonshot AI Kimi K3.1 Pro via NVIDIA NIM into a structured signal with TP/SL levels and factor weights (with a deterministic rule-based fallback if AI is unavailable) — then lets you execute directly on SoDEX (spot, or perps long/short with market **or limit** orders, adjustable leverage up to each market's real max, TP/SL bracket orders, reduce-only, and isolated/cross margin) and receive a personal Telegram alert when your trade executes.
 
 Every signal is backtested against real hourly price data — hit rate, average P&L, and max drawdown are computed from actual TP/SL outcomes, not simulated numbers. Before you trade, a half-Kelly risk panel recommends a position size and flags risk-reward and liquidation risk; after you trade, the Portfolio page shows what actually happened, including whether a leveraged position was genuinely liquidated (straight from SoDEX's own record, not a guess).
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │                                                                     │
-│   SoSoValue API          Gemini AI           SoDEX Mainnet        │
-│   ─────────────    →    ───────────    →    ─────────────────────  │
-│   ETF Flows             Synthesize           Place Order           │
-│   News Feed             Signal + TP/SL       EIP-712 Sign          │
-│   Fund Data             Factor Weights        Confirm Trade         │
+│   SoSoValue API        Kimi K3.1 Pro         SoDEX Mainnet          │
+│   ─────────────    →   ─────────────    →   ──────────────────────  │
+│   ETF Flows            NVIDIA NIM Proxy      Place Order            │
+│   News Feed            Signal + Fallback     EIP-712 Sign           │
+│   Fund Data            Factor Weights        Confirm Trade          │
 │                                                                     │
-│   Binance WS            Upstash Redis        Telegram Bot          │
-│   ──────────            ─────────────        ─────────────         │
-│   Live BTC/ETH          Signal Archive        @ETFSignalAIBot      │
-│   price (1s)            Subscribers           Personal Alerts       │
+│   Binance WS           Upstash Redis         Telegram Bot           │
+│   ──────────           ─────────────         ─────────────          │
+│   Live BTC/ETH         Signal Archive        @ETFSignalAIBot        │
+│   price (1s)           Subscribers           Personal Alerts        │
 │                                                                     │
 └─────────────────────────────────────────────────────────────────────┘
 ```
@@ -68,7 +68,7 @@ Every signal is backtested against real hourly price data — hit rate, average 
 | **2. Live Price** | Streams real-time BTC/ETH price from Binance WebSocket (~1s cadence); auto-reconnects |
 | **3. Sentiment** | Computes a 0–100 flow sentiment score from 14-day momentum + inflow breadth |
 | **4. Enrich** | Pulls categorised news: on-chain events, institutional reports, price alerts, research |
-| **5. Analyze** | Gemini AI synthesises everything into a structured signal: direction, confidence, key factors, TP/SL, risk warning, factor weights |
+| **5. Analyze** | Kimi K3.1 Pro (`moonshotai/kimi-k3.1-pro` via NVIDIA NIM) synthesises everything into a structured signal: direction, confidence, key factors, TP/SL, risk warning, factor weights (falls back deterministically if unavailable) |
 | **6. Signal** | Dashboard shows BULLISH / BEARISH / NEUTRAL with factor breakdown bars, headline, summary, trade idea, AskAI follow-up chat |
 | **7. Size** | Half-Kelly risk panel recommends a position size from balance + confidence + TP/SL, with risk-reward, ATR, and (for perps) liquidation-price warnings |
 | **8. Execute** | User connects wallet, reviews order, acknowledges risk, signs via EIP-712, submits to SoDEX — spot (buy/sell) or perps (long/short, market/limit, up to each market's real max leverage, optional TP/SL bracket order + reduce-only, isolated/cross margin) |
@@ -104,7 +104,7 @@ A full-featured companion bot at [@ETFSignalAIBot](https://t.me/ETFSignalAIBot):
 
 | Command | Description |
 |---------|------------|
-| `/signal` or `/btc` | Live BTC AI signal (Gemini + SoSoValue data) |
+| `/signal` or `/btc` | Live BTC AI signal (Kimi K3.1 Pro + SoSoValue data) |
 | `/eth` | Live ETH AI signal |
 | `/status` | BTC & ETH ETF market snapshot |
 | `/ch` | BTC/USDT 1m candlestick chart |
@@ -129,14 +129,14 @@ A full-featured companion bot at [@ETFSignalAIBot](https://t.me/ETFSignalAIBot):
 - Node.js 18+
 - Any EVM wallet (MetaMask or Rabby)
 - SoSoValue API key ([apply here](https://sosovalue.com/developer/dashboard))
-- Google Gemini API key ([get here](https://aistudio.google.com/apikey))
+- NVIDIA NIM API key ([get here](https://build.nvidia.com)) for Kimi K3.1 Pro
 
 ### 1. Clone & Install
 
 ```bash
 git clone https://github.com/girume1/etfsignal.git
-cd etfsignal/app
-npm install --legacy-peer-deps
+cd etfsignal
+npm install && cd app && npm install --legacy-peer-deps
 ```
 
 ### 2. Configure Environment
@@ -147,7 +147,8 @@ cp .env.example .env
 
 ```env
 # SERVER-SIDE — consumed by Vercel serverless functions only, never sent to browser
-GEMINI_API_KEY=AIza...
+NVIDIA_API_KEY=nvapi-...
+# NVIDIA_MODEL=moonshotai/kimi-k3.1-pro
 SOSO_API_KEY=SOSO-...
 TELEGRAM_BOT_TOKEN=...
 UPSTASH_REDIS_REST_URL=...
@@ -181,7 +182,8 @@ Open [http://localhost:5173](http://localhost:5173) 🎉
 
 | Key | Required | Purpose |
 |-----|----------|---------|
-| `GEMINI_API_KEY` | ✅ | Gemini AI signal generation |
+| `NVIDIA_API_KEY` | ✅ | Kimi K3.1 Pro AI signal generation via NVIDIA NIM |
+| `NVIDIA_MODEL` | Optional | Override NVIDIA NIM model ID (default `moonshotai/kimi-k3.1-pro`) |
 | `SOSO_API_KEY` | ✅ | Live ETF flow data |
 | `VITE_DYNAMIC_ENVIRONMENT_ID` | ✅ | Wallet connection (Dynamic) |
 | `VITE_SODEX_BUILDER_ID` | ✅ | SoDEX Builder Account ID (client EIP-712 order builder fee attribution) |
@@ -202,7 +204,8 @@ Open [http://localhost:5173](http://localhost:5173) 🎉
 ```
 etfsignal/
 ├── api/                          # Vercel serverless / Edge Functions
-│   ├── analyze.ts                # Gemini AI proxy (GEMINI_API_KEY server-side)
+│   ├── analyze.ts                # Kimi K3.1 Pro NVIDIA NIM proxy (NVIDIA_API_KEY server-side)
+│   ├── aiBudget.ts               # Shared 26s server / 29s client budget constants
 │   ├── sosovalue.ts              # SoSoValue data proxy
 │   ├── chart.ts                  # Chart image generator (chart-img.com + QuickChart fallback)
 │   ├── signal-archive.ts         # Signal archive — GET/POST/PATCH via Upstash Redis
@@ -216,16 +219,22 @@ etfsignal/
 │
 └── app/
     └── src/
+        ├── config/
+        │   └── valuechain.ts     # Shared ValueChain (286623/138565) & SoDEX gateway config
+        │
         ├── contexts/
-        │   ├── DashboardContext.tsx  # Shared data + wallet + signal + trade state
-        │   └── DensityContext.tsx    # Layout density (compact / comfortable / mobile)
+        │   ├── DashboardContext.tsx     # Shared data + wallet/network + signal + trade state
+        │   ├── ConnectionStatusContext.tsx # Live status tracking for SoSoValue, Binance & AI
+        │   └── DensityContext.tsx       # Layout density (compact / comfortable / mobile)
         │
         ├── hooks/
         │   └── useLivePrices.ts      # Binance WebSocket — live BTC/ETH price stream
         │
         ├── services/
         │   ├── sosovalue.ts          # SoSoValue API client — normalizes stringified API numbers to real numbers
-        │   ├── ai.ts                 # Gemini signal synthesis + AskAI follow-up + backtest/flow context
+        │   ├── ai.ts                 # Kimi K3.1 Pro signal synthesis + AskAI + fallback + 60s circuit breaker
+        │   ├── fallbackSignal.ts     # Deterministic rule-based signal builder (no network dependency)
+        │   ├── walletNetwork.ts      # Per-wallet EIP-1193 ValueChain verification & 4902 add+switch helper
         │   ├── sodex.ts              # EIP-712 signing + SoDEX spot & perps order placement
         │   ├── backtester.ts         # Pure: replays signals against real hourly candles → HIT/MISS/EXPIRED
         │   ├── riskManager.ts        # Pure: half-Kelly sizing, ATR/R:R warnings, leveraged margin + liquidation estimate
@@ -266,7 +275,7 @@ etfsignal/
 | **SoSoValue** | `GET /api/v1/news/featured` | Categorised crypto news feed |
 | **Binance** | `wss://stream.binance.com:9443/stream` | Live BTC/ETH price — `miniTicker` ~1s updates |
 | **Binance** | `GET /api/v3/klines` | Daily/hourly candles — chart price history + backtest evaluation |
-| **Gemini AI** | `gemini-2.5-flash` via `/api/analyze` | Signal synthesis + AskAI follow-up |
+| **The Agent (Kimi K3.1 Pro)** | `moonshotai/kimi-k3.1-pro` via NVIDIA NIM through `/api/analyze` | Signal synthesis + AskAI follow-up |
 | **SoDEX** | `POST mainnet-gw.sodex.dev/api/v1/spot/trade/orders/batch` | EIP-712 signed spot order placement (domain `spot`, envelope `batchNewOrder`, Builder Fee attribution) |
 | **SoDEX** | `POST mainnet-gw.sodex.dev/api/v1/perps/trade/orders` | EIP-712 signed perps order placement (domain `futures`, envelope `newOrder`, Builder Fee attribution) |
 | **SoDEX** | `GET .../perps/accounts/{addr}/positions/history` | Real liquidation status (`isTakenOver`/`takeOverPrice`) for closed perps positions |
@@ -323,10 +332,24 @@ interface RiskResult {
 
 ---
 
+## 🤖 AI Provider & Graceful Degradation
+
+- **Primary AI provider**: `/api/analyze` proxies `moonshotai/kimi-k3.1-pro` on NVIDIA NIM (`NVIDIA_API_KEY`, optional `NVIDIA_MODEL`) with up to **2 retries** using bounded backoff (`ATTEMPT_TIMEOUTS_MS` inside a `26s` total server budget / `30s` Vercel `maxDuration`).
+- **Rule-based fallback & circuit breaker**: On network errors, timeouts, rate limits (`429`), or upstream `5xx`, the client serves a deterministic rule-based `MarketSignal` (`source: 'fallback'`, confidence capped at `60`) built from ETF inflows, momentum, and sentiment — clearly badged in the UI with a one-click Retry button and excluded from AI backtest stats. After 2 consecutive failures, a 60s circuit breaker avoids repeated timeouts.
+- **Trading is never blocked**: AI signals are strictly optional advisors. Buy/Sell and manual order placement in `TradeModal` remain enabled whenever a wallet is connected, whether AI analysis is loading, idle, degraded, or unavailable.
+
+## ⛓️ Network: ValueChain (Chain ID 286623)
+
+- **Mainnet**: `ValueChain` · Chain ID `286623` (`0x45F9F`) · Currency `SOSO` (18 decimals) · Explorer `https://main-scan.valuechain.xyz`
+- **Testnet**: `ValueChain Testnet` · Chain ID `138565` (`0x21D45`) via `VITE_SODEX_NETWORK=testnet`
+- Dynamic (`@dynamic-labs/sdk-react-core`) is configured with `overrides.evmNetworks` so ValueChain is registered upfront alongside dashboard chains. Post-connect verification and EIP-3085/3326 add-and-switch use the connected wallet's own EIP-1193 provider instead of global `window.ethereum`.
+
+---
+
 ## 🛡️ Safety & Risk Controls
 
 - **Explicit risk acknowledgment** — checkbox required before any trade executes
-- **Risk warning displayed** — Gemini's risk thesis shown before confirmation, plus a leverage-specific warning for perps
+- **Risk warning displayed** — The Agent's risk thesis (or a manual trading reminder when placing an order without a signal) shown before confirmation, plus a leverage-specific warning for perps
 - **Half-Kelly position sizing** — recommended size from balance, confidence, and TP/SL, with a 10 vUSDC floor and 20%-of-balance ceiling
 - **Risk-reward + ATR warnings** — flagged when r < 1.5 or a stop-loss sits beyond 3× ATR
 - **Liquidation awareness** — estimated liquidation price shown before a leveraged trade; real liquidation status (SoDEX's own record) shown after, in Portfolio
@@ -345,7 +368,7 @@ interface RiskResult {
 ## 🗺️ Buildathon Roadmap
 
 ```
-Wave 1  ✅  Full scaffold · SoSoValue live data · Gemini AI signals · SoDEX EIP-712 trades
+Wave 1  ✅  Full scaffold · SoSoValue live data · AI signals · SoDEX EIP-712 trades
             5-page app shell · Bloomberg ticker · Binance live price stream (● LIVE indicator)
             Recharts interactive charts · Sentiment gauge · AskAI chat · Alerts feed
             Dynamic multi-wallet · Wallet-gated dashboard · Density toggle
@@ -380,7 +403,7 @@ Wave 3  ✅  Real backtesting — hit rate/avg P&L/max drawdown from actual TP/S
 | User Value & Practical Impact | **30%** | Real backtested hit rate/P&L, half-Kelly position sizing, and liquidation-aware perps trading turn ETF flow data into risk-managed, actionable trades |
 | Functionality & Working Demo | **25%** | Live at etfsignal.vercel.app — full pipeline: live data → AI signal → risk-sized EIP-712 trade (spot or perps) → Telegram alert → real 24h evaluation |
 | Logic, Workflow & Product Design | **20%** | 9-page app, shared data context, real backtester + risk manager as pure testable modules, signal archive with genuine TP/SL outcomes, perps position tracking |
-| Data / API Integration | **15%** | SoSoValue + Binance (WS + REST) + Gemini AI + SoDEX spot & perps mainnet + Upstash Redis + chart-img.com/Bybit/Kraken/OKX fallback + Ethereum RPC |
+| Data / API Integration | **15%** | SoSoValue + Binance (WS + REST) + Kimi K3.1 Pro (NVIDIA NIM) + SoDEX spot & perps mainnet + Upstash Redis + chart-img.com/Bybit/Kraken/OKX fallback + Ethereum RPC |
 | UX & Clarity | **10%** | Bloomberg cockpit, recharts, live ticker, Dynamic wallet, onboarding tour, factor breakdown bars, real vs estimated stats clearly labeled |
 
 ---
@@ -397,7 +420,7 @@ Wave 3  ✅  Real backtesting — hit rate/avg P&L/max drawdown from actual TP/S
 | Wallet | Dynamic (`@dynamic-labs/sdk-react-core`) — MetaMask, Rabby, WalletConnect + 300 more |
 | Web3 | ethers.js v6 (EIP-712 signing via Dynamic signer) |
 | Live Data | Binance WebSocket `miniTicker` stream (BTC + ETH, ~1s cadence) |
-| AI | Google Gemini `gemini-2.5-flash` (Vercel Node.js Function) |
+| AI | Moonshot AI `moonshotai/kimi-k3.1-pro` via NVIDIA NIM (Vercel Node.js Function) |
 | Data | SoSoValue REST API |
 | Trading | SoDEX Mainnet REST — spot (`batchNewOrder`, domain `spot`) + perps (`newOrder`, domain `futures`), symbolID-based, EIP-712 signed by the connected wallet |
 | Backtesting | Pure TS module replaying signals against Binance hourly candles — no I/O, fully unit-tested |
@@ -440,6 +463,6 @@ TELEGRAM_BOT_TOKEN=your_token node scripts/setup-telegram-webhook.js
 
 **ETFSignal AI** · SoSoValue Buildathon 2026 · Wave 3
 
-*Data by [SoSoValue](https://sosovalue.com) · Live prices by [Binance](https://binance.com) · Trading on [SoDEX](https://sodex.com) · AI by [Google Gemini](https://deepmind.google/gemini) · Wallet by [Dynamic](https://dynamic.xyz) · Bot on [Telegram](https://t.me/ETFSignalAIBot)*
+*Data by [SoSoValue](https://sosovalue.com) · Live prices by [Binance](https://binance.com) · Trading on [SoDEX](https://sodex.com) · AI by [Moonshot AI Kimi via NVIDIA NIM](https://build.nvidia.com) · Wallet by [Dynamic](https://dynamic.xyz) · Bot on [Telegram](https://t.me/ETFSignalAIBot)*
 
 </div>

@@ -28,6 +28,7 @@ export function useLivePrices(): LivePrices {
   const wsRef      = useRef<WebSocket | null>(null);
   const timerRef   = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const mountedRef = useRef(true);
+  const connectRef = useRef<() => void>(() => {});
 
   const connect = useCallback(() => {
     if (!mountedRef.current) return;
@@ -61,7 +62,7 @@ export function useLivePrices(): LivePrices {
       ws.onclose = () => {
         if (!mountedRef.current) return;
         setPrices(p => ({ ...p, connected: false }));
-        timerRef.current = setTimeout(connect, 3_000); // reconnect
+        timerRef.current = setTimeout(() => connectRef.current(), 3_000); // reconnect
       };
 
       ws.onerror = () => ws.close(); // triggers onclose → reconnect
@@ -70,7 +71,11 @@ export function useLivePrices(): LivePrices {
       // WebSocket constructor can throw in some envs (SSR, test)
       // just stay disconnected
     }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    connectRef.current = connect;
+  }, [connect]);
 
   useEffect(() => {
     mountedRef.current = true;

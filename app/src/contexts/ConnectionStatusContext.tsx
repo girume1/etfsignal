@@ -1,24 +1,14 @@
-import { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
-
-export type SourceStatus = 'unknown' | 'live' | 'error';
-
-export interface ConnectionStatus {
-  sosovalue: SourceStatus;
-  binance: SourceStatus;
-  gemini: SourceStatus;
-}
-
-export interface ConnectionStatusContextValue {
-  status: ConnectionStatus;
-  setSourceStatus: (source: keyof ConnectionStatus, s: SourceStatus) => void;
-}
-
-const ConnectionStatusContext = createContext<ConnectionStatusContextValue | null>(null);
+import { useState, useCallback, type ReactNode } from 'react';
+import {
+  ConnectionStatusContext,
+  type ConnectionStatus,
+  type SourceStatus,
+} from './connectionStatusStore';
 
 const INITIAL_STATUS: ConnectionStatus = {
   sosovalue: 'unknown',
   binance: 'unknown',
-  gemini: 'unknown',
+  ai: 'unknown',
 };
 
 export function ConnectionStatusProvider({ children }: { children: ReactNode }) {
@@ -36,10 +26,4 @@ export function ConnectionStatusProvider({ children }: { children: ReactNode }) 
       {children}
     </ConnectionStatusContext.Provider>
   );
-}
-
-export function useConnectionStatus(): ConnectionStatusContextValue {
-  const ctx = useContext(ConnectionStatusContext);
-  if (!ctx) throw new Error('useConnectionStatus must be used inside ConnectionStatusProvider');
-  return ctx;
 }

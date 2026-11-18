@@ -54,7 +54,7 @@ async function main() {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       commands: [
-        { command: 'signal',      description: 'Live BTC ETF signal (Gemini AI)' },
+        { command: 'signal',      description: 'Live BTC ETF signal (Kimi K3.1 Pro)' },
         { command: 'btc',         description: 'BTC-specific AI signal' },
         { command: 'eth',         description: 'ETH-specific AI signal' },
         { command: 'status',      description: 'Live BTC & ETH ETF market snapshot' },
@@ -83,8 +83,11 @@ async function main() {
 
 Required Vercel env vars:
   TELEGRAM_BOT_TOKEN        ✓ (already set)
-  GEMINI_API_KEY            — needed for /signal, /btc, /eth
+  NVIDIA_API_KEY            — needed for /signal, /btc, /eth (Kimi K3.1 Pro via NVIDIA NIM)
   SOSO_API_KEY              — needed for live ETF data
+
+Optional:
+  NVIDIA_MODEL              — override default model (moonshotai/kimi-k3.1-pro)
 
 Optional (for subscriber persistence):
   UPSTASH_REDIS_REST_URL    — Upstash Redis endpoint

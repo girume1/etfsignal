@@ -1,5 +1,4 @@
-import { useDashboard } from '../contexts/DashboardContext';
-import { formatUSD } from '../services/sosovalue';
+import { useDashboard } from '../contexts/dashboardStore';
 
 export function QuickStats() {
   const {

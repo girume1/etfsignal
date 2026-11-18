@@ -1,8 +1,9 @@
 import { Menu, BarChart2 } from 'lucide-react';
 import type { WalletState } from '../types';
 import { WalletMenu } from './WalletMenu';
-import { useDashboard } from '../contexts/DashboardContext';
+import { useDashboard } from '../contexts/dashboardStore';
 import { formatUSD } from '../services/sosovalue';
+import { ACTIVE_VALUECHAIN, getChainDisplayName } from '../config/valuechain';
 
 interface HeaderProps {
   wallet: WalletState;
@@ -13,9 +14,9 @@ interface HeaderProps {
 }
 
 function PricePill({
-  icon, label, price, change, color,
+  icon, label, price, change,
 }: {
-  icon: React.ReactNode; label: string; price: string; change?: string; color: string;
+  icon: React.ReactNode; label: string; price: string; change?: string;
 }) {
   const isPos = !change || change.startsWith('+');
   return (
@@ -45,7 +46,17 @@ export function Header({
     btcData, ethData,
     liveBtcPx, liveEthPx, latestBtcPx, latestEthPx,
     liveConnected,
+    switchToValueChain,
   } = useDashboard();
+
+  const isLocked = wallet.connected && wallet.networkStatus === 'locked';
+  const isWrongNetwork = Boolean(
+    wallet.connected &&
+    !isLocked &&
+    wallet.chainId != null &&
+    wallet.chainId !== ACTIVE_VALUECHAIN.chainId,
+  );
+  const wrongNetworkName = wallet.chainName ?? getChainDisplayName(wallet.chainId);
 
 
   const btcPrice = liveBtcPx ?? latestBtcPx;
@@ -101,7 +112,6 @@ export function Header({
             icon={<span className="w-2.5 h-2.5 rounded-full inline-block shrink-0" style={{ background: '#F59E0B' }} />}
             label="BTC"
             price={`$${btcPrice.toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
-            color="#F59E0B"
           />
         )}
         {ethPrice && (
@@ -109,7 +119,6 @@ export function Header({
             icon={<span className="w-2.5 h-2.5 rounded-full inline-block shrink-0" style={{ background: '#818CF8' }} />}
             label="ETH"
             price={`$${ethPrice.toLocaleString(undefined, { maximumFractionDigits: 2 })}`}
-            color="#818CF8"
           />
         )}
         {totalAum !== null && (
@@ -118,7 +127,6 @@ export function Header({
             label="TOTAL ETF AUM"
             price={formatUSD(totalAum).replace('+', '')}
             change={aumChangeStr}
-            color="#FF7637"
           />
         )}
 
@@ -133,6 +141,49 @@ export function Header({
 
       {/* Right controls */}
       <div className="flex items-center gap-2 shrink-0">
+        {wallet.connected && (
+          isLocked ? (
+            <button
+              type="button"
+              onClick={() => void switchToValueChain?.()}
+              className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-mono transition-opacity hover:opacity-90"
+              style={{
+                background: 'rgba(251,191,36,0.12)',
+                color: '#FBBF24',
+                border: '1px solid rgba(251,191,36,0.35)',
+              }}
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block shrink-0" />
+              Unlock wallet · Retry
+            </button>
+          ) : isWrongNetwork ? (
+            <button
+              type="button"
+              onClick={() => void switchToValueChain?.()}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-mono transition-opacity hover:opacity-90"
+              style={{
+                background: 'rgba(251,191,36,0.12)',
+                color: '#FBBF24',
+                border: '1px solid rgba(251,191,36,0.35)',
+              }}
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block shrink-0" />
+              Wrong network: {wrongNetworkName} · Switch
+            </button>
+          ) : (
+            <span
+              className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-mono"
+              style={{
+                background: 'rgba(52,211,153,0.12)',
+                color: '#34D399',
+                border: '1px solid rgba(52,211,153,0.3)',
+              }}
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-green-400 inline-block shrink-0" />
+              {ACTIVE_VALUECHAIN.name} · {ACTIVE_VALUECHAIN.chainId}
+            </span>
+          )
+        )}
 
         <WalletMenu
           wallet={wallet}

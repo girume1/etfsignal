@@ -1,6 +1,6 @@
 import { RefreshCw, Sparkles } from 'lucide-react';
-import { useDashboard } from '../../contexts/DashboardContext';
-import { useDensity } from '../../contexts/DensityContext';
+import { useDashboard } from '../../contexts/dashboardStore';
+import { useDensity } from '../../contexts/densityStore';
 import { QuickStats } from '../../components/QuickStats';
 import { EtfPanel } from '../../components/EtfPanel';
 import { PriceFlowChart } from '../../components/PriceFlowChart';
@@ -30,7 +30,7 @@ export default function OverviewPage() {
     activeLabel, activeTab, setActiveTab,
     latestBtcPx, latestEthPx, liveBtcPx, liveEthPx,
     loading, lastUpdated, sentiment,
-    signal, signalLoading, signalError, analysisStage, handleAnalyze, cancelAnalyze,
+    signal, signalLoading, signalError, analysisStage, aiCircuitOpen, handleAnalyze, handleRetryAi, cancelAnalyze,
     alerts, history, news, refresh,
     openTradeModal, wallet,
   } = useDashboard();
@@ -171,6 +171,8 @@ export default function OverviewPage() {
             error={signalError}
             analysisStage={analysisStage}
             onCancel={cancelAnalyze}
+            circuitOpen={aiCircuitOpen}
+            onRetryAi={handleRetryAi}
           />
           <AskAI asset={activeLabel} etfData={activeData} signal={signal} />
         </div>

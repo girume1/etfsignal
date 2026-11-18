@@ -5,6 +5,7 @@ import type { HistoricalInflow } from '../services/sosovalue';
 import { formatUSD } from '../services/sosovalue';
 import { TradingChart } from './TradingChart';
 import { isWatched, toggleWatch } from '../services/watchlist';
+import { detectAnomalies, getTopFunds, type AnomalyKind } from '../utils/etfAnomalies';
 
 interface EtfPanelProps {
   btcData: EtfData | null;
@@ -15,44 +16,6 @@ interface EtfPanelProps {
   onTabChange: (tab: ActiveTab) => void;
   loading: boolean;
   currentPrice?: number | null;
-}
-
-// ─── Anomaly detection ────────────────────────────────────────────────────
-// Delivers on the "opportunity discovery" bonus criterion: flags the largest
-// inflow and largest outflow of the day on the fund breakdown. Pure client-side
-// so it works identically with live or mock data.
-
-export type AnomalyKind = 'topInflow' | 'topOutflow' | 'lowFee';
-export interface AnomalyMap { [fundId: string]: AnomalyKind[] }
-
-export function detectAnomalies(funds: EtfFund[]): AnomalyMap {
-  const m: AnomalyMap = Object.create(null) as AnomalyMap;
-
-  // Low fee flagging is independent of inflow data
-  const lowFeeThreshold = 0.002; // 20 bps or less
-  funds
-    .filter(f => (f.fee.value ?? 1) <= lowFeeThreshold)
-    .forEach(f => (m[f.id] ??= []).push('lowFee'));
-
-  const withFlow = funds.filter(f => f.dailyNetInflow.value !== null);
-  if (withFlow.length === 0) return m;
-
-  const topInflow  = withFlow.reduce((best, f) => (f.dailyNetInflow.value! > best.dailyNetInflow.value! ? f : best));
-  const topOutflow = withFlow.reduce((worst, f) => (f.dailyNetInflow.value! < worst.dailyNetInflow.value! ? f : worst));
-  if ((topInflow.dailyNetInflow.value  || 0) >  50_000_000) (m[topInflow.id]  ??= []).push('topInflow');
-  if ((topOutflow.dailyNetInflow.value || 0) < -25_000_000) (m[topOutflow.id] ??= []).push('topOutflow');
-
-  return m;
-}
-
-// ─── Top funds sort/slice (pure, testable) ────────────────────────────────
-// Returns up to 10 funds sorted by absolute daily net inflow descending.
-// Funds with null inflow are excluded.
-export function getTopFunds<T extends { dailyNetInflow: { value: number | null } }>(funds: T[], limit = 10): T[] {
-  return funds
-    .filter(f => f.dailyNetInflow.value !== null)
-    .sort((a, b) => Math.abs(b.dailyNetInflow.value!) - Math.abs(a.dailyNetInflow.value!))
-    .slice(0, limit);
 }
 
 const ANOMALY_ICON: Record<AnomalyKind, React.ElementType> = {
@@ -212,8 +175,9 @@ export function FundRow({ fund, anomalies }: { fund: EtfFund; anomalies: Anomaly
 }
 
 export function EtfPanel({ btcData, ethData, btcHistory, ethHistory, activeTab, onTabChange, loading, currentPrice }: EtfPanelProps) {
+  void btcHistory;
+  void ethHistory;
   const data    = activeTab === 'btc' ? btcData    : ethData;
-  const history = activeTab === 'btc' ? btcHistory : ethHistory;
   const label   = activeTab === 'btc' ? 'BTC' : 'ETH';
 
   const dailyInflow = data?.dailyNetInflow.value ?? null;

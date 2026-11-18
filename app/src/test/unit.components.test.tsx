@@ -171,11 +171,11 @@ describe('SignalPanel', () => {
         {...defaultProps}
         onAnalyze={onAnalyze}
         signal={null}
-        error="Gemini API error: 500"
+        error="AI API error: 500"
       />,
     );
 
-    expect(screen.getByText('Gemini API error: 500')).toBeInTheDocument();
+    expect(screen.getByText('AI API error: 500')).toBeInTheDocument();
     const retryBtn = screen.getByRole('button', { name: /retry/i });
     expect(retryBtn).toBeInTheDocument();
     fireEvent.click(retryBtn);

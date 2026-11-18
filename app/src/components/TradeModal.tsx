@@ -2,14 +2,16 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import type { JsonRpcSigner } from 'ethers';
 import {
   X, TrendingUp, Zap, Target, ArrowUp, ArrowDown,
-  ArrowUpDown, RefreshCw, ExternalLink, AlertTriangle, Shield,
+  RefreshCw, ExternalLink, AlertTriangle, Shield,
   ChevronUp, ChevronDown, CheckCircle2, XCircle,
 } from 'lucide-react';
-import type { MarketSignal, OrderSide, TradeOrder } from '../types';
+import type { MarketSignal, OrderSide, TradeOrder, WalletNetworkStatus } from '../types';
 import {
   fetchBalances, getPerpsMaxLeverage, getQuantityPrecision, updatePerpsCollateral,
-  USE_TESTNET, getBuilderConfig, validateOrderMinimum, SPOT_MIN_NOTIONAL_USD, PERPS_MIN_NOTIONAL_USD,
+  getBuilderConfig, validateOrderMinimum, SPOT_MIN_NOTIONAL_USD, PERPS_MIN_NOTIONAL_USD,
 } from '../services/sodex';
+import { ACTIVE_VALUECHAIN, USE_TESTNET, getChainDisplayName } from '../config/valuechain';
+import { ensureWalletOnValueChain, isWalletLockedError, WALLET_LOCKED_MESSAGE } from '../services/walletNetwork';
 import { computePositionSize, computeLeveragedRisk, type LeveragedRiskResult } from '../services/riskManager';
 
 function RiskPanel({
@@ -42,7 +44,7 @@ function RiskPanel({
   const warnings = [
     risk.riskRewardWarning && 'Risk/reward below 1.5x',
     risk.atrWarning && 'Stop-loss beyond 3x ATR',
-    risk.clamped && `Clamped to 10 ${USE_TESTNET ? 'vUSDC' : 'USDC'} minimum`,
+    risk.clamped && `Clamped to 10 ${ACTIVE_VALUECHAIN.settlementCurrency} minimum`,
     risk.capped && 'Capped to 20% of balance',
     leveraged?.liquidationWarning && 'Liquidation within 15% of entry',
   ].filter((w): w is string => Boolean(w));
@@ -97,10 +99,13 @@ function RiskPanel({
 }
 
 interface TradeModalProps {
-  signal: MarketSignal;
+  signal?: MarketSignal | null;
   side: OrderSide;
   symbol: string;
   walletAddress?: string | null;
+  walletChainId?: number | null;
+  walletNetworkStatus?: WalletNetworkStatus;
+  onSwitchNetwork?: () => Promise<boolean>;
   currentPrice?: number;
   signer?: JsonRpcSigner | null;
   onConfirm: (order: TradeOrder) => Promise<{ orderId: string }>;
@@ -109,8 +114,39 @@ interface TradeModalProps {
 
 const PERCENTS = [0, 25, 50, 75, 100];
 
+function SegmentBtn({
+  active,
+  onClick,
+  bgColor,
+  color,
+  borderCol,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  bgColor: string;
+  color: string;
+  borderCol: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="flex-1 py-2 rounded-lg text-sm font-semibold capitalize transition-all"
+      style={{
+        background: active ? bgColor : 'transparent',
+        color:      active ? color   : '#64748b',
+        border:     active ? `1px solid ${borderCol}` : '1px solid transparent',
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
 export function TradeModal({
-  signal, side, symbol, walletAddress, currentPrice, signer, onConfirm, onClose,
+  signal, side, symbol, walletAddress, walletChainId, walletNetworkStatus, onSwitchNetwork,
+  currentPrice, signer, onConfirm, onClose,
 }: TradeModalProps) {
   const baseAsset   = symbol.split('-')[0]; // BTC or ETH
   const quoteAsset  = symbol.split('-')[1]; // USDC
@@ -121,14 +157,21 @@ export function TradeModal({
   const [marketType,   setMarketType]   = useState<'spot' | 'futures'>('spot');
   const [orderType,    setOrderType]    = useState<'MARKET' | 'LIMIT'>('MARKET');
   const [amount,       setAmount]       = useState(side === 'SELL' ? '0.001' : '10');
-  const [limitPrice,   setLimitPrice]   = useState(
-    currentPrice ? currentPrice.toFixed(2) : ''
-  );
+  const [limitPriceInput, setLimitPriceInput] = useState<string | null>(null);
+  const limitPrice = limitPriceInput ?? (currentPrice ? currentPrice.toFixed(2) : '');
+  const setLimitPrice = (next: string) => setLimitPriceInput(next);
   const [pct,          setPct]          = useState(0);
   const [dropOpen,     setDropOpen]     = useState(false);
   const [acknowledged, setAcknowledged] = useState(false);
   const [submitting,   setSubmitting]   = useState(false);
-  const [result,       setResult]       = useState<{ success: boolean; message: string; orderId?: string } | null>(null);
+  const [switchingNetwork, setSwitchingNetwork] = useState(false);
+  const [result,       setResult]       = useState<{
+    success: boolean;
+    message: string;
+    orderId?: string;
+    wrongNetwork?: boolean;
+    walletLocked?: boolean;
+  } | null>(null);
   const [leverage,     setLeverage]     = useState(20);
   const [maxLeverage,  setMaxLeverage]  = useState(20);
   const [marginMode,   setMarginMode]   = useState<'ISOLATED' | 'CROSS'>('ISOLATED');
@@ -148,33 +191,29 @@ export function TradeModal({
   const [balances,   setBalances]   = useState<Record<string, string>>({});
   const [balLoading, setBalLoading] = useState(false);
 
-  const loadBalances = useCallback(() => {
+  const loadBalances = useCallback(async () => {
     if (!walletAddress) return;
+    await Promise.resolve();
     setBalLoading(true);
-    fetchBalances(walletAddress)
-      .then(setBalances)
-      .catch(() => setBalances({}))
-      .finally(() => setBalLoading(false));
+    try {
+      const next = await fetchBalances(walletAddress);
+      setBalances(next);
+    } catch {
+      setBalances({});
+    } finally {
+      setBalLoading(false);
+    }
   }, [walletAddress]);
 
-  useEffect(() => { loadBalances(); }, [loadBalances]);
-
-  // Pre-fill limit price when currentPrice changes (e.g. live tick)
   useEffect(() => {
-    if (currentPrice && orderType === 'LIMIT' && !limitPrice) {
-      setLimitPrice(currentPrice.toFixed(2));
-    }
-  }, [currentPrice, orderType, limitPrice]);
-
-  // Reset amount when switching into futures — schema allows sizing by either
-  // base-asset quantity or USDC funds on perps, unlike spot (SELL is base-asset only)
-  useEffect(() => {
-    if (marketType === 'futures') {
-      setPct(0);
-      setAmount(currency === baseAsset ? '0.001' : '50');
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [marketType]);
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) void loadBalances();
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [loadBalances]);
 
   // Real per-symbol leverage cap (e.g. 40x for BTC-USD) — was hardcoded to a
   // 20x picker regardless of what the market actually allows.
@@ -193,12 +232,37 @@ export function TradeModal({
   const fundsAllowed =
     (orderType === 'MARKET' && (marketType === 'futures' || side === 'BUY')) ||
     orderType === 'LIMIT';
-  useEffect(() => {
-    if (!fundsAllowed && currency !== baseAsset) {
+
+  const selectMarketType = useCallback((nextMarket: 'spot' | 'futures') => {
+    const nextOrder = nextMarket === 'futures' ? 'MARKET' : orderType;
+    setMarketType(nextMarket);
+    if (nextMarket === 'futures') {
+      setOrderType('MARKET');
+      setPct(0);
+      setAmount(currency === baseAsset ? '0.001' : '50');
+    } else {
+      const nextFundsAllowed =
+        (nextOrder === 'MARKET' && side === 'BUY') || nextOrder === 'LIMIT';
+      if (!nextFundsAllowed && currency !== baseAsset) {
+        setCurrency(baseAsset);
+        setPct(0);
+      }
+    }
+  }, [orderType, currency, baseAsset, side]);
+
+  const selectOrderType = useCallback((nextOrder: 'MARKET' | 'LIMIT') => {
+    setOrderType(nextOrder);
+    if (nextOrder === 'LIMIT' && !limitPrice && currentPrice) {
+      setLimitPrice(currentPrice.toFixed(2));
+    }
+    const nextFundsAllowed =
+      (nextOrder === 'MARKET' && (marketType === 'futures' || side === 'BUY')) ||
+      nextOrder === 'LIMIT';
+    if (!nextFundsAllowed && currency !== baseAsset) {
       setCurrency(baseAsset);
       setPct(0);
     }
-  }, [fundsAllowed, currency, baseAsset]);
+  }, [limitPrice, currentPrice, marketType, side, currency, baseAsset]);
 
   // ── Risk panel: debounced amount → quote-asset (USD) terms ────────────────
   const [debouncedAmount, setDebouncedAmount] = useState(amount);
@@ -261,6 +325,17 @@ export function TradeModal({
   // for LIMIT orders, not the live market price (which can differ a lot from
   // where a resting limit order will actually fill).
   const entryPrice = orderType === 'LIMIT' ? parseFloat(limitPrice || '0') || undefined : currentPrice;
+  const customTpPct = takeProfitPrice && entryPrice && entryPrice > 0
+    ? Math.abs(((Number(takeProfitPrice) - entryPrice) / entryPrice) * 100)
+    : 0;
+  const customSlPct = stopLossPrice && entryPrice && entryPrice > 0
+    ? Math.abs(((Number(stopLossPrice) - entryPrice) / entryPrice) * 100)
+    : 0;
+  const riskConfidence = signal?.confidence ?? 50;
+  const riskTpPct = signal?.takeProfit?.pct ?? customTpPct;
+  const riskSlPct = signal?.stopLoss?.pct ?? customSlPct;
+  const riskSlPrice = signal?.stopLoss?.price ?? (stopLossPrice ? Number(stopLossPrice) : undefined);
+
   const tpInvalid = Boolean(takeProfitPrice && entryPrice &&
     (side === 'BUY' ? Number(takeProfitPrice) <= entryPrice : Number(takeProfitPrice) >= entryPrice));
   const slInvalid = Boolean(stopLossPrice && entryPrice &&
@@ -340,10 +415,57 @@ export function TradeModal({
             },
       );
       setResult({ success: true, message: '', orderId });
-    } catch (err: any) {
-      setResult({ success: false, message: err.message || 'Order failed' });
+    } catch (err: unknown) {
+      const errObj = typeof err === 'object' && err !== null ? (err as { message?: unknown; walletLocked?: unknown; wrongNetwork?: unknown }) : {};
+      const msg = typeof errObj.message === 'string' && errObj.message ? errObj.message : 'Order failed';
+      const walletLocked = Boolean(errObj.walletLocked || isWalletLockedError(err));
+      const wrongNetwork = !walletLocked && Boolean(
+        errObj.wrongNetwork || /wrong\s*network|switch.*valuechain|chain\s*id/i.test(msg),
+      );
+      setResult({
+        success: false,
+        message: walletLocked ? WALLET_LOCKED_MESSAGE : msg,
+        wrongNetwork,
+        walletLocked,
+      });
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function handleSwitchToValueChain() {
+    setSwitchingNetwork(true);
+    try {
+      if (onSwitchNetwork) {
+        const ok = await onSwitchNetwork();
+        if (ok) {
+          setResult(null);
+          return;
+        }
+      } else {
+        const res = await ensureWalletOnValueChain({ signer });
+        if (res.ok) {
+          setResult(null);
+          return;
+        }
+        setResult({
+          success: false,
+          message: res.error || `Could not switch to ${ACTIVE_VALUECHAIN.name}.`,
+          wrongNetwork: res.status !== 'locked',
+          walletLocked: res.status === 'locked',
+        });
+      }
+    } catch (err: unknown) {
+      const locked = isWalletLockedError(err);
+      const errMsg = err instanceof Error ? err.message : undefined;
+      setResult({
+        success: false,
+        message: locked ? WALLET_LOCKED_MESSAGE : (errMsg || `Could not switch to ${ACTIVE_VALUECHAIN.name}.`),
+        wrongNetwork: !locked,
+        walletLocked: locked,
+      });
+    } finally {
+      setSwitchingNetwork(false);
     }
   }
 
@@ -356,30 +478,11 @@ export function TradeModal({
       const r = await updatePerpsCollateral(signer, collateralCoin, signedAmount);
       setCollateralMsg(r.success ? `${collateralAction === 'add' ? 'Added' : 'Removed'} ${collateralAmount} ${collateralCoin}` : r.error ?? 'Failed');
       if (r.success) setCollateralAmount('');
-    } catch (err: any) {
-      setCollateralMsg(err.message || 'Failed');
+    } catch (err: unknown) {
+      setCollateralMsg(err instanceof Error ? err.message : 'Failed');
     } finally {
       setCollateralBusy(false);
     }
-  }
-
-  // ── Segment button helper ─────────────────────────────────────────────────
-  function SegmentBtn({
-    active, onClick, children,
-  }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
-    return (
-      <button
-        onClick={onClick}
-        className="flex-1 py-2 rounded-lg text-sm font-semibold capitalize transition-all"
-        style={{
-          background: active ? bgColor : 'transparent',
-          color:      active ? color   : '#64748b',
-          border:     active ? `1px solid ${borderCol}` : '1px solid transparent',
-        }}
-      >
-        {children}
-      </button>
-    );
   }
 
   return (
@@ -432,10 +535,22 @@ export function TradeModal({
               style={{ background: 'var(--brand-card)', border: '1px solid var(--brand-border)' }}
               className="flex rounded-xl p-1 mb-2 gap-1"
             >
-              <SegmentBtn active={marketType === 'spot'} onClick={() => setMarketType('spot')}>
+              <SegmentBtn
+                active={marketType === 'spot'}
+                onClick={() => selectMarketType('spot')}
+                bgColor={bgColor}
+                color={color}
+                borderCol={borderCol}
+              >
                 <span className="flex items-center justify-center gap-1.5"><TrendingUp size={13} /> Spot</span>
               </SegmentBtn>
-              <SegmentBtn active={marketType === 'futures'} onClick={() => { setMarketType('futures'); setOrderType('MARKET'); }}>
+              <SegmentBtn
+                active={marketType === 'futures'}
+                onClick={() => selectMarketType('futures')}
+                bgColor={bgColor}
+                color={color}
+                borderCol={borderCol}
+              >
                 <span className="flex items-center justify-center gap-1.5"><Zap size={13} /> Futures</span>
               </SegmentBtn>
             </div>
@@ -445,13 +560,22 @@ export function TradeModal({
               style={{ background: 'var(--brand-card)', border: '1px solid var(--brand-border)' }}
               className="flex rounded-xl p-1 mb-4 gap-1"
             >
-              <SegmentBtn active={orderType === 'MARKET'} onClick={() => setOrderType('MARKET')}>
+              <SegmentBtn
+                active={orderType === 'MARKET'}
+                onClick={() => selectOrderType('MARKET')}
+                bgColor={bgColor}
+                color={color}
+                borderCol={borderCol}
+              >
                 <span className="flex items-center justify-center gap-1.5"><Zap size={13} /> Market</span>
               </SegmentBtn>
-              <SegmentBtn active={orderType === 'LIMIT'}  onClick={() => {
-                setOrderType('LIMIT');
-                if (!limitPrice && currentPrice) setLimitPrice(currentPrice.toFixed(2));
-              }}>
+              <SegmentBtn
+                active={orderType === 'LIMIT'}
+                onClick={() => selectOrderType('LIMIT')}
+                bgColor={bgColor}
+                color={color}
+                borderCol={borderCol}
+              >
                 <span className="flex items-center justify-center gap-1.5"><Target size={13} /> Limit</span>
               </SegmentBtn>
             </div>
@@ -547,26 +671,45 @@ export function TradeModal({
             )}
 
             {/* ── Signal context ────────────────────────────────────────── */}
-            <div
-              style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--brand-border)' }}
-              className="rounded-xl p-3 mb-4"
-            >
-              <div className="text-xs text-slate-500 mb-0.5">Based on signal</div>
-              <div className="text-sm text-slate-300 leading-snug">{signal.headline}</div>
-              <div className="text-xs mt-1.5 font-medium" style={{ color }}>
-                {signal.direction} · {signal.confidence}% confidence
+            {signal ? (
+              <div
+                style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--brand-border)' }}
+                className="rounded-xl p-3 mb-4"
+              >
+                <div className="flex items-center justify-between gap-2 mb-0.5">
+                  <span className="text-xs text-slate-500">Based on signal</span>
+                  {signal.source === 'fallback' && (
+                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/25">
+                      Rule-based fallback
+                    </span>
+                  )}
+                </div>
+                <div className="text-sm text-slate-300 leading-snug">{signal.headline}</div>
+                <div className="text-xs mt-1.5 font-medium" style={{ color }}>
+                  {signal.direction} · {signal.confidence}% confidence
+                </div>
               </div>
-            </div>
+            ) : (
+              <div
+                style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--brand-border)' }}
+                className="rounded-xl p-3 mb-4"
+              >
+                <div className="text-xs font-semibold text-slate-300 mb-0.5">No AI signal, manual order</div>
+                <div className="text-xs text-slate-500 leading-snug">
+                  Manual execution with default sizing (50% neutral confidence, 10 vUSDC floor / 20% ceiling). Set optional TP/SL below.
+                </div>
+              </div>
+            )}
 
             {/* ── Risk panel (position sizing + risk/reward) ────────────── */}
             <RiskPanel
               balance={riskBalance}
               defaultBalance={riskDefaultBalance}
-              confidence={signal.confidence}
-              tpPct={signal.takeProfit.pct}
-              slPct={signal.stopLoss.pct}
+              confidence={riskConfidence}
+              tpPct={riskTpPct}
+              slPct={riskSlPct}
               entryPrice={currentPrice}
-              slPrice={signal.stopLoss.price}
+              slPrice={riskSlPrice}
               amountUsd={amountUsd}
               {...(marketType === 'futures' ? { leverage, side } : {})}
             />
@@ -715,7 +858,7 @@ export function TradeModal({
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-xs font-semibold text-slate-300">No {quoteAsset} found on SoDEX</span>
                     <a
-                      href={`https://sodex.com/trade/spot/${baseAsset}_USDC`}
+                      href={`${ACTIVE_VALUECHAIN.sodexUrl}/trade/spot/${baseAsset}_USDC`}
                       target="_blank" rel="noopener noreferrer"
                       className="text-xs font-bold hover:opacity-80 transition-opacity inline-flex items-center gap-1"
                       style={{ color: '#00FFA7' }}
@@ -725,7 +868,7 @@ export function TradeModal({
                     </a>
                   </div>
                   <ol className="text-[10px] text-slate-500 space-y-0.5 list-none">
-                    <li>1. Connect your wallet at <a href="https://sodex.com" target="_blank" rel="noopener noreferrer" className="text-slate-400 underline">sodex.com</a> (registers your account)</li>
+                    <li>1. Connect your wallet at <a href={ACTIVE_VALUECHAIN.sodexUrl} target="_blank" rel="noopener noreferrer" className="text-slate-400 underline">{ACTIVE_VALUECHAIN.sodexHost}</a> (registers your account)</li>
                     <li>2. Deposit {quoteAsset} to your SoDEX account</li>
                     <li>3. Return here and click the refresh icon ↻ to reload your balance</li>
                   </ol>
@@ -853,7 +996,9 @@ export function TradeModal({
                 <AlertTriangle size={12} className="shrink-0" />
                 Risk Warning
               </div>
-              <p className="text-xs text-slate-400 leading-relaxed">{signal.riskWarning}</p>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                {signal?.riskWarning ?? 'Manual order placed without an AI signal. Verify your entry price, position size, and risk limits independently.'}
+              </p>
               {marketType === 'futures' && (
                 <p className="text-xs text-slate-400 leading-relaxed mt-1.5 pt-1.5" style={{ borderTop: '1px solid rgba(251,191,36,0.15)' }}>
                   Leverage amplifies both gains and losses. At {leverage}x, a small adverse price move can liquidate your entire margin.
@@ -861,9 +1006,36 @@ export function TradeModal({
               )}
             </div>
 
-            {/* ── Builder fee indicator ─────────────────────────────────── */}
+            {/* ── Connected network warning / Builder fee indicator ───── */}
+            {walletNetworkStatus === 'locked' && (
+              <div
+                style={{ background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.28)' }}
+                className="rounded-xl px-3 py-2 mb-3 text-xs text-amber-300"
+              >
+                {WALLET_LOCKED_MESSAGE}
+              </div>
+            )}
+            {walletNetworkStatus !== 'locked' && walletChainId != null && walletChainId !== ACTIVE_VALUECHAIN.chainId && (
+              <div
+                style={{ background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.28)' }}
+                className="rounded-xl px-3 py-2 mb-3 flex items-center justify-between gap-2 text-xs text-amber-300"
+              >
+                <span>
+                  Connected to {getChainDisplayName(walletChainId)} ({walletChainId}) instead of {ACTIVE_VALUECHAIN.name}.
+                </span>
+                <button
+                  type="button"
+                  onClick={() => void handleSwitchToValueChain()}
+                  disabled={switchingNetwork}
+                  className="px-2.5 py-1 rounded-lg bg-amber-400/20 text-amber-200 border border-amber-400/35 hover:bg-amber-400/30 font-semibold shrink-0 disabled:opacity-50"
+                >
+                  {switchingNetwork ? 'Switching…' : `Switch to ${ACTIVE_VALUECHAIN.name}`}
+                </button>
+              </div>
+            )}
+
             <div className="flex items-center justify-between text-[11px] font-mono text-slate-500 mb-3 px-1">
-              <span>Network: {USE_TESTNET ? 'ValueChain Testnet (138565)' : 'ValueChain Mainnet (286623)'}</span>
+              <span>Network: {ACTIVE_VALUECHAIN.label} ({ACTIVE_VALUECHAIN.chainId})</span>
               <span style={{ color: '#00FFA7' }}>Builder Fee: {(getBuilderConfig().fee / 10).toFixed(1)} bps{getBuilderConfig().id ? ` (#${getBuilderConfig().id})` : ''}</span>
             </div>
 
@@ -947,7 +1119,7 @@ export function TradeModal({
                 </div>
 
                 <a
-                  href={`https://sodex.com/trade/${marketType}/${sodexSymbol}`}
+                  href={`${ACTIVE_VALUECHAIN.sodexUrl}/trade/${marketType}/${sodexSymbol}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   style={{ background: 'linear-gradient(135deg,#00FFA7,#A78BFA)', color: '#06080B' }}
@@ -958,7 +1130,32 @@ export function TradeModal({
                 </a>
               </>
             ) : (
-              <p className="text-sm text-slate-400 mb-4 whitespace-pre-line">{result.message}</p>
+              <>
+                <p className="text-sm text-slate-400 mb-4 whitespace-pre-line">{result.message}</p>
+                {result.wrongNetwork && (
+                  <div className="mb-3 flex justify-center">
+                    <button
+                      type="button"
+                      onClick={() => void handleSwitchToValueChain()}
+                      disabled={switchingNetwork}
+                      className="px-4 py-2 rounded-xl text-sm font-semibold bg-amber-400/20 text-amber-200 border border-amber-400/40 hover:bg-amber-400/30 transition-colors disabled:opacity-50"
+                    >
+                      {switchingNetwork ? 'Switching…' : `Switch to ${ACTIVE_VALUECHAIN.name}`}
+                    </button>
+                  </div>
+                )}
+                {result.walletLocked && (
+                  <div className="mb-3 flex justify-center">
+                    <button
+                      type="button"
+                      onClick={() => setResult(null)}
+                      className="px-4 py-2 rounded-xl text-sm font-semibold bg-amber-400/20 text-amber-200 border border-amber-400/40 hover:bg-amber-400/30 transition-colors"
+                    >
+                      Unlock wallet &amp; retry
+                    </button>
+                  </div>
+                )}
+              </>
             )}
             <button
               onClick={onClose}

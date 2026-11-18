@@ -6,12 +6,14 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, waitFor } from '@testing-library/react';
 import * as fc from 'fast-check';
-import type { ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { densityClasses } from '../utils/filters';
-import type { Density } from '../contexts/DensityContext';
-import { DensityProvider, useDensity } from '../contexts/DensityContext';
+import type { Density } from '../contexts/densityStore';
+import { DensityProvider } from '../contexts/DensityContext';
+import { useDensity } from '../contexts/densityStore';
 import { ConnectionStatusProvider } from '../contexts/ConnectionStatusContext';
-import { DashboardProvider, useDashboard } from '../contexts/DashboardContext';
+import { DashboardProvider } from '../contexts/DashboardContext';
+import { useDashboard } from '../contexts/dashboardStore';
 import { fetchEtfMetrics } from '../services/sosovalue';
 
 // ─── Module-level mocks required by DashboardProvider ────────────────────────
@@ -123,7 +125,9 @@ describe('P19: Density mode localStorage persistence', () => {
 
           function Consumer() {
             const { density: d } = useDensity();
-            capturedDensity = d as Density;
+            useEffect(() => {
+              capturedDensity = d as Density;
+            }, [d]);
             return null;
           }
 
@@ -150,7 +154,9 @@ describe('P19: Density mode localStorage persistence', () => {
 
     function Consumer() {
       const { density: d } = useDensity();
-      capturedDensity = d as Density;
+      useEffect(() => {
+        capturedDensity = d as Density;
+      }, [d]);
       return null;
     }
 
@@ -194,7 +200,10 @@ describe('P20: No mock data on API error', () => {
           let ctx: ReturnType<typeof useDashboard> | null = null;
 
           function Consumer() {
-            ctx = useDashboard();
+            const current = useDashboard();
+            useEffect(() => {
+              ctx = current;
+            }, [current]);
             return null;
           }
 

@@ -4,7 +4,7 @@
  */
 
 import type { NewsItem, Alert } from '../types';
-import type { Density } from '../contexts/DensityContext';
+import type { Density } from '../contexts/densityStore';
 import { getNewsTitle } from '../services/sosovalue';
 
 export type FilterKind = Alert['kind'] | 'all';

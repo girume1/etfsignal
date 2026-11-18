@@ -27,23 +27,25 @@ const STARTERS: Record<'BTC' | 'ETH', string[]> = {
 /**
  * Follow-up chat panel. Lets the user ask free-form questions about the
  * current signal or the underlying data — routed through the same
- * /api/analyze edge function that powers signal synthesis, so the
- * GEMINI_API_KEY never touches the client.
+ * /api/analyze serverless function that powers signal synthesis, so the
+ * NVIDIA_API_KEY never touches the client.
  */
 export function AskAI({ asset, etfData, signal }: AskAIProps) {
   const [history, setHistory] = useState<ChatTurn[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [failedQuestion, setFailedQuestion] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
+    scrollRef.current?.scrollTo?.({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
   }, [history, loading]);
 
   async function send(question: string) {
     if (!etfData || !question.trim() || loading) return;
     setError(null);
+    setFailedQuestion(null);
     const q = question.trim();
     setInput('');
     setHistory(h => [...h, { role: 'user', content: q }]);
@@ -51,8 +53,11 @@ export function AskAI({ asset, etfData, signal }: AskAIProps) {
     try {
       const answer = await askFollowUp(asset, etfData, signal, history, q);
       setHistory(h => [...h, { role: 'assistant', content: answer }]);
-    } catch (err: any) {
-      setError(err?.message || 'The Agent request failed.');
+    } catch (err: unknown) {
+      const rawMsg = err instanceof Error ? err.message : 'The Agent is temporarily unavailable.';
+      const friendlyMsg = `${rawMsg} Manual trading and rule-based ETF data remain available.`;
+      setError(friendlyMsg);
+      setFailedQuestion(q);
     } finally {
       setLoading(false);
     }
@@ -145,10 +150,19 @@ export function AskAI({ asset, etfData, signal }: AskAIProps) {
         )}
         {error && (
           <div
-            style={{ background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.25)' }}
-            className="rounded-lg px-3 py-2 text-xs text-red-300"
+            style={{ background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.28)' }}
+            className="rounded-lg px-3 py-2 text-xs text-amber-200 flex items-center justify-between gap-2"
           >
-            {error}
+            <span className="leading-snug">{error}</span>
+            {failedQuestion && (
+              <button
+                type="button"
+                onClick={() => send(failedQuestion)}
+                className="text-[11px] font-semibold px-2 py-1 rounded border border-amber-400/35 hover:border-amber-300 text-amber-200 hover:text-white shrink-0"
+              >
+                Try again
+              </button>
+            )}
           </div>
         )}
       </div>

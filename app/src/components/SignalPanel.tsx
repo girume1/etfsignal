@@ -18,6 +18,8 @@ interface SignalPanelProps {
   error?: string | null;
   analysisStage?: AnalysisStage | null;
   onCancel?: () => void;
+  circuitOpen?: boolean;
+  onRetryAi?: () => void;
 }
 
 const DIRECTION_STYLES = {
@@ -64,7 +66,7 @@ const LOADING_STAGES: Array<{ key: AnalysisStage; label: string }> = [
 
 export function SignalPanel({
   signal, loading, onAnalyze, activeTab,
-  onTrade, walletConnected, error, analysisStage, onCancel,
+  onTrade, walletConnected, error, analysisStage, onCancel, circuitOpen, onRetryAi,
 }: SignalPanelProps) {
   const label = activeTab.toUpperCase();
   const style = signal ? DIRECTION_STYLES[signal.direction] : null;
@@ -72,24 +74,29 @@ export function SignalPanel({
   const [elapsedSec, setElapsedSec] = useState(0);
 
   useEffect(() => {
-    if (!loading) {
+    if (!loading) return;
+    const startedAt = Date.now();
+    const resetId = setTimeout(() => {
       setFallbackIdx(0);
       setElapsedSec(0);
-      return;
-    }
-    const startedAt = Date.now();
+    }, 0);
     const timer = setInterval(() => {
       const sec = (Date.now() - startedAt) / 1000;
       setElapsedSec(sec);
       // Only advance fallback index up to stage 2 ('calling_agent') if analysisStage prop is not provided
       setFallbackIdx((prev) => (prev < 2 ? prev + 1 : prev));
     }, 500);
-    return () => clearInterval(timer);
+    return () => {
+      clearTimeout(resetId);
+      clearInterval(timer);
+    };
   }, [loading]);
 
+  const activeFallbackIdx = loading ? fallbackIdx : 0;
+  const activeElapsedSec = loading ? elapsedSec : 0;
   const activeStageIdx = analysisStage
     ? Math.max(0, LOADING_STAGES.findIndex((s) => s.key === analysisStage))
-    : fallbackIdx;
+    : activeFallbackIdx;
 
   return (
     <div className="flex flex-col gap-3">
@@ -173,7 +180,7 @@ export function SignalPanel({
           <div className="text-center">
             <p className="text-slate-300 text-sm font-medium">Synthesizing signal…</p>
             <p className="text-slate-500 text-xs mt-1">
-              Reading ETF flows + news with {AGENT_BRANDING.name} · <span className="font-mono text-slate-400">{elapsedSec.toFixed(1)}s</span>
+              Reading ETF flows + news with {AGENT_BRANDING.name} · <span className="font-mono text-slate-400">{activeElapsedSec.toFixed(1)}s</span>
             </p>
           </div>
           <div
@@ -199,7 +206,7 @@ export function SignalPanel({
               );
             })}
           </div>
-          {elapsedSec >= 6 && (
+          {activeElapsedSec >= 6 && (
             <div className="w-full flex items-center justify-between gap-2 text-[11px] text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
               <span>Processing high institutional data volume — still waiting for {AGENT_BRANDING.name}…</span>
               {onCancel && (
@@ -226,17 +233,50 @@ export function SignalPanel({
           className="rounded-xl p-5 flex flex-col gap-4 slide-up"
         >
           {/* Agent intelligence badge */}
-          <div className="flex items-center justify-between text-[10px] font-mono text-slate-400">
+          <div className="flex items-center justify-between text-[10px] font-mono text-slate-400 gap-2 flex-wrap">
             <span className="flex items-center gap-1.5">
-              <Sparkles size={11} style={{ color: '#00FFA7' }} className="shrink-0" />
-              <span className="text-slate-200 font-semibold">{AGENT_BRANDING.name}</span>
-              <span className="text-slate-500">· {AGENT_BRANDING.subtitle}</span>
+              <Sparkles size={11} style={{ color: signal.source === 'fallback' ? '#FBBF24' : '#00FFA7' }} className="shrink-0" />
+              <span className="text-slate-200 font-semibold">
+                {signal.source === 'fallback' ? 'Quantitative Rules' : AGENT_BRANDING.name}
+              </span>
+              <span className="text-slate-500">
+                · {signal.source === 'fallback' ? 'Local Rule Engine' : AGENT_BRANDING.subtitle}
+              </span>
             </span>
-            <span className="flex items-center gap-1 text-emerald-400">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              ACTIVE
-            </span>
+            {signal.source === 'fallback' ? (
+              <span
+                className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/30"
+              >
+                Rule-based fallback (AI unavailable)
+              </span>
+            ) : (
+              <span className="flex items-center gap-1 text-emerald-400">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                ACTIVE
+              </span>
+            )}
           </div>
+
+          {/* Soft warning banner when running on deterministic fallback */}
+          {signal.source === 'fallback' && (
+            <div
+              style={{ background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.28)' }}
+              className="rounded-lg px-3 py-2 flex items-center justify-between gap-2 text-xs text-amber-200"
+            >
+              <div className="flex items-start gap-2 min-w-0">
+                <AlertTriangle size={13} className="text-amber-400 shrink-0 mt-0.5" />
+                <span className="text-[11px] leading-snug text-amber-200/90">
+                  {signal.degradedReason ?? 'AI provider unavailable — showing deterministic rule-based signal.'}
+                </span>
+              </div>
+              <button
+                onClick={onRetryAi ?? onAnalyze}
+                className="text-[11px] font-semibold px-2.5 py-1 rounded-md border border-amber-400/40 hover:border-amber-300 text-amber-200 hover:text-white transition-colors shrink-0"
+              >
+                {circuitOpen ? 'Try AI again' : 'Retry'}
+              </button>
+            </div>
+          )}
 
           {/* Direction + confidence */}
           <div className="flex items-center justify-between flex-wrap gap-2">

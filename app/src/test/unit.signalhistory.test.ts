@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeRealStats, computeEstimatedStats, countResolved, buildRealChartData } from '../components/SignalHistory';
+import { computeRealStats, computeEstimatedStats, countResolved, buildRealChartData } from '../utils/signalStats';
 import type { HistoricalSignal } from '../types';
 
 function real(id: string, pnlPct: number, outcome: 'HIT' | 'MISS' | 'EXPIRED'): HistoricalSignal {

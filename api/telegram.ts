@@ -3,7 +3,8 @@
 //
 // Env vars required:
 //   TELEGRAM_BOT_TOKEN        — Telegram bot HTTP API token
-//   GEMINI_API_KEY            — Google Gemini AI key (for /signal)
+//   NVIDIA_API_KEY            — NVIDIA NIM API key for Kimi K3.1 Pro (for /signal, /btc, /eth)
+//   NVIDIA_MODEL              — (optional) Override Kimi model ID (default: moonshotai/kimi-k3.1-pro)
 //   SOSO_API_KEY              — SoSoValue ETF data key (for /status & /signal)
 //   UPSTASH_REDIS_REST_URL    — Upstash Redis endpoint (for subscriber persistence)
 //   UPSTASH_REDIS_REST_TOKEN  — Upstash Redis bearer token
@@ -451,15 +452,22 @@ Respond with ONLY a JSON object (no markdown, no extra text):
     },
     25_000,
   ).catch((err: any) => {
-    if (err?.name === 'AbortError') {
-      throw new Error('The Agent timed out waiting for Gemini. Please try again.');
-    }
-    throw err;
+    const busyErr: any = new Error(
+      err?.name === 'AbortError'
+        ? 'The Agent timed out waiting for the AI provider. Please try again.'
+        : (err?.message ?? 'AI provider connection failed'),
+    );
+    busyErr.retryable = true;
+    throw busyErr;
   });
 
   if (!aiRes.ok) {
     const errBody: any = await aiRes.json().catch(() => ({}));
-    throw new Error(errBody?.error || `Agent API error: ${aiRes.status}`);
+    const retryableStatus = [408, 429, 500, 502, 503, 504].includes(aiRes.status);
+    const isRetryable = typeof errBody?.retryable === 'boolean' ? errBody.retryable : retryableStatus;
+    const err: any = new Error(errBody?.error || `Agent API error: ${aiRes.status}`);
+    err.retryable = isRetryable;
+    throw err;
   }
 
   const aiData: any  = await aiRes.json();
@@ -913,7 +921,13 @@ export async function handleSignal(
       }
     } catch (err: any) {
       const safeMsg = String(err?.message ?? 'Analysis unavailable').replace(/`/g, "'");
-      const errorText = `❌ *${asset} Signal Analysis Failed*\n\`${safeMsg}\`\n\nPlease try again in a moment.`;
+      const errorText = err?.retryable
+        ? [
+            `⏳ *${asset} Signal — AI is busy, try again*`,
+            ``,
+            `The Agent is temporarily overloaded or timed out. Live ETF snapshots (/status) and manual trading remain available — tap /${asset.toLowerCase()} again shortly.`,
+          ].join('\n')
+        : `❌ *${asset} Signal Analysis Failed*\n\`${safeMsg}\`\n\nPlease try again in a moment.`;
       if (progressMsgId) {
         const edited = await editMessage(token, chatId, progressMsgId, errorText);
         if (!edited) {

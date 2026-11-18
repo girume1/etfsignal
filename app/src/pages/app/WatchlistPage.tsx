@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect } from 'react';
 import { Star } from 'lucide-react';
-import { useDashboard } from '../../contexts/DashboardContext';
+import { useDashboard } from '../../contexts/dashboardStore';
 import { FundRow } from '../../components/EtfPanel';
 import { getWatchlist } from '../../services/watchlist';
 import type { EtfFund } from '../../types';

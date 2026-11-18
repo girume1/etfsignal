@@ -13,5 +13,10 @@ interface ImportMeta {
 
 // MetaMask / EIP-1193 injected provider
 interface Window {
-  ethereum?: any;
+  ethereum?: {
+    request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
+    on?: (event: string, listener: (...args: unknown[]) => void) => void;
+    removeListener?: (event: string, listener: (...args: unknown[]) => void) => void;
+    [key: string]: unknown;
+  };
 }

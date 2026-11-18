@@ -1,7 +1,7 @@
 import { useMemo, useState, useEffect } from 'react';
 import { ArrowUp, ArrowDown, RefreshCw, Award } from 'lucide-react';
-import { useDashboard } from '../../contexts/DashboardContext';
-import { useDensity } from '../../contexts/DensityContext';
+import { useDashboard } from '../../contexts/dashboardStore';
+import { useDensity } from '../../contexts/densityStore';
 import { QuickStats } from '../../components/QuickStats';
 import { PriceFlowChart } from '../../components/PriceFlowChart';
 import { MarketShareDonut } from '../../components/MarketShareDonut';
@@ -160,17 +160,32 @@ export default function FlowsPage() {
   } | null>(null);
   const [windowLoading, setWindowLoading] = useState(false);
 
+  const handleSelectWindow = (w: FlowWindow) => {
+    setSelectedWindow(w);
+    if (w === 14) {
+      setWindowData(null);
+      setWindowLoading(false);
+    } else {
+      setWindowLoading(true);
+    }
+  };
+
   useEffect(() => {
-    if (selectedWindow === 14) { setWindowData(null); return; }
-    setWindowLoading(true);
+    if (selectedWindow === 14) return;
+    let cancelled = false;
     Promise.all([
       fetchHistoricalInflows('us-btc-spot', selectedWindow),
       fetchHistoricalInflows('us-eth-spot', selectedWindow),
       fetchPriceHistory('us-btc-spot', selectedWindow),
       fetchPriceHistory('us-eth-spot', selectedWindow),
     ])
-      .then(([btc, eth, btcPx, ethPx]) => setWindowData({ btc, eth, btcPrice: btcPx, ethPrice: ethPx }))
-      .finally(() => setWindowLoading(false));
+      .then(([btc, eth, btcPx, ethPx]) => {
+        if (!cancelled) setWindowData({ btc, eth, btcPrice: btcPx, ethPrice: ethPx });
+      })
+      .finally(() => {
+        if (!cancelled) setWindowLoading(false);
+      });
+    return () => { cancelled = true; };
   }, [selectedWindow]);
 
   const activeBtcHist  = selectedWindow === 14 ? btcHist  : (windowData?.btc  ?? btcHist);
@@ -215,7 +230,7 @@ export default function FlowsPage() {
             {WINDOWS.map(w => (
               <button
                 key={w}
-                onClick={() => setSelectedWindow(w)}
+                onClick={() => handleSelectWindow(w)}
                 style={{
                   background: selectedWindow === w ? 'rgba(0,255,167,0.1)' : 'transparent',
                   color:      selectedWindow === w ? '#00FFA7' : '#64748B',

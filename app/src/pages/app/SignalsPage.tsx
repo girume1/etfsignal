@@ -1,6 +1,6 @@
 import { Sparkles, Settings } from 'lucide-react';
-import { useDashboard } from '../../contexts/DashboardContext';
-import { useDensity } from '../../contexts/DensityContext';
+import { useDashboard } from '../../contexts/dashboardStore';
+import { useDensity } from '../../contexts/densityStore';
 import { QuickStats } from '../../components/QuickStats';
 import { SentimentGauge } from '../../components/SentimentGauge';
 import { SignalPanel } from '../../components/SignalPanel';
@@ -21,8 +21,8 @@ const HOW_STEPS = [
 export default function SignalsPage() {
   const {
     activeData, activeLabel, activeTab, setActiveTab,
-    sentiment, signal, signalLoading, signalError, analysisStage,
-    handleAnalyze, cancelAnalyze, openTradeModal, wallet, history, loading,
+    sentiment, signal, signalLoading, signalError, analysisStage, aiCircuitOpen,
+    handleAnalyze, handleRetryAi, cancelAnalyze, openTradeModal, wallet, history, loading,
     liveBtcPx, liveEthPx,
   } = useDashboard();
   const { density } = useDensity();
@@ -163,6 +163,8 @@ export default function SignalsPage() {
             error={signalError}
             analysisStage={analysisStage}
             onCancel={cancelAnalyze}
+            circuitOpen={aiCircuitOpen}
+            onRetryAi={handleRetryAi}
           />
           {signal && (
             <AskAI asset={activeLabel} etfData={activeData} signal={signal} />

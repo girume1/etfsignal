@@ -5,7 +5,7 @@ import {
   Newspaper, ArrowLeftRight, Star, PieChart,
   Settings, Sparkles, ExternalLink, Send,
 } from 'lucide-react';
-import { useDashboard } from '../contexts/DashboardContext';
+import { useDashboard } from '../contexts/dashboardStore';
 import { AIAdvantageModal } from './AIAdvantageModal';
 import { AGENT_BRANDING } from '../config/agentBranding';
 
@@ -32,73 +32,86 @@ interface AppSidebarProps {
   onClose: () => void;
 }
 
+function SidebarNavItem({
+  path,
+  icon: Icon,
+  label,
+  exact = false,
+  badge = 0,
+  disabled = false,
+  pathname,
+  onClose,
+}: {
+  path?: string;
+  icon: React.ElementType;
+  label: string;
+  exact?: boolean;
+  badge?: number;
+  disabled?: boolean;
+  pathname: string;
+  onClose: () => void;
+}) {
+  if (disabled || !path) {
+    return (
+      <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm opacity-35 cursor-not-allowed select-none">
+        <Icon size={16} className="shrink-0 text-slate-500" />
+        <span className="flex-1 text-slate-500">{label}</span>
+        <span className="text-[9px] font-mono text-slate-600 bg-white/5 px-1.5 py-0.5 rounded">SOON</span>
+      </div>
+    );
+  }
+
+  const active = exact
+    ? pathname === path
+    : pathname.startsWith(path);
+
+  return (
+    <NavLink
+      to={path}
+      end={exact}
+      onClick={onClose}
+      className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium nav-item${active ? ' nav-item-active' : ''}`}
+      style={active ? {
+        background: 'rgba(0,255,167,0.08)',
+        color: '#fff',
+        border: '1px solid rgba(0,255,167,0.2)',
+        boxShadow: '0 0 20px rgba(0,255,167,0.06)',
+      } : {
+        color: '#64748B',
+        border: '1px solid transparent',
+      }}
+    >
+      <Icon
+        size={16}
+        className="shrink-0 transition-colors"
+        style={{ color: active ? '#00FFA7' : undefined }}
+      />
+      <span className="flex-1">{label}</span>
+      {badge > 0 && (
+        <span className="text-[10px] px-1.5 py-0.5 rounded-full font-mono min-w-[1.25rem] text-center"
+          style={{ background: 'rgba(0,255,167,0.15)', color: '#00FFA7', border: '1px solid rgba(0,255,167,0.35)' }}>
+          {badge}
+        </span>
+      )}
+    </NavLink>
+  );
+}
+
+function SidebarNavSection({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="mb-1">
+      <p className="px-3 mb-1 text-[9px] font-semibold uppercase tracking-widest text-slate-600 font-mono">
+        {label}
+      </p>
+      <div className="space-y-0.5">{children}</div>
+    </div>
+  );
+}
+
 export function AppSidebar({ open, onClose }: AppSidebarProps) {
   const { unreadAlertCount } = useDashboard();
   const location = useLocation();
   const [showAIModal, setShowAIModal] = useState(false);
-
-  function NavItem({
-    path, icon: Icon, label, exact = false, badge = 0, disabled = false,
-  }: {
-    path?: string; icon: any; label: string;
-    exact?: boolean; badge?: number; disabled?: boolean;
-  }) {
-    if (disabled || !path) {
-      return (
-        <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm opacity-35 cursor-not-allowed select-none">
-          <Icon size={16} className="shrink-0 text-slate-500" />
-          <span className="flex-1 text-slate-500">{label}</span>
-          <span className="text-[9px] font-mono text-slate-600 bg-white/5 px-1.5 py-0.5 rounded">SOON</span>
-        </div>
-      );
-    }
-
-    const active = exact
-      ? location.pathname === path
-      : location.pathname.startsWith(path);
-
-    return (
-      <NavLink
-        to={path}
-        end={exact}
-        onClick={onClose}
-        className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium nav-item${active ? ' nav-item-active' : ''}`}
-        style={active ? {
-          background: 'rgba(0,255,167,0.08)',
-          color: '#fff',
-          border: '1px solid rgba(0,255,167,0.2)',
-          boxShadow: '0 0 20px rgba(0,255,167,0.06)',
-        } : {
-          color: '#64748B',
-          border: '1px solid transparent',
-        }}
-      >
-        <Icon
-          size={16}
-          className="shrink-0 transition-colors"
-          style={{ color: active ? '#00FFA7' : undefined }}
-        />
-        <span className="flex-1">{label}</span>
-        {badge > 0 && (
-          <span className="text-[10px] px-1.5 py-0.5 rounded-full font-mono min-w-[1.25rem] text-center"
-            style={{ background: 'rgba(0,255,167,0.15)', color: '#00FFA7', border: '1px solid rgba(0,255,167,0.35)' }}>
-            {badge}
-          </span>
-        )}
-      </NavLink>
-    );
-  }
-
-  function NavSection({ label, children }: { label: string; children: React.ReactNode }) {
-    return (
-      <div className="mb-1">
-        <p className="px-3 mb-1 text-[9px] font-semibold uppercase tracking-widest text-slate-600 font-mono">
-          {label}
-        </p>
-        <div className="space-y-0.5">{children}</div>
-      </div>
-    );
-  }
 
   return (
     <>
@@ -141,30 +154,47 @@ export function AppSidebar({ open, onClose }: AppSidebarProps) {
 
         {/* ── Navigation ───────────────────────────────────────── */}
         <nav className="flex-1 px-2 py-4 space-y-4 overflow-y-auto">
-          <NavSection label="Main">
+          <SidebarNavSection label="Main">
             {NAV_MAIN.map(item => (
-              <NavItem
+              <SidebarNavItem
                 key={item.path}
                 path={item.path}
                 icon={item.icon}
                 label={item.label}
                 exact={item.exact}
                 badge={item.path === '/app/alerts' ? unreadAlertCount : 0}
+                pathname={location.pathname}
+                onClose={onClose}
               />
             ))}
-          </NavSection>
+          </SidebarNavSection>
 
-          <NavSection label="Trading">
+          <SidebarNavSection label="Trading">
             {NAV_TRADE.map(item => (
-              <NavItem key={item.path} path={item.path} icon={item.icon} label={item.label} />
+              <SidebarNavItem
+                key={item.path}
+                path={item.path}
+                icon={item.icon}
+                label={item.label}
+                pathname={location.pathname}
+                onClose={onClose}
+              />
             ))}
-          </NavSection>
+          </SidebarNavSection>
 
-          <NavSection label="Account">
+          <SidebarNavSection label="Account">
             {NAV_ACCOUNT.map(item => (
-              <NavItem key={item.path} path={item.path} icon={item.icon} label={item.label} exact={item.exact} />
+              <SidebarNavItem
+                key={item.path}
+                path={item.path}
+                icon={item.icon}
+                label={item.label}
+                exact={item.exact}
+                pathname={location.pathname}
+                onClose={onClose}
+              />
             ))}
-          </NavSection>
+          </SidebarNavSection>
         </nav>
 
         {/* ── AI Advantage promo card ───────────────────────────── */}

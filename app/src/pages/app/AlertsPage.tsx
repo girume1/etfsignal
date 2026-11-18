@@ -1,14 +1,11 @@
 import { useState, useEffect } from 'react';
 import { ChevronUp, ChevronDown, ArrowLeftRight, Diamond, Zap, RefreshCw } from 'lucide-react';
-import { useDashboard } from '../../contexts/DashboardContext';
-import { useDensity } from '../../contexts/DensityContext';
+import { useDashboard } from '../../contexts/dashboardStore';
+import { useDensity } from '../../contexts/densityStore';
 import { QuickStats } from '../../components/QuickStats';
 import type { Alert } from '../../types';
 import { filterAlerts } from '../../utils/filters';
 import type { FilterKind, FilterSeverity } from '../../utils/filters';
-
-// Re-export for backward compatibility and direct testing
-export { filterAlerts };
 
 const KIND_ICONS: Record<Alert['kind'], React.ElementType> = {
   inflow:    ChevronUp,

@@ -1,16 +1,28 @@
 import { ethers } from 'ethers';
 import type { TradeOrder, PerpsPosition } from '../types';
+import {
+  USE_TESTNET,
+  CHAIN_ID,
+  CHAIN_ID_HEX,
+  ACTIVE_VALUECHAIN,
+} from '../config/valuechain';
+import {
+  ensureWalletOnValueChain,
+  getWalletChainId,
+  isUserRejectedError,
+  isWalletLockedError,
+  resolveConnectedProvider,
+  WalletLockedError,
+  WrongNetworkError,
+  WALLET_LOCKED_MESSAGE,
+  type DynamicWalletLike,
+  type Eip1193Provider,
+} from './walletNetwork';
 
-export const USE_TESTNET  = import.meta.env.VITE_SODEX_NETWORK === 'testnet';
-const MAINNET_GW   = 'https://mainnet-gw.sodex.dev/api/v1/spot';
-const MAINNET_PERPS_GW = 'https://mainnet-gw.sodex.dev/api/v1/perps';
-const TESTNET_GW_SPOT  = 'https://testnet-gw.sodex.dev/api/v1/spot';
-const TESTNET_GW_PERPS = 'https://testnet-gw.sodex.dev/api/v1/perps';
+export { USE_TESTNET, CHAIN_ID, CHAIN_ID_HEX, ACTIVE_VALUECHAIN };
 
-const TESTNET_GW  = USE_TESTNET ? TESTNET_GW_SPOT  : MAINNET_GW;
-const PERPS_GW    = USE_TESTNET ? TESTNET_GW_PERPS : MAINNET_PERPS_GW;
-export const CHAIN_ID     = USE_TESTNET ? 138565  : 286623;   // testnet: ValueChain testnet | mainnet: ValueChain
-export const CHAIN_ID_HEX = USE_TESTNET ? '0x21D45' : '0x45F9F'; // hex for wallet_switchEthereumChain
+const TESTNET_GW = ACTIVE_VALUECHAIN.spotGateway;
+const PERPS_GW   = ACTIVE_VALUECHAIN.perpsGateway;
 
 // ─── Exchange Minimum Order Rules (verified from SoDEX /markets/symbols) ──────
 // SoDEX enforces minNotional="5" ($5 USDC) on Spot (BTC/USDC, ETH/USDC) and
@@ -137,7 +149,32 @@ export function setBuilderConfig(id?: number | string | null, fee?: number | str
     if (fee !== undefined && fee !== null && String(fee).trim() !== '') {
       localStorage.setItem('etfsignal.builder_fee', String(fee).trim());
     }
-  } catch {}
+  } catch {
+    // ignore storage errors
+  }
+}
+
+interface SodexSymbolEntry {
+  id?: number | string;
+  symbolID?: number | string;
+  name?: string;
+  symbol?: string;
+  displayName?: string;
+  pricePrecision?: number | string;
+  quantityPrecision?: number | string;
+  baseCoin?: string;
+  baseAsset?: string;
+  quoteCoin?: string;
+  quoteAsset?: string;
+  maxLeverage?: number | string;
+}
+
+interface SodexApiEnvelope<T = unknown> {
+  code?: number;
+  msg?: string;
+  message?: string;
+  error?: string;
+  data?: T;
 }
 
 // Symbol ID cache — populated at runtime from GET /markets/symbols
@@ -157,7 +194,7 @@ async function resolveSymbolId(symbol: string): Promise<number> {
   const [base, quote] = symbol.split('-');  // e.g. BTC, USDC
 
   const res = await fetch(`${TESTNET_GW}/markets/symbols`);
-  const json: any = await res.json();
+  const json = (await res.json()) as SodexApiEnvelope<SodexSymbolEntry[]>;
   if (!Array.isArray(json.data)) {
     throw new Error('Could not fetch SoDEX symbol list');
   }
@@ -196,7 +233,7 @@ async function resolveSymbolId(symbol: string): Promise<number> {
   }
 
   // Debug: log what symbols are actually available
-  console.error('[sodex] available symbols:', json.data.map((s: any) => s.name ?? s.symbol).join(', '));
+  console.error('[sodex] available symbols:', json.data.map((s) => s.name ?? s.symbol).join(', '));
   throw new Error(`Symbol ${symbol} not found on SoDEX`);
 }
 
@@ -217,12 +254,12 @@ async function resolvePerpsSymbolId(symbol: string): Promise<number> {
   const [base] = symbol.split('-'); // e.g. BTC
 
   const res = await fetch(`${PERPS_GW}/markets/symbols`);
-  const json: any = await res.json();
+  const json = (await res.json()) as SodexApiEnvelope<SodexSymbolEntry[]>;
   if (!Array.isArray(json.data)) {
     throw new Error('Could not fetch SoDEX perps symbol list');
   }
 
-  const cacheAndReturn = (s: any) => {
+  const cacheAndReturn = (s: SodexSymbolEntry) => {
     const id = s.id ?? s.symbolID;
     perpsSymbolIdCache[symbol] = Number(id);
     perpsPrecisionCache[symbol] = Number(s.pricePrecision ?? 2);
@@ -251,7 +288,7 @@ async function resolvePerpsSymbolId(symbol: string): Promise<number> {
     }
   }
 
-  console.error('[sodex] available perps symbols:', json.data.map((s: any) => s.name ?? s.symbol).join(', '));
+  console.error('[sodex] available perps symbols:', json.data.map((s) => s.name ?? s.symbol).join(', '));
   throw new Error(`Perps symbol ${symbol} not found on SoDEX`);
 }
 
@@ -276,10 +313,25 @@ export async function getQuantityPrecision(symbol: string, marketType: 'spot' | 
 // Coin ID cache for non-USDC collateral (Asset Mode) — from GET /markets/coins
 const perpsCoinIdCache: Record<string, number> = {};
 
+interface SodexCoinEntry {
+  id?: number | string;
+  coinID?: number | string;
+  coin?: string;
+  name?: string;
+}
+
+interface SodexAccountData {
+  aid?: number | string;
+  accountId?: number | string;
+  id?: number | string;
+  account_id?: number | string;
+  primaryAccountID?: number | string;
+}
+
 async function resolvePerpsCoinId(coin: string): Promise<number> {
   if (perpsCoinIdCache[coin]) return perpsCoinIdCache[coin];
   const res = await fetch(`${PERPS_GW}/markets/coins`);
-  const json: any = await res.json();
+  const json = (await res.json()) as SodexApiEnvelope<SodexCoinEntry[]>;
   if (!Array.isArray(json.data)) throw new Error('Could not fetch SoDEX coin list');
   for (const c of json.data) {
     const id = c.id ?? c.coinID;
@@ -319,50 +371,44 @@ const types = {
 
 // ─── Network switch ───────────────────────────────────────────────────────────
 
-async function ensureSoDEXNetwork(requireInjected = false): Promise<void> {
-  if (typeof window === 'undefined' || !window.ethereum) {
-    if (requireInjected) {
-      throw new Error('No wallet found. Please install MetaMask or another Web3 wallet.');
+export interface SoDEXWalletContext {
+  primaryWallet?: DynamicWalletLike | null;
+  signer?: ethers.Signer | null;
+  provider?: Eip1193Provider | null;
+}
+
+export async function ensureSoDEXNetwork(
+  requireProvider = false,
+  walletCtx: SoDEXWalletContext = {},
+): Promise<void> {
+  const result = await ensureWalletOnValueChain({
+    primaryWallet: walletCtx.primaryWallet,
+    signer: walletCtx.signer,
+    provider: walletCtx.provider,
+    targetConfig: ACTIVE_VALUECHAIN,
+    // Keep window.ethereum strictly as a last-resort legacy path when neither Dynamic wallet nor signer provider exists
+    allowLegacyWindowFallback: true,
+  });
+
+  if (result.ok) return;
+
+  if (result.status === 'no_provider') {
+    if (requireProvider) {
+      throw new Error('No wallet found. Please install or connect a Web3 wallet.');
     }
     return;
   }
 
-  const currentChain = await window.ethereum.request({ method: 'eth_chainId' });
-  if (parseInt(currentChain, 16) === CHAIN_ID) return;
-
-  try {
-    await window.ethereum.request({
-      method: 'wallet_switchEthereumChain',
-      params: [{ chainId: CHAIN_ID_HEX }],
-    });
-  } catch (switchErr: any) {
-    if (switchErr.code === 4902 || switchErr?.message?.includes('Unrecognized chain')) {
-      const networkLabel = USE_TESTNET ? 'ValueChain Testnet' : 'ValueChain Mainnet';
-      const rpcUrl       = USE_TESTNET ? 'https://testnet.valuechain.xyz' : 'https://mainnet.valuechain.xyz';
-      const explorerUrl  = USE_TESTNET ? 'https://testnet-scan.valuechain.xyz' : 'https://main-scan.valuechain.xyz';
-      try {
-        await window.ethereum.request({
-          method: 'wallet_addEthereumChain',
-          params: [{
-            chainId: CHAIN_ID_HEX,
-            chainName: networkLabel,
-            nativeCurrency: { name: 'SOSO', symbol: 'SOSO', decimals: 18 },
-            rpcUrls: [rpcUrl],
-            blockExplorerUrls: [explorerUrl],
-          }],
-        });
-        return;
-      } catch (addErr: any) {
-        const connectUrl = USE_TESTNET ? 'https://testnet.sodex.com' : 'https://sodex.com';
-        throw new Error(
-          `${networkLabel} is not in your wallet yet.\n\n` +
-          `1. Go to ${connectUrl} and connect your wallet — it will auto-add the network.\n` +
-          '2. Come back here and try again.'
-        );
-      }
-    }
-    throw new Error(`Could not switch to SoDEX network: ${switchErr.message ?? switchErr}`);
+  if (result.status === 'locked') {
+    throw new WalletLockedError(result.error ?? WALLET_LOCKED_MESSAGE);
   }
+
+  throw new WrongNetworkError(
+    result.error ?? `Wrong network. Switch your wallet to ${ACTIVE_VALUECHAIN.name} (chain ${CHAIN_ID}).`,
+    result.chainId,
+    CHAIN_ID,
+    result.canAutoSwitch,
+  );
 }
 
 // ─── Account ID ───────────────────────────────────────────────────────────────
@@ -372,12 +418,12 @@ async function ensureSoDEXNetwork(requireInjected = false): Promise<void> {
 async function fetchAccountId(address: string, baseUrl: string = TESTNET_GW): Promise<number> {
   const res = await fetch(`${baseUrl}/accounts/${address}/state`);
   const raw = await res.text();
-  let json: any = {};
-  try { json = JSON.parse(raw); } catch { /* non-JSON */ }
+  let json: SodexApiEnvelope<SodexAccountData> = {};
+  try { json = JSON.parse(raw) as SodexApiEnvelope<SodexAccountData>; } catch { /* non-JSON */ }
 
   if (!res.ok || json.code !== 0) {
     const msg = json.msg || json.message || json.error || `HTTP ${res.status}`;
-    const registerUrl = USE_TESTNET ? 'https://testnet.sodex.com' : 'https://sodex.com';
+    const registerUrl = ACTIVE_VALUECHAIN.sodexUrl;
     throw new Error(
       `SoDEX account not found (${msg}).\n` +
       `Please connect your wallet at ${registerUrl} first to register your account.`
@@ -386,7 +432,7 @@ async function fetchAccountId(address: string, baseUrl: string = TESTNET_GW): Pr
 
   const aid = json.data?.aid ?? json.data?.accountId ?? json.data?.id ?? json.data?.account_id ?? json.data?.primaryAccountID;
   if (!aid) {
-    const registerUrl = USE_TESTNET ? 'https://testnet.sodex.com' : 'https://sodex.com';
+    const registerUrl = ACTIVE_VALUECHAIN.sodexUrl;
     throw new Error(
       'Could not read account ID from SoDEX.\n' +
       `Please connect your wallet at ${registerUrl} first.`
@@ -403,9 +449,9 @@ export async function fetchBalances(address: string): Promise<Record<string, str
   try {
     const res = await fetch(`/api/sodex-balance?address=${encodeURIComponent(address)}`);
     if (!res.ok) return {};
-    const json: any = await res.json();
+    const json = (await res.json()) as { ok?: boolean; balances?: Record<string, string> };
     if (json.ok && json.balances && Object.keys(json.balances).length > 0) {
-      return json.balances as Record<string, string>;
+      return json.balances;
     }
   } catch { /* fall through */ }
   return {};
@@ -419,9 +465,9 @@ export async function fetchPerpsPositionHistory(address: string, limit = 20): Pr
   try {
     const res = await fetch(`${PERPS_GW}/accounts/${address}/positions/history?limit=${limit}`);
     if (!res.ok) return [];
-    const json: any = await res.json();
+    const json = (await res.json()) as SodexApiEnvelope<PerpsPosition[]>;
     if (json.code !== 0 || !Array.isArray(json.data)) return [];
-    return json.data as PerpsPosition[];
+    return json.data;
   } catch {
     return [];
   }
@@ -429,29 +475,31 @@ export async function fetchPerpsPositionHistory(address: string, limit = 20): Pr
 
 // ─── EIP-712 signing ──────────────────────────────────────────────────────────
 
-/**
- * Serialize `value` to compact JSON with keys in the exact order they appear
- * in the Go struct definitions (Go's json.Marshal preserves struct field order).
- *
- * The server re-marshals the request body via json.Marshal and compares the
- * resulting hash against payloadHash — so key order must match exactly.
- *
- * Spot BatchNewOrderRequest field order (from sodex-go-sdk-public/spot/types):
- *   BatchNewOrderRequest: accountID, orders
- *   BatchNewOrderItem:    symbolID, clOrdID, side, type, timeInForce, price*, quantity*
- *   (* omitempty — omit when unset)
- *
- * The signing envelope adds: type, params
- */
-function goJSON(value: unknown): string {
-  if (value === null || value === undefined) return JSON.stringify(value);
-  if (Array.isArray(value)) return '[' + value.map(goJSON).join(',') + ']';
-  if (typeof value === 'object') {
-    // Preserve insertion order — caller must build objects with fields in Go struct order
-    const entries = Object.entries(value as Record<string, unknown>);
-    return '{' + entries.map(([k, v]) => JSON.stringify(k) + ':' + goJSON(v)).join(',') + '}';
+interface TypedDataSigner {
+  signTypedData: (
+    domain: ReturnType<typeof makeDomain>,
+    types: Record<string, Array<{ name: string; type: string }>>,
+    value: { payloadHash: string; nonce: bigint },
+  ) => Promise<string>;
+}
+
+interface BatchOrderResultItem {
+  code?: number;
+  msg?: string;
+  message?: string;
+  error?: string;
+  reason?: string;
+  ordId?: string;
+  orderID?: string | number;
+  clOrdID?: string;
+}
+
+function getSodexErrorMessage(err: unknown): string {
+  if (typeof err === 'object' && err !== null && 'message' in err) {
+    const msg = (err as { message?: unknown }).message;
+    if (typeof msg === 'string' && msg) return msg;
   }
-  return JSON.stringify(value);
+  return err != null ? String(err) : 'Unknown error';
 }
 
 export async function signOrder(
@@ -468,22 +516,44 @@ export async function signOrder(
   console.log('[sodex] signing payload JSON:', payloadJson);
   console.log('[sodex] payloadHash:', payloadHash);
 
+  // Verify connected wallet chain matches ValueChain right before EIP-712 signing
+  const chainCheck = await getWalletChainId({ signer });
+  if (chainCheck.locked) {
+    throw new WalletLockedError(chainCheck.error ?? WALLET_LOCKED_MESSAGE);
+  }
+  if (chainCheck.chainId !== null && chainCheck.chainId !== CHAIN_ID) {
+    throw new WrongNetworkError(
+      `Wrong network (${chainCheck.chainName ?? `Chain ${chainCheck.chainId}`}). Switch to ${ACTIVE_VALUECHAIN.name} (${CHAIN_ID}) before signing.`,
+      chainCheck.chainId,
+      CHAIN_ID,
+      true,
+    );
+  }
+
   // nonce must be BigInt for uint64 EIP-712 encoding in ethers v6
   const message = { payloadHash, nonce: BigInt(nonce) };
   let rawSig: string;
   try {
-    rawSig = await (signer as any).signTypedData(
+    rawSig = await (signer as unknown as TypedDataSigner).signTypedData(
       makeDomain(domainName),
       { ExchangeAction: types.ExchangeAction },
       message,
     );
-  } catch (err: any) {
-    // Viem validates chainId on signTypedData — wallet must be on the correct SoDEX network
-    const msg: string = err?.message ?? String(err);
+  } catch (err: unknown) {
+    if (isWalletLockedError(err)) {
+      throw new WalletLockedError('Unlock your wallet to sign your SoDEX order.');
+    }
+    if (isUserRejectedError(err)) {
+      throw new Error('Order signature was cancelled in your wallet.');
+    }
+    // Viem validates chainId on signTypedData — wallet must be on the correct ValueChain network
+    const msg: string = getSodexErrorMessage(err);
     if (msg.includes('chainId') || msg.includes('chain')) {
-      throw new Error(
-        `Wrong network. Switch your wallet to SoDEX (chain ${CHAIN_ID}).\n\n` +
-        `Visit ${USE_TESTNET ? 'testnet.' : ''}sodex.com and connect your wallet — it will add the network automatically.`
+      throw new WrongNetworkError(
+        `Wrong network. Switch your wallet to ${ACTIVE_VALUECHAIN.name} (chain ${CHAIN_ID}) before signing.`,
+        chainCheck.chainId,
+        CHAIN_ID,
+        true,
       );
     }
     throw err;
@@ -521,7 +591,7 @@ function friendlyError(msg: string): string {
   if (m.includes('insufficient') || m.includes('balance'))
     return 'Insufficient balance. Please deposit funds to your SoDEX account first.';
   if (m.includes('api key not found') || m.includes('unauthorized'))
-    return 'Signing error — wallet may not be registered on SoDEX. Visit sodex.com to register.';
+    return `Signing error — wallet may not be registered on SoDEX. Visit ${ACTIVE_VALUECHAIN.sodexHost} to register.`;
   if (m.includes('notional is invalid'))
     return 'Order value is too small — below SoDEX\'s minimum order size for this market ($5 spot, $10 perps).';
   if (m.includes('invalid payload') || m.includes('quantity is invalid'))
@@ -535,16 +605,44 @@ export interface PlaceOrderResult {
   success: boolean;
   orderId?: string;
   error?: string;
+  wrongNetwork?: boolean;
+  walletLocked?: boolean;
+  actualChainId?: number | null;
+}
+
+function toOrderFailureResult(err: unknown): PlaceOrderResult {
+  if (err instanceof WalletLockedError || isWalletLockedError(err)) {
+    return {
+      success: false,
+      error: err instanceof WalletLockedError ? err.message : WALLET_LOCKED_MESSAGE,
+      walletLocked: true,
+    };
+  }
+  if (err instanceof WrongNetworkError) {
+    return {
+      success: false,
+      error: err.message,
+      wrongNetwork: true,
+      actualChainId: err.actualChainId,
+    };
+  }
+  const msg = getSodexErrorMessage(err);
+  return { success: false, error: msg };
 }
 
 export async function placeSpotOrder(
   signer: ethers.Signer,
   _unusedAccountId: number,
   order: TradeOrder,
+  options?: { primaryWallet?: DynamicWalletLike | null; provider?: Eip1193Provider | null },
 ): Promise<PlaceOrderResult> {
   try {
-    // 1. Switch to the correct SoDEX network chain
-    await ensureSoDEXNetwork();
+    // 1. Switch connected wallet to the active ValueChain network before signing
+    await ensureSoDEXNetwork(false, {
+      signer,
+      primaryWallet: options?.primaryWallet,
+      provider: options?.provider,
+    });
 
     const address = await signer.getAddress();
     const nonce   = Date.now();
@@ -612,8 +710,8 @@ export async function placeSpotOrder(
     });
 
     const raw = await response.text();
-    let result: any = {};
-    try { result = JSON.parse(raw); } catch { /* non-JSON */ }
+    let result: SodexApiEnvelope<{ orders?: BatchOrderResultItem[] }> = {};
+    try { result = JSON.parse(raw) as SodexApiEnvelope<{ orders?: BatchOrderResultItem[] }>; } catch { /* non-JSON */ }
 
     console.log('[sodex] response', response.status, raw);
 
@@ -627,8 +725,8 @@ export async function placeSpotOrder(
     const errMsg = friendlyError(raw2);
     return { success: false, error: errMsg };
 
-  } catch (err: any) {
-    return { success: false, error: err.message || 'Unknown error' };
+  } catch (err: unknown) {
+    return toOrderFailureResult(err);
   }
 }
 
@@ -729,24 +827,29 @@ export async function updatePerpsCollateral(
       body: JSON.stringify(requestBody),
     });
     const raw = await response.text();
-    let result: any = {};
-    try { result = JSON.parse(raw); } catch { /* non-JSON */ }
+    let result: SodexApiEnvelope = {};
+    try { result = JSON.parse(raw) as SodexApiEnvelope; } catch { /* non-JSON */ }
     console.log('[sodex] updatePerpsCollateral response', response.status, raw);
 
     if (response.ok && result.code === 0) return { success: true };
     const msg = result.msg || result.message || result.error || `SoDEX error (HTTP ${response.status})`;
     return { success: false, error: friendlyError(msg) };
-  } catch (err: any) {
-    return { success: false, error: err.message || 'Unknown error' };
+  } catch (err: unknown) {
+    return { success: false, error: getSodexErrorMessage(err) };
   }
 }
 
 export async function placePerpsOrder(
   signer: ethers.Signer,
   order: PerpsOrder,
+  options?: { primaryWallet?: DynamicWalletLike | null; provider?: Eip1193Provider | null },
 ): Promise<PlaceOrderResult> {
   try {
-    await ensureSoDEXNetwork();
+    await ensureSoDEXNetwork(false, {
+      signer,
+      primaryWallet: options?.primaryWallet,
+      provider: options?.provider,
+    });
 
     const address = await signer.getAddress();
     const nonce   = Date.now();
@@ -855,8 +958,8 @@ export async function placePerpsOrder(
     });
 
     const raw = await response.text();
-    let result: any = {};
-    try { result = JSON.parse(raw); } catch { /* non-JSON */ }
+    let result: SodexApiEnvelope<BatchOrderResultItem[]> = {};
+    try { result = JSON.parse(raw) as SodexApiEnvelope<BatchOrderResultItem[]>; } catch { /* non-JSON */ }
 
     console.log('[sodex] perps response', response.status, raw);
 
@@ -865,7 +968,11 @@ export async function placePerpsOrder(
       // Bracket orders submit 2-3 items — a rejected attached TP/SL (e.g. stop
       // price on the wrong side of the entry) shouldn't be silently ignored
       // just because the entry itself succeeded.
-      const rejected = Array.isArray(result.data) ? result.data.find((o: any) => o.code !== 0) : first?.code !== 0 ? first : null;
+      const rejected = Array.isArray(result.data)
+        ? result.data.find((o) => o.code !== 0)
+        : first?.code !== 0
+          ? first
+          : null;
       if (rejected) {
         // Show the raw per-order detail (not just a generic fallback) so a
         // rejection reason SoDEX didn't put under msg/message is still visible.
@@ -880,25 +987,34 @@ export async function placePerpsOrder(
     const raw2 = result.msg || result.message || result.error || `SoDEX error (HTTP ${response.status})`;
     return { success: false, error: friendlyError(raw2) };
 
-  } catch (err: any) {
-    return { success: false, error: err.message || 'Unknown error' };
+  } catch (err: unknown) {
+    return toOrderFailureResult(err);
   }
 }
 
 // ─── Wallet utils ─────────────────────────────────────────────────────────────
 
-export async function connectWallet(): Promise<{ signer: ethers.Signer; address: string } | null> {
-  if (!window.ethereum) {
-    alert('MetaMask is required. Please install it.');
+export async function connectWallet(
+  primaryWallet?: DynamicWalletLike | null,
+): Promise<{ signer: ethers.Signer; address: string } | null> {
+  const walletProvider = await resolveConnectedProvider({
+    primaryWallet,
+    // Legacy fallback only when invoked directly without a Dynamic wallet
+    allowLegacyWindowFallback: true,
+  });
+  if (!walletProvider) {
     return null;
   }
   try {
-    const provider = new ethers.BrowserProvider(window.ethereum);
+    const provider = new ethers.BrowserProvider(walletProvider);
     await provider.send('eth_requestAccounts', []);
     const signer  = await provider.getSigner();
     const address = await signer.getAddress();
     return { signer, address };
-  } catch {
+  } catch (err) {
+    if (isWalletLockedError(err)) {
+      return null;
+    }
     return null;
   }
 }

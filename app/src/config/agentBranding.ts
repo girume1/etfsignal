@@ -1,6 +1,6 @@
 /**
  * Centralized branding configuration for ETFSignalAI's AI identity: "The Agent".
- * Underlying model integration remains Google Gemini (via /api/analyze).
+ * Powered by Moonshot AI Kimi K3.1 Pro via NVIDIA NIM (/api/analyze).
  */
 
 export const AGENT_BRANDING = {

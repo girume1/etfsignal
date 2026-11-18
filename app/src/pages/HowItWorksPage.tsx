@@ -165,7 +165,7 @@ export function HowItWorksPage() {
                 {[
                   ['SoSoValue', '/openapi/v2/etf/currentEtfDataMetrics', 'Live BTC/ETH ETF flow metrics'],
                   ['SoSoValue', '/api/v1/news/featured', 'Categorized crypto news feed'],
-                  ['The Agent (Google Gemini)', 'gemini-2.5-flash via /api/analyze', 'AI Market Intelligence & signal synthesis'],
+                  ['The Agent (Kimi K3.1 Pro)', 'moonshotai/kimi-k3.1-pro via NVIDIA NIM through /api/analyze', 'AI Market Intelligence & signal synthesis'],
                   ['Binance', 'wss://stream.binance.com — miniTicker', 'Live BTC/ETH price, ~1s cadence'],
                   ['Binance', '/api/v3/klines', 'Hourly/daily candles — charts + real 24h backtest evaluation'],
                   ['SoDEX', 'mainnet-gw.sodex.dev/api/v1/spot', 'EIP-712 signed spot order placement + Builder Fee'],

@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { PieChart, RefreshCw, ArrowUp, ArrowDown, ExternalLink, Wallet, Zap, ChevronLeft, ChevronRight } from 'lucide-react';
-import { useDashboard } from '../../contexts/DashboardContext';
-import { fetchBalances, fetchPerpsPositionHistory, truncateAddress, USE_TESTNET } from '../../services/sodex';
+import { useDashboard } from '../../contexts/dashboardStore';
+import { fetchBalances, fetchPerpsPositionHistory, truncateAddress } from '../../services/sodex';
+import { ACTIVE_VALUECHAIN, USE_TESTNET } from '../../config/valuechain';
 import { formatUSD } from '../../services/sosovalue';
 import type { PerpsPosition } from '../../types';
 
@@ -66,30 +67,56 @@ export default function PortfolioPage() {
   const [balances,   setBalances]   = useState<Record<string, string>>({});
   const [balLoading, setBalLoading] = useState(false);
 
-  const loadBalances = useCallback(() => {
+  const loadBalances = useCallback(async () => {
     if (!wallet.address) return;
+    await Promise.resolve();
     setBalLoading(true);
-    fetchBalances(wallet.address)
-      .then(setBalances)
-      .catch(() => setBalances({}))
-      .finally(() => setBalLoading(false));
+    try {
+      const b = await fetchBalances(wallet.address);
+      setBalances(b);
+    } catch {
+      setBalances({});
+    } finally {
+      setBalLoading(false);
+    }
   }, [wallet.address]);
 
-  useEffect(() => { loadBalances(); }, [loadBalances]);
+  useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) void loadBalances();
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [loadBalances]);
 
   const [positions,    setPositions]    = useState<PerpsPosition[]>([]);
   const [posLoading,   setPosLoading]   = useState(false);
 
-  const loadPositions = useCallback(() => {
+  const loadPositions = useCallback(async () => {
     if (!wallet.address) return;
+    await Promise.resolve();
     setPosLoading(true);
-    fetchPerpsPositionHistory(wallet.address)
-      .then(setPositions)
-      .catch(() => setPositions([]))
-      .finally(() => setPosLoading(false));
+    try {
+      const p = await fetchPerpsPositionHistory(wallet.address);
+      setPositions(p);
+    } catch {
+      setPositions([]);
+    } finally {
+      setPosLoading(false);
+    }
   }, [wallet.address]);
 
-  useEffect(() => { loadPositions(); }, [loadPositions]);
+  useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) void loadPositions();
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [loadPositions]);
 
   const btcPrice = liveBtcPx ?? latestBtcPx ?? 0;
   const ethPrice = liveEthPx ?? latestEthPx ?? 0;
@@ -313,7 +340,7 @@ export default function PortfolioPage() {
                       <div className="text-[10px] text-slate-600">{timeAgo(t.timestamp)}</div>
                     </div>
                     <a
-                      href={`https://${USE_TESTNET ? 'testnet.' : ''}sodex.com/portfolio?address=${wallet.address ?? ''}`}
+                      href={`${ACTIVE_VALUECHAIN.explorerPortfolioUrl}${wallet.address ?? ''}`}
                       target="_blank" rel="noopener noreferrer"
                       className="text-slate-600 hover:text-slate-300 transition-colors shrink-0"
                       title="View on SoDEX"

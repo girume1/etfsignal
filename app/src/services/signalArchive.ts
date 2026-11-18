@@ -10,6 +10,9 @@ const MS_24H = 24 * 60 * 60 * 1000;
  * Caller sets outcome: 'PENDING' / pnlReal: false for direction-bearing signals.
  */
 export async function saveSignal(signal: HistoricalSignal): Promise<void> {
+  // Never persist rule-based fallback signals in the performance archive
+  if (signal.source === 'fallback') return;
+
   const existing: HistoricalSignal[] = JSON.parse(localStorage.getItem(HISTORY_KEY) ?? '[]');
   localStorage.setItem(HISTORY_KEY, JSON.stringify([signal, ...existing].slice(0, 20)));
 
@@ -52,6 +55,7 @@ export async function evaluatePendingSignals(): Promise<void> {
   const now = Date.now();
   const eligible = all.filter(
     (s) =>
+      s.source !== 'fallback' &&
       s.outcome === 'PENDING' &&
       s.direction !== 'NEUTRAL' &&
       s.tpPrice != null &&

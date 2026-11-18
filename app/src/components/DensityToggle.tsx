@@ -1,4 +1,4 @@
-import { useDensity, type Density } from '../contexts/DensityContext';
+import { useDensity, type Density } from '../contexts/densityStore';
 
 const OPTIONS: { value: Density; label: string; icon: string; hint: string }[] = [
   { value: 'mobile',      label: 'Mobile',      icon: '▯',  hint: 'Single-column, stacked panels' },

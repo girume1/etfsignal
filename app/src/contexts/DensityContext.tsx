@@ -1,20 +1,10 @@
 import {
-  createContext, useContext, useState, useEffect,
+  useState, useEffect,
   type ReactNode,
 } from 'react';
+import { DensityContext, type Density } from './densityStore';
 
-export type Density = 'compact' | 'comfortable' | 'mobile';
 const STORAGE_KEY = 'etfsignal.density';
-
-interface DensityContextValue {
-  density: Density;
-  setDensity: (d: Density) => void;
-  auto: boolean;           // true if user hasn't manually picked — follows viewport
-  setAuto: (v: boolean) => void;
-  isMobile: boolean;       // viewport < 768
-}
-
-const DensityContext = createContext<DensityContextValue | null>(null);
 
 function detectAutoDensity(): Density {
   if (typeof window === 'undefined') return 'comfortable';
@@ -69,10 +59,4 @@ export function DensityProvider({ children }: { children: ReactNode }) {
       {children}
     </DensityContext.Provider>
   );
-}
-
-export function useDensity(): DensityContextValue {
-  const ctx = useContext(DensityContext);
-  if (!ctx) throw new Error('useDensity must be used inside DensityProvider');
-  return ctx;
 }
